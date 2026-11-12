@@ -122,6 +122,7 @@ suspend fun loadPdfThumb(file: File, widthPx: Int = 300): Bitmap? {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PdfViewerScreen(file: File, onClose: () -> Unit, onHome: () -> Unit) {
     val context = LocalContext.current
