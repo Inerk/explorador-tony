@@ -217,13 +217,13 @@ fun AppRoot() {
                         AppTheme.entries.forEach { t ->
                             androidx.compose.foundation.layout.Row(
                                 Modifier.fillMaxWidth()
-                                    .clickable { LibraryStore.setTheme(t); choosingTheme = false }
+                                    .clickable { LibraryStore.changeTheme(t); choosingTheme = false }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 androidx.compose.material3.RadioButton(
                                     selected = LibraryStore.theme == t,
-                                    onClick = { LibraryStore.setTheme(t); choosingTheme = false })
+                                    onClick = { LibraryStore.changeTheme(t); choosingTheme = false })
                                 Text(t.label)
                             }
                         }

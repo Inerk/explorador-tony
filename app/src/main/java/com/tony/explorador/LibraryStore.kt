@@ -56,6 +56,7 @@ object LibraryStore {
     val playlists = mutableStateListOf<Playlist>()
 
     var theme by mutableStateOf(AppTheme.XP)
+        private set
 
     private val dataFile get() = File(appContext.filesDir, "biblioteca.json")
     private val songsCache get() = File(appContext.filesDir, "canciones.json")
@@ -110,7 +111,7 @@ object LibraryStore {
         if (i >= 0) { playlists[i] = change(playlists[i]); save() }
     }
 
-    fun setTheme(t: AppTheme) { theme = t; save() }
+    fun changeTheme(t: AppTheme) { theme = t; save() }
 
     fun addFolder(path: String) { if (path !in musicFolders) { musicFolders.add(path); save() } }
     fun removeFolder(path: String) { musicFolders.remove(path); save() }
