@@ -210,9 +210,9 @@ fun VintagePlayerScreen(
                         onFavorite = { path?.let { LibraryStore.toggleFavorite(it) } },
                         modifier = Modifier.weight(1f).fillMaxSize()
                     )
-                    RecordPile(
-                        player = player, forward = true, label = "Siguen", total = remainingCount(player),
-                        modifier = Modifier.width(104.dp)
+                    RecordCrate(
+                        player = player, total = remainingCount(player),
+                        modifier = Modifier.width(122.dp)
                     )
                 }
             }
@@ -352,7 +352,7 @@ fun Turntable(
     BoxWithConstraints(
         modifier.aspectRatio(Deck.ASPECT)
             // un poco de perspectiva, como si lo vieras sobre la mesa
-            .graphicsLayer { rotationX = 9f; cameraDistance = 30f * density }
+            .graphicsLayer { rotationX = 6f; cameraDistance = 30f * density }
     ) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
@@ -377,10 +377,10 @@ fun Turntable(
                     alpha = 1f - (abs(slide.value) - 0.9f).coerceIn(0f, 0.4f) / 0.4f
                     // el vinilo nunca está perfectamente plano: se bambolea un poquito con cada vuelta
                     val a = angle * PI.toFloat() / 180f
-                    val sw = if (slide.value != 0f) 1.05f else 1f + 0.0035f * sin(a) * speed
+                    val sw = if (slide.value != 0f) 1.04f else 1f + 0.0012f * sin(a) * speed
                     scaleX = sw; scaleY = sw
-                    rotationZ = 1.6f * sin(a) * speed
-                    translationY = 0.9f * this.density * sin(2f * a) * speed
+                    rotationZ = 0.45f * sin(a) * speed
+                    translationY = 0.3f * this.density * sin(2f * a) * speed
                 }
                 .combinedClickable(onClick = onTap, onLongClick = onLongPress)
         ) {
@@ -415,7 +415,7 @@ fun Turntable(
 
         // la pluma (foto), girando sobre su eje
         Canvas(Modifier.fillMaxSize()) {
-            val jitter = if (playing && arm >= 0f) 0.25f * sin(angle * PI.toFloat() / 180f) * speed else 0f
+            val jitter = if (playing && arm >= 0f) 0.06f * sin(angle * PI.toFloat() / 180f) * speed else 0f
             drawArmImage(armImg, plateImg, center, recordR, arm, lift, jitter)
         }
     }
@@ -492,9 +492,9 @@ private fun DrawScope.drawArmImage(
     val dstH = img.height * armScale
     val topLeft = pivot - Offset(Deck.IMG_PIVOT_X * dstW, Deck.IMG_PIVOT_Y * dstH)
     rotate(theta, pivot) {
-        val sh = dstW * (0.03f + 0.05f * lift)
+        val sh = dstW * (0.03f + 0.025f * lift)
         drawImage(img, dstOffset = iOff(topLeft + Offset(sh, sh * 1.6f)), dstSize = iSize(dstW, dstH), colorFilter = shadowTint)
-        val k = 1f + 0.03f * lift
+        val k = 1f + 0.015f * lift
         withTransform({ scale(k, k, pivot) }) {
             drawImage(img, dstOffset = iOff(topLeft), dstSize = iSize(dstW, dstH), filterQuality = fq)
         }
@@ -652,8 +652,8 @@ private fun Sleeve(path: String, vinylOnRight: Boolean, modifier: Modifier) {
         if (b != null) {
             Image(
                 remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop,
-                modifier = Modifier.offset(left + frontW * 0.05f, maxHeight * (66f / 1060f) + frontH * 0.05f)
-                    .size(frontW * 0.9f, frontH * 0.9f)
+                modifier = Modifier.offset(left, maxHeight * (66f / 1060f))
+                    .size(frontW, frontH).clip(RoundedCornerShape(1.dp))
             )
         }
     }
@@ -874,13 +874,14 @@ private fun JacketAndNote(
                 .rotate(-6f)
                 .shadow(10.dp, RoundedCornerShape(3.dp))
         ) {
-            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null, modifier = Modifier.fillMaxSize())
             if (cover != null) {
+                // el estuche ES la portada, con un poco de textura de cartón gastado encima
                 Image(remember(cover) { cover.asImageBitmap() }, null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().padding(jacket * 0.07f))
-                // la textura del cartón encima de la portada, para que se vea impresa y gastada
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
                 Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null,
-                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.28f })
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.22f })
+            } else {
+                Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null, modifier = Modifier.fillMaxSize())
             }
             Text(
                 if (favorite) "★" else "☆",
@@ -923,5 +924,61 @@ private fun JacketAndNote(
             }
             Image(androidx.compose.ui.res.painterResource(R.drawable.vt_env_front), null, modifier = Modifier.fillMaxSize())
         }
+    }
+}
+
+// ───────────────────────── Caja con los discos que siguen ─────────────────────────
+
+/**
+ * Caja de madera con los estuches parados, como en una tienda de discos:
+ * el siguiente se ve de frente y los demás asoman por arriba, uno detrás de otro.
+ */
+@Composable
+private fun RecordCrate(player: Player, total: Int, modifier: Modifier) {
+    val idx = neighbours(player, true, 5)
+    Column(modifier.padding(top = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(700f / 482f)) {
+            val w = maxWidth
+            val h = maxHeight
+            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_crate_back), null, modifier = Modifier.fillMaxSize())
+            // del más lejano al más cercano
+            idx.indices.reversed().forEach { depth ->
+                val i = idx[depth]
+                val path = player.getMediaItemAt(i).mediaId
+                val jw = w * (0.64f - 0.025f * depth)
+                val bottom = h * (0.80f - 0.07f * depth)
+                androidx.compose.runtime.key(path, i) {
+                    CrateJacket(
+                        path = path,
+                        shade = 0.10f * depth,
+                        modifier = Modifier
+                            .offset(x = (w - jw) / 2 + (if (depth % 2 == 0) 0.dp else 2.dp), y = bottom - jw)
+                            .size(jw)
+                            .rotate(if (depth % 2 == 0) -1f else 1f)
+                            .clickable { player.seekTo(i, 0L); player.play() }
+                    )
+                }
+            }
+            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_crate_front), null, modifier = Modifier.fillMaxSize())
+            if (idx.isEmpty()) {
+                Text("vacía", color = Vintage.CreamDim, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
+                    fontSize = 12.sp, modifier = Modifier.align(Alignment.Center))
+            }
+        }
+        Text("Siguen ($total)", color = Vintage.CreamDim, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun CrateJacket(path: String, shade: Float, modifier: Modifier) {
+    val cover by produceState(initialValue = peekCover(path), path) { if (value == null) value = loadCover(path) }
+    Box(modifier.shadow(4.dp, RoundedCornerShape(2.dp)).clip(RoundedCornerShape(2.dp)).background(Vintage.Cream)) {
+        val c = cover
+        if (c != null) Image(remember(c) { c.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        else Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null, modifier = Modifier.fillMaxSize())
+        // canto de arriba con brillo y sombra para los que están atrás
+        Box(Modifier.fillMaxWidth().height(2.dp).background(Color.White.copy(alpha = 0.35f)))
+        if (shade > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = shade)))
     }
 }

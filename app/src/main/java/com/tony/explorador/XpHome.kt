@@ -104,6 +104,7 @@ fun XpDesktop(
     var startOpen by remember { mutableStateOf(false) }
     var clockOpen by remember { mutableStateOf(false) }
     var accountOpen by remember { mutableStateOf(false) }
+    var wallpaperOpen by remember { mutableStateOf(false) }
     val tick = observePlayer(player)
     val hasMusic = player != null && player.mediaItemCount > 0 && tick >= 0
     BackHandler(enabled = startOpen) { startOpen = false }
@@ -148,11 +149,12 @@ fun XpDesktop(
     }
 
     Box(Modifier.fillMaxSize()) {
-        XpWallpaper(Modifier.fillMaxSize())
+        WallpaperView(Modifier.fillMaxSize())
 
         Column(Modifier.fillMaxSize()) {
             // Íconos del escritorio
-            DesktopIconsArea(apps, Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(8.dp))
+            DesktopIconsArea(apps, Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(8.dp),
+                onChangeWallpaper = { wallpaperOpen = true })
             Taskbar(
                 onStart = { startOpen = !startOpen },
                 startOpen = startOpen,
@@ -191,6 +193,7 @@ fun XpDesktop(
                         onAccount = { accountOpen = true },
                         onMusicFolders = onOpenMusic,
                         onUpdates = onCheckUpdates,
+                        onWallpaper = { wallpaperOpen = true },
                     )
                 }
             }
@@ -231,44 +234,11 @@ fun XpDesktop(
         if (accountOpen) {
             UserAccountDialog(onDismiss = { accountOpen = false })
         }
+        if (wallpaperOpen) WallpaperDialog(onDismiss = { wallpaperOpen = false })
     }
 }
 
 data class TaskButton(val title: String, val icon: XpIconKind, val active: Boolean, val onClick: () -> Unit)
-
-/** Fondo original: cielo azul, nubes suaves y una colina verde. */
-@Composable
-private fun XpWallpaper(modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width
-        val h = size.height
-        drawRect(Brush.verticalGradient(listOf(XpColors.SkyTop, XpColors.SkyBottom), endY = h * 0.75f))
-        // nubes
-        fun cloud(cx: Float, cy: Float, r: Float, a: Float) {
-            val c = Color.White.copy(alpha = a)
-            drawOval(c, Offset(cx - r * 1.6f, cy - r * 0.45f), Size(r * 3.2f, r * 0.9f))
-            drawOval(c, Offset(cx - r * 0.9f, cy - r * 0.8f), Size(r * 1.6f, r * 1.0f))
-            drawOval(c, Offset(cx - r * 0.1f, cy - r * 0.65f), Size(r * 1.4f, r * 0.85f))
-        }
-        cloud(w * 0.25f, h * 0.18f, w * 0.12f, 0.55f)
-        cloud(w * 0.78f, h * 0.10f, w * 0.10f, 0.45f)
-        cloud(w * 0.62f, h * 0.30f, w * 0.08f, 0.35f)
-        // colina de atrás
-        val back = Path().apply {
-            moveTo(0f, h * 0.68f)
-            cubicTo(w * 0.35f, h * 0.56f, w * 0.7f, h * 0.62f, w, h * 0.58f)
-            lineTo(w, h); lineTo(0f, h); close()
-        }
-        drawPath(back, Brush.verticalGradient(listOf(Color(0xFF8ACB52), XpColors.HillDark), startY = h * 0.56f, endY = h))
-        // colina principal
-        val front = Path().apply {
-            moveTo(0f, h * 0.80f)
-            cubicTo(w * 0.25f, h * 0.62f, w * 0.65f, h * 0.66f, w, h * 0.78f)
-            lineTo(w, h); lineTo(0f, h); close()
-        }
-        drawPath(front, Brush.verticalGradient(listOf(XpColors.HillLight, XpColors.HillDark), startY = h * 0.64f, endY = h))
-    }
-}
 
 private fun Color.darker(): Color = Color(red * 0.45f, green * 0.45f, blue * 0.45f, alpha)
 
@@ -283,24 +253,21 @@ private fun Taskbar(
         Modifier.fillMaxWidth().background(XpColors.taskbarBrush).navigationBarsPadding().height(42.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Botón Inicio
+        // Botón Inicio (corto, con esfera brillante)
         Row(
             Modifier.fillMaxHeight()
-                .clip(RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp))
+                .clip(RoundedCornerShape(topEnd = 12.dp, bottomEnd = 12.dp))
                 .background(if (startOpen) Brush.verticalGradient(listOf(XpColors.StartBottom, XpColors.StartMid)) else XpColors.startBrush)
                 .clickable(onClick = onStart)
-                .padding(start = 10.dp, end = 18.dp),
+                .padding(start = 6.dp, end = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            androidx.compose.foundation.Image(
-                androidx.compose.ui.res.painterResource(R.drawable.app_logo), null,
-                modifier = Modifier.size(26.dp).clip(RoundedCornerShape(6.dp))
-            )
-            Spacer(Modifier.width(6.dp))
+            StartOrb(Modifier.size(26.dp))
+            Spacer(Modifier.width(5.dp))
             Text(
                 "Inicio",
                 style = TextStyle(
-                    color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic,
+                    color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic,
                     shadow = Shadow(Color.Black.copy(alpha = 0.5f), Offset(1f, 1f), 2f)
                 )
             )
@@ -427,3 +394,28 @@ fun XpTitleBackground(content: @Composable () -> Unit) {
     Box(Modifier.background(XpColors.titleBrush)) { content() }
 }
 
+
+/** Esfera del botón Inicio: cristal azul con un destello blanco de cuatro puntas. */
+@Composable
+private fun StartOrb(modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val r = size.minDimension / 2
+        val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
+        drawCircle(Color.Black.copy(alpha = 0.3f), r, c + androidx.compose.ui.geometry.Offset(0f, 1.5f))
+        drawCircle(Brush.radialGradient(listOf(Color(0xFFBFE6FF), Color(0xFF3D9BFF), Color(0xFF0B4FB8)),
+            center = c - androidx.compose.ui.geometry.Offset(r * 0.3f, r * 0.35f), radius = r * 1.4f), r, c)
+        drawCircle(Color.White.copy(alpha = 0.85f), r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        // destello
+        val p = androidx.compose.ui.graphics.Path().apply {
+            moveTo(c.x, c.y - r * 0.62f)
+            quadraticBezierTo(c.x + r * 0.08f, c.y - r * 0.08f, c.x + r * 0.62f, c.y)
+            quadraticBezierTo(c.x + r * 0.08f, c.y + r * 0.08f, c.x, c.y + r * 0.62f)
+            quadraticBezierTo(c.x - r * 0.08f, c.y + r * 0.08f, c.x - r * 0.62f, c.y)
+            quadraticBezierTo(c.x - r * 0.08f, c.y - r * 0.08f, c.x, c.y - r * 0.62f)
+            close()
+        }
+        drawPath(p, Color.White)
+        drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent), startY = c.y - r, endY = c.y),
+            c - androidx.compose.ui.geometry.Offset(r * 0.6f, r * 0.92f), androidx.compose.ui.geometry.Size(r * 1.2f, r * 0.7f))
+    }
+}

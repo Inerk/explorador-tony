@@ -197,6 +197,7 @@ fun ControlPanelContent(
     onAccount: () -> Unit,
     onMusicFolders: () -> Unit,
     onUpdates: () -> Unit,
+    onWallpaper: () -> Unit = {},
 ) {
     var musicSkinOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
@@ -212,6 +213,7 @@ fun ControlPanelContent(
             }
         }
         item { PanelItem(XpIconKind.SETTINGS, "Apariencia y temas", "Cambia el tema de toda la app") { onTheme() } }
+        item { PanelItem(XpIconKind.PICTURES, "Fondo de pantalla", "Elige el fondo del escritorio o usa una foto tuya") { onWallpaper() } }
         item {
             PanelItem(null, "Cuentas de usuario", "Tu nombre y tu imagen", avatar = true) { onAccount() }
         }

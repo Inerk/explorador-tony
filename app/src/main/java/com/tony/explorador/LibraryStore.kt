@@ -70,6 +70,12 @@ object LibraryStore {
         private set
 
     val avatarFile get() = File(appContext.filesDir, "avatar.jpg")
+    val wallpaperFile get() = File(appContext.filesDir, "fondo.jpg")
+    var wallpaper by mutableStateOf("xp")
+        private set
+    var wallpaperVersion by mutableStateOf(0)
+        private set
+    fun changeWallpaper(id: String) { wallpaper = id; wallpaperVersion++; save() }
 
     fun changeUserName(name: String) { userName = name; save() }
     fun changeAvatar(index: Int) { avatar = index; avatarVersion++; save() }
@@ -354,6 +360,7 @@ object LibraryStore {
             put("avatar", avatar)
             put("musicSkin", musicSkin.name)
             put("windowSkin", windowSkin.name)
+            put("wallpaper", wallpaper)
             put("desktopConfigured", desktopConfigured)
             put("desktopIds", JSONArray(desktopIds.toList()))
             put("desktopPos", JSONObject(desktopPos.toMap()))
@@ -379,6 +386,7 @@ object LibraryStore {
         avatar = o.optInt("avatar", 0)
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }
         o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
+        o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         desktopConfigured = o.optBoolean("desktopConfigured", false)
         o.optJSONArray("desktopIds")?.let { a -> for (i in 0 until a.length()) desktopIds.add(a.getString(i)) }
         o.optJSONObject("desktopPos")?.let { m -> m.keys().forEach { k -> desktopPos[k] = m.getString(k) } }

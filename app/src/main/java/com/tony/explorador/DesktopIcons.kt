@@ -68,7 +68,7 @@ private val CellH = 108.dp
  * Deja presionado en un espacio vacío para personalizar.
  */
 @Composable
-fun DesktopIconsArea(apps: Map<String, DeskApp>, modifier: Modifier) {
+fun DesktopIconsArea(apps: Map<String, DeskApp>, modifier: Modifier, onChangeWallpaper: () -> Unit = {}) {
     var customize by remember { mutableStateOf(false) }
     var bgMenu by remember { mutableStateOf<Offset?>(null) }
     val density = LocalDensity.current
@@ -129,6 +129,7 @@ fun DesktopIconsArea(apps: Map<String, DeskApp>, modifier: Modifier) {
                 DropdownMenu(expanded = true, onDismissRequest = { bgMenu = null }) {
                     DropdownMenuItem(text = { Text("Personalizar escritorio…") }, onClick = { bgMenu = null; customize = true })
                     DropdownMenuItem(text = { Text("Organizar íconos") }, onClick = { bgMenu = null; LibraryStore.resetDesktopPositions() })
+                    DropdownMenuItem(text = { Text("Cambiar fondo de pantalla…") }, onClick = { bgMenu = null; onChangeWallpaper() })
                 }
             }
         }
