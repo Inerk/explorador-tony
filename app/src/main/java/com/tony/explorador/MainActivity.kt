@@ -349,6 +349,7 @@ fun AppRoot() {
                         openRequest = libraryRequest,
                         onRequestHandled = { libraryRequest = null },
                         onOpenFolder = { goTo("folder", it) },
+                        startAtSongs = peekedLibrary,
                     )
                 }
                 }

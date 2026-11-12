@@ -173,10 +173,12 @@ fun LibraryScreen(
     openRequest: Pair<String, String>? = null,
     onRequestHandled: () -> Unit = {},
     onOpenFolder: (String) -> Unit = {},
+    startAtSongs: Boolean = false,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val stack = remember { mutableStateListOf<LibPage>(LibPage.Menu) }
+    // al llegar deslizando desde el reproductor, abre directo en «Todas las canciones»
+    val stack = remember { mutableStateListOf<LibPage>(LibPage.Menu).apply { if (startAtSongs) add(LibPage.Songs) } }
     val page = stack.last()
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
@@ -562,7 +564,7 @@ private fun SongList(
         return
     }
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 26.dp else 0.dp), state = listState) {
+    LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
         item { header() }
         item { PlayBar(songs, onPlay, viewButton) }
         itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
@@ -754,7 +756,7 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
         m
     }
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().padding(end = if (groups.size > 25) 26.dp else 0.dp), state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(end = if (groups.size > 25) 14.dp else 0.dp), state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
         items(groups.entries.toList(), key = { it.key }) { (name, list) ->
             val thumb by produceState<android.graphics.Bitmap?>(null, name, LibraryStore.tagsVersion) { value = loadThumb(list.first().path) }
             Row(
@@ -1102,10 +1104,9 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
     }
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = 8.dp, bottom = 8.dp)
-                .fillMaxHeight(0.92f).width(26.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(if (active != null) Retro.Panel else Retro.Panel.copy(alpha = 0.55f))
+            // tira delgada; el área para tocar es un poquito más ancha que lo que se ve
+            Modifier.align(Alignment.CenterEnd).padding(top = 8.dp, bottom = 8.dp)
+                .fillMaxHeight(0.92f).width(22.dp)
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -1120,11 +1121,14 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
                     }
                 },
             verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.End
         ) {
             LETTERS.forEach { l ->
                 Text(
-                    l, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    l, fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.width(12.dp).padding(end = 2.dp)
+                        .background(if (active != null) Retro.Panel.copy(alpha = 0.7f) else Color.Transparent),
                     color = when {
                         l == active -> Retro.Orange
                         l in firstIndex -> Retro.Text
