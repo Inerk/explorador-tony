@@ -139,6 +139,8 @@ fun LibraryScreen(
     miniPlayer: @Composable () -> Unit,
     onHome: () -> Unit = {},
     resetSignal: Int = 0,
+    openRequest: Pair<String, String>? = null,
+    onRequestHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -147,6 +149,13 @@ fun LibraryScreen(
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
     BackHandler { pop() }
+    LaunchedEffect(openRequest) {
+        openRequest?.let { (kind, value) ->
+            while (stack.size > 1) stack.removeAt(stack.lastIndex)
+            stack.add(if (kind == "artist") LibPage.Artist(value) else LibPage.Album(value))
+            onRequestHandled()
+        }
+    }
     LaunchedEffect(resetSignal) {
         if (resetSignal > 0) { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
     }
@@ -223,7 +232,7 @@ fun LibraryScreen(
             ) { (_, shownPage) ->
             when (val p = shownPage) {
                 LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) })
-                LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it })
+                LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
                 LibPage.Artists -> GroupList(
                     groups = songs.groupBy { it.artist }.toSortedMap(compareBy { it.lowercase(Locale.ROOT) }),
                     icon = Icons.Filled.Person, color = Retro.Blue,
@@ -386,6 +395,7 @@ private fun SongList(
     empty: String = "No hay canciones.\nRevisa “Carpetas de música”.",
     onRemove: ((Song) -> Unit)? = null,
     header: @Composable () -> Unit = {},
+    alphabet: Boolean = false,
 ) {
     if (songs.isEmpty()) {
         Column(Modifier.fillMaxSize()) {
@@ -396,7 +406,14 @@ private fun SongList(
         }
         return
     }
-    LazyColumn(Modifier.fillMaxSize()) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val letters = remember(songs) {
+        val m = LinkedHashMap<String, Int>()
+        songs.forEachIndexed { i, s -> m.putIfAbsent(letterOf(s.title), i + 2) } // +2: encabezado y botones
+        m
+    }
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 26.dp else 0.dp), state = listState) {
         item { header() }
         item { PlayBar(songs, onPlay) }
         itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
@@ -410,6 +427,8 @@ private fun SongList(
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
+    }
+    if (alphabet && songs.size > 25) AlphabetScroller(listState, letters)
     }
 }
 
@@ -480,7 +499,14 @@ private fun SongRow(
 
 @Composable
 private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color: Color, onOpen: (String) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 6.dp)) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val letters = remember(groups) {
+        val m = LinkedHashMap<String, Int>()
+        groups.keys.forEachIndexed { i, k -> m.putIfAbsent(letterOf(k), i) }
+        m
+    }
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().padding(end = if (groups.size > 25) 26.dp else 0.dp), state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
         items(groups.entries.toList(), key = { it.key }) { (name, list) ->
             val thumb by produceState<android.graphics.Bitmap?>(null, name) { value = loadThumb(list.first().path) }
             Row(
@@ -504,6 +530,8 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
                 Text("›", color = color, fontSize = 24.sp)
             }
         }
+    }
+    if (groups.size > 25) AlphabetScroller(listState, letters)
     }
 }
 
@@ -616,7 +644,7 @@ private fun PlaylistDetail(pl: Playlist, onPlay: (List<Song>, Int, Boolean) -> U
 }
 
 @Composable
-private fun AddToPlaylistDialog(onDismiss: () -> Unit, onPick: (String) -> Unit, onNew: (String) -> Unit) {
+fun AddToPlaylistDialog(onDismiss: () -> Unit, onPick: (String) -> Unit, onNew: (String) -> Unit) {
     var newName by remember { mutableStateOf<String?>(null) }
     if (newName != null) {
         NameInputDialog("Nueva lista", "", onDismiss = { newName = null }) { onNew(it) }
@@ -799,3 +827,72 @@ private fun Color.darken(f: Float = 0.55f) = Color(red * f, green * f, blue * f,
 private fun Color.compositeOverWhite() = Color(
     red * alpha + (1 - alpha), green * alpha + (1 - alpha), blue * alpha + (1 - alpha), 1f
 )
+
+// ───────── Barra de letras para buscar rápido ─────────
+
+private val LETTERS = listOf("#") + ('A'..'Z').map { it.toString() }
+
+private fun letterOf(text: String): String {
+    val c = java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .firstOrNull()?.uppercaseChar() ?: return "#"
+    return if (c in 'A'..'Z') c.toString() else "#"
+}
+
+@Composable
+private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyListState, firstIndex: Map<String, Int>) {
+    var active by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    fun jump(y: Float, h: Int) {
+        val i = (y / h * LETTERS.size).toInt().coerceIn(0, LETTERS.lastIndex)
+        active = LETTERS[i]
+        // si esa letra no tiene canciones, se va a la siguiente que sí
+        val target = LETTERS.drop(i).firstNotNullOfOrNull { firstIndex[it] }
+            ?: LETTERS.take(i).reversed().firstNotNullOfOrNull { firstIndex[it] } ?: return
+        scope.launch { listState.scrollToItem(target) }
+    }
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.align(Alignment.CenterEnd).padding(end = 2.dp, top = 8.dp, bottom = 8.dp)
+                .fillMaxHeight(0.92f).width(26.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .background(if (active != null) Retro.Panel else Retro.Panel.copy(alpha = 0.55f))
+                .pointerInput(Unit) {
+                    androidx.compose.foundation.gestures.awaitEachGesture {
+                        val down = androidx.compose.foundation.gestures.awaitFirstDown()
+                        down.consume()
+                        jump(down.position.y, size.height)
+                        do {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.first()
+                            if (ch.pressed) { jump(ch.position.y, size.height); ch.consume() }
+                        } while (ch.pressed)
+                        active = null
+                    }
+                },
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            LETTERS.forEach { l ->
+                Text(
+                    l, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    color = when {
+                        l == active -> Retro.Orange
+                        l in firstIndex -> Retro.Text
+                        else -> Retro.SubText.copy(alpha = 0.4f)
+                    }
+                )
+            }
+        }
+        // letra grande mientras deslizas
+        active?.let { l ->
+            Box(
+                Modifier.align(Alignment.Center).padding(start = 80.dp).size(110.dp)
+                    .clip(RoundedCornerShape(24.dp)).background(Color(0xCC3A3A44)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(l, color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+            }
+        }
+    }
+}

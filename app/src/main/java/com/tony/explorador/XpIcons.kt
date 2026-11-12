@@ -12,12 +12,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -43,6 +44,8 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.SD_CARD -> drawSdCard()
             XpIconKind.FOLDER -> drawFolder()
             XpIconKind.SETTINGS -> drawControlPanel()
+            XpIconKind.PLAYER -> drawPlayer()
+            XpIconKind.GALLERY -> drawGallery()
         }
     }
 }
@@ -243,4 +246,58 @@ private fun DrawScope.drawControlPanel() {
         drawCircle(Color.White, w * 0.055f, Offset(w * (0.18f + 0.64f * knobs[i]), y))
         drawCircle(c, w * 0.055f, Offset(w * (0.18f + 0.64f * knobs[i]), y), style = Stroke(w * 0.02f))
     }
+}
+
+/** Reproductor: disco brillante detrás y botón de play naranja de cristal al frente. */
+private fun DrawScope.drawPlayer() {
+    val w = size.width
+    val h = size.height
+    // disco
+    val dc = Offset(w * 0.58f, h * 0.44f)
+    val dr = w * 0.36f
+    drawCircle(Brush.sweepGradient(listOf(Color(0xFFE6E9F0), Color(0xFFB8E0FF), Color(0xFFF5D0FF), Color(0xFFFFF2B8),
+        Color(0xFFC8F5D0), Color(0xFFE6E9F0)), center = dc), dr, dc)
+    drawCircle(Color(0xFF9AA3B5), dr, dc, style = Stroke(w * 0.015f))
+    drawCircle(Color.White.copy(alpha = 0.7f), dr * 0.32f, dc)
+    drawCircle(Color(0xFF9AA3B5), dr * 0.12f, dc)
+    // botón de play
+    val c = Offset(w * 0.38f, h * 0.58f)
+    val r = w * 0.27f
+    drawCircle(Brush.radialGradient(listOf(Color(0xFFFFD08A), Color(0xFFFF8A1E), Color(0xFFC24E00)),
+        center = Offset(c.x - r * 0.3f, c.y - r * 0.35f), radius = r * 1.5f), r, c)
+    drawCircle(Color(0xFF8A3A00), r, c, style = Stroke(w * 0.015f))
+    val tri = Path().apply {
+        moveTo(c.x - r * 0.28f, c.y - r * 0.42f); lineTo(c.x + r * 0.48f, c.y); lineTo(c.x - r * 0.28f, c.y + r * 0.42f); close()
+    }
+    drawPath(tri, Color.White)
+    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent), startY = c.y - r, endY = c.y),
+        Offset(c.x - r * 0.62f, c.y - r * 0.92f), Size(r * 1.24f, r * 0.8f))
+}
+
+/** Galería: fotos apiladas un poco giradas. */
+private fun DrawScope.drawGallery() {
+    val w = size.width
+    val h = size.height
+    fun photo(angle: Float, dx: Float, dy: Float, sky: Color) {
+        rotate(angle, Offset(w * 0.5f + dx, h * 0.5f + dy)) {
+            val o = Offset(w * 0.16f + dx, h * 0.2f + dy)
+            val s = Size(w * 0.68f, h * 0.56f)
+            drawRect(Color.Black.copy(alpha = 0.18f), o + Offset(w * 0.02f, w * 0.03f), s)
+            drawRect(Color.White, o, s)
+            val io = o + Offset(s.width * 0.07f, s.height * 0.08f)
+            val isz = Size(s.width * 0.86f, s.height * 0.72f)
+            drawRect(Brush.verticalGradient(listOf(sky, Color(0xFFDDEEFF)), startY = io.y, endY = io.y + isz.height), io, isz)
+            val hill = Path().apply {
+                moveTo(io.x, io.y + isz.height)
+                cubicTo(io.x + isz.width * 0.3f, io.y + isz.height * 0.45f, io.x + isz.width * 0.6f, io.y + isz.height * 0.6f, io.x + isz.width, io.y + isz.height * 0.5f)
+                lineTo(io.x + isz.width, io.y + isz.height); close()
+            }
+            drawPath(hill, Color(0xFF4FAE2C))
+            drawCircle(Color(0xFFFFD84D), isz.width * 0.08f, Offset(io.x + isz.width * 0.78f, io.y + isz.height * 0.28f))
+            drawRect(Color(0xFFB8C2D4), o, s, style = Stroke(w * 0.012f))
+        }
+    }
+    photo(-14f, -w * 0.04f, h * 0.02f, Color(0xFFFF9A5A))
+    photo(8f, w * 0.05f, -h * 0.02f, Color(0xFF9B7BEA))
+    photo(-2f, 0f, h * 0.06f, Color(0xFF3D8BFF))
 }

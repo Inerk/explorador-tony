@@ -172,6 +172,17 @@ object LibraryStore {
 
     fun songFor(path: String): Song? = songs.firstOrNull { it.path == path }
 
+    /** Quita una canción borrada de la biblioteca, favoritas y listas. */
+    fun removeSong(path: String) {
+        songs = songs.filter { it.path != path }
+        favorites.remove(path)
+        for (i in playlists.indices) {
+            val p = playlists[i]
+            if (path in p.paths) playlists[i] = p.copy(paths = p.paths - path)
+        }
+        save()
+    }
+
     suspend fun scan() {
         if (scanning) return
         scanning = true

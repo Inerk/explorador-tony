@@ -123,8 +123,8 @@ fun XpDesktop(
         add(DeskApp("mypc", "Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) })
         roots.drop(1).firstOrNull()?.let { r -> add(DeskApp("sd", r.name, XpIconKind.SD_CARD) { onOpenFolder(r.file) }) }
         add(DeskApp("docs", "Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
-        add(DeskApp("music", "Mi música", XpIconKind.MUSIC) { onOpenMusic() })
-        add(DeskApp("pictures", "Mis imágenes", XpIconKind.PICTURES) { onOpenGallery() })
+        add(DeskApp("music", "Música", XpIconKind.PLAYER) { onOpenMusic() })
+        add(DeskApp("pictures", "Galería", XpIconKind.GALLERY) { onOpenGallery() })
         add(DeskApp("camera", "Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
         add(DeskApp("videos", "Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
         add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
@@ -142,7 +142,7 @@ fun XpDesktop(
     val tasks = buildList {
         if (myPc.open) add(TaskButton("Mi PC", XpIconKind.COMPUTER, !myPc.minimized) { myPc.minimized = !myPc.minimized })
         if (settings.open) add(TaskButton("Panel de control", XpIconKind.SETTINGS, !settings.minimized) { settings.minimized = !settings.minimized })
-        if (hasMusic) add(TaskButton(player?.mediaMetadata?.title?.toString() ?: "Música", XpIconKind.MUSIC, !DesktopState.player.minimized) {
+        if (hasMusic) add(TaskButton(player?.mediaMetadata?.title?.toString() ?: "Música", XpIconKind.PLAYER, !DesktopState.player.minimized) {
             DesktopState.player.minimized = !DesktopState.player.minimized
         })
     }

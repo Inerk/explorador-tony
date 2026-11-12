@@ -67,6 +67,7 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -231,11 +232,20 @@ fun MusicPlayerScreen(
     onOpenCoverFlow: () -> Unit = {},
     onHome: () -> Unit = {},
     onMusicMenu: () -> Unit = {},
+    onGoTo: (String, String) -> Unit = { _, _ -> },
 ) {
     BackHandler(onBack = onClose)
     val musicMenu by rememberUpdatedState(onMusicMenu)
     var mode by remember { mutableStateOf(PanelMode.COVER) }
     var infoOpen by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val pull = remember { Animatable(0f) }
+    var instant by remember { mutableStateOf(false) }
+    LaunchedEffect(mode) { instant = false }
+    val pullScope = rememberCoroutineScope()
+    val screenH = with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx()
+    }
     val tick = observePlayer(player, if (mode == PanelMode.COVER) 250L else 100L)
 
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
@@ -320,12 +330,33 @@ fun MusicPlayerScreen(
                     }
                 }
 
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                // La lista aparece detrás mientras jalas el reproductor hacia abajo
+                if (mode == PanelMode.COVER && pull.value > 0.001f) {
+                    Box(Modifier.fillMaxSize().graphicsLayer {
+                        alpha = pull.value
+                        val sc = 0.9f + 0.1f * pull.value
+                        scaleX = sc; scaleY = sc
+                    }) { QueuePanel(player, accent) }
+                }
+                Column(
+                    Modifier.fillMaxSize().graphicsLayer {
+                        val p = pull.value
+                        translationY = p * size.height * 0.6f
+                        val sc = 1f - 0.45f * p
+                        scaleX = sc; scaleY = sc
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                        alpha = 1f - 0.6f * p
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 // Panel central: portada / letra / lista
                 Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
                     AnimatedContent(
                         targetState = mode,
                         transitionSpec = {
-                            if (targetState == PanelMode.COVER)
+                            if (instant) androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                            else if (targetState == PanelMode.COVER)
                                 (fadeIn(tween(240)) + scaleIn(tween(320), initialScale = 0.85f)) togetherWith
                                     (fadeOut(tween(160)) + scaleOut(tween(220), targetScale = 1.08f))
                             else
@@ -345,8 +376,23 @@ fun MusicPlayerScreen(
                                 onNext = { player.seekToNextMediaItem() },
                                 onPrev = { player.seekToPreviousMediaItem() },
                                 onLongPress = onOpenCoverFlow,
-                                onSwipeDown = { mode = PanelMode.QUEUE },
+                                onPull = { dy ->
+                                    pullScope.launch { pull.snapTo((pull.value + dy / (screenH * 0.55f)).coerceIn(0f, 1f)) }
+                                },
+                                onPullEnd = { vy ->
+                                    pullScope.launch {
+                                        if (vy > 1100f || pull.value > 0.35f) {
+                                            pull.animateTo(1f, tween(170))
+                                            instant = true
+                                            mode = PanelMode.QUEUE
+                                            pull.snapTo(0f)
+                                        } else {
+                                            pull.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                        }
+                                    }
+                                },
                                 onSwipeUp = { infoOpen = true },
+                                onMenu = { menuOpen = true },
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -492,8 +538,27 @@ fun MusicPlayerScreen(
                 }
                 } }
                 }
+                }
+                }
                 Spacer(Modifier.height(8.dp))
             }
+        }
+    }
+    if (menuOpen) {
+        player.currentMediaItem?.mediaId?.let { path ->
+            SongMenuWindow(
+                path = path,
+                accent = accent,
+                onDismiss = { menuOpen = false },
+                onInfo = { menuOpen = false; infoOpen = true },
+                onLyrics = { menuOpen = false; mode = PanelMode.LYRICS },
+                onGoTo = { kind, value -> menuOpen = false; onGoTo(kind, value) },
+                onDeleted = {
+                    menuOpen = false
+                    val i = player.currentMediaItemIndex
+                    if (i >= 0 && i < player.mediaItemCount) player.removeMediaItem(i)
+                },
+            )
         }
     }
     if (infoOpen) {
@@ -515,8 +580,10 @@ private fun CoverArt(
     onNext: () -> Unit,
     onPrev: () -> Unit,
     onLongPress: () -> Unit,
-    onSwipeDown: () -> Unit,
+    onPull: (Float) -> Unit,
+    onPullEnd: (Float) -> Unit,
     onSwipeUp: () -> Unit,
+    onMenu: () -> Unit,
 ) {
     val scale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
@@ -526,7 +593,8 @@ private fun CoverArt(
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val swipeDown by rememberUpdatedState(onSwipeDown)
+    val pullBy by rememberUpdatedState(onPull)
+    val pullEnd by rememberUpdatedState(onPullEnd)
     val swipeUp by rememberUpdatedState(onSwipeUp)
     val next by rememberUpdatedState(onNext)
     val prev by rememberUpdatedState(onPrev)
@@ -543,14 +611,17 @@ private fun CoverArt(
                     var axis = 0 // 0 = sin decidir, 1 = horizontal, 2 = vertical
                     var fired = false
                     var dy = 0f
+                    val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
                     detectDragGestures(
-                        onDragStart = { axis = 0; fired = false; dy = 0f },
+                        onDragStart = { axis = 0; fired = false; dy = 0f; tracker.resetTracking() },
                         onDragEnd = {
+                            if (axis == 2) {
+                                // soltar: si lo aventaste o lo bajaste bastante, se va a la lista
+                                pullEnd(tracker.calculateVelocity().y)
+                                scope.launch { offsetY.animateTo(0f, spring(dampingRatio = 0.6f)) }
+                            }
                             scope.launch {
-                                if (axis == 2) {
-                                    offsetY.animateTo(0f, spring(dampingRatio = 0.6f))
-                                    return@launch
-                                }
+                                if (axis == 2) return@launch
                                 val v = offsetX.value
                                 when {
                                     v < -w * 0.22f && hasNext -> {
@@ -569,24 +640,23 @@ private fun CoverArt(
                                 }
                             }
                         },
-                        onDragCancel = { scope.launch { offsetX.animateTo(0f); offsetY.animateTo(0f) } }
+                        onDragCancel = { pullEnd(0f); scope.launch { offsetX.animateTo(0f); offsetY.animateTo(0f) } }
                     ) { change, drag ->
                         change.consume()
+                        tracker.addPosition(change.uptimeMillis, change.position)
                         if (axis == 0) axis = if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y)) 1 else 2
                         if (axis == 1) {
                             // si no hay a dónde ir, se siente como liga
                             val resist = if ((drag.x < 0 && !hasNext) || (drag.x > 0 && !hasPrev)) 0.3f else 1f
                             scope.launch { offsetX.snapTo(offsetX.value + drag.x * resist) }
                         } else {
-                            // abajo abre la lista, arriba abre la información (al instante, sin esperar a soltar)
+                            // hacia abajo: todo el reproductor sigue tu dedo; hacia arriba: información
                             dy += drag.y
-                            scope.launch { offsetY.snapTo((offsetY.value + drag.y * 0.4f).coerceIn(-w * 0.15f, w * 0.4f)) }
-                            if (!fired && dy > w * 0.08f) {
-                                fired = true
-                                swipeDown()
-                            } else if (!fired && dy < -w * 0.08f) {
-                                fired = true
-                                swipeUp()
+                            if (dy > 0f || drag.y > 0f) {
+                                pullBy(drag.y)
+                            } else {
+                                scope.launch { offsetY.snapTo((offsetY.value + drag.y * 0.3f).coerceIn(-w * 0.12f, 0f)) }
+                                if (!fired && dy < -w * 0.08f) { fired = true; swipeUp() }
                             }
                         }
                     }
@@ -607,7 +677,7 @@ private fun CoverArt(
                 .combinedClickable(onClick = onTap, onLongClick = onLongPress),
             contentAlignment = Alignment.Center
         ) {
-            Crossfade(targetState = cover, animationSpec = tween(400), label = "cover") { bmp ->
+            Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
                 if (bmp != null) {
                     Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
                         contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -617,6 +687,15 @@ private fun CoverArt(
                             tint = Color.White.copy(alpha = 0.5f))
                     }
                 }
+            }
+            // ⋮ abajo a la derecha de la portada
+            Box(
+                Modifier.align(Alignment.BottomEnd).padding(10.dp).size(38.dp)
+                    .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(onClick = onMenu),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.MoreVert, "Más opciones", tint = Color.White)
             }
         }
     }

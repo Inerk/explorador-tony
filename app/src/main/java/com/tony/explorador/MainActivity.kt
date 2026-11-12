@@ -147,6 +147,17 @@ fun AppRoot() {
     var libraryReset by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
     var folderRequest by remember { mutableStateOf<File?>(null) }
+    var libraryRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
+    fun goTo(kind: String, value: String) {
+        if (kind == "folder") {
+            overlays.toList().forEach { close(it) }
+            folderRequest = File(value)
+        } else {
+            overlays.filter { it == Overlay.Music || it == Overlay.CoverFlow }.forEach { close(it) }
+            libraryRequest = kind to value
+            if (Overlay.Library !in overlays) open(Overlay.Library)
+        }
+    }
     fun musicMenu() {
         overlays.filter { it == Overlay.Music || it == Overlay.CoverFlow }.forEach { close(it) }
         libraryReset++
@@ -229,7 +240,8 @@ fun AppRoot() {
                         MusicPlayerScreen(controller, onClose = { close(o) },
                             onOpenCoverFlow = { open(Overlay.CoverFlow) },
                             onHome = { goHome() },
-                            onMusicMenu = { musicMenu() })
+                            onMusicMenu = { musicMenu() },
+                            onGoTo = { k, v -> goTo(k, v) })
                     }
                     Overlay.CoverFlow -> CoverFlowScreen(
                         startPath = controller?.currentMediaItem?.mediaId,
@@ -268,6 +280,8 @@ fun AppRoot() {
                         miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) },
                         onHome = { goHome() },
                         resetSignal = libraryReset,
+                        openRequest = libraryRequest,
+                        onRequestHandled = { libraryRequest = null },
                     )
                 }
                 }
