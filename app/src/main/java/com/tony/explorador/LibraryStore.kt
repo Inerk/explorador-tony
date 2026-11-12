@@ -293,6 +293,29 @@ object LibraryStore {
             }
         }
 
+        // 1b) Videos musicales que estén dentro de las carpetas de música
+        runCatching {
+            appContext.contentResolver.query(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Video.Media.DATA, MediaStore.Video.Media.TITLE, MediaStore.Video.Media.ARTIST,
+                    MediaStore.Video.Media.ALBUM, MediaStore.Video.Media.DURATION), null, null, null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val path = c.getString(0) ?: continue
+                    if (prefixes.none { path.startsWith(it) }) continue
+                    val f = File(path)
+                    if (!f.isFile || f.kind() != FileKind.VIDEO) continue
+                    byPath[path] = Song(
+                        path = path,
+                        title = c.getString(1)?.takeIf { it.isNotBlank() } ?: f.nameWithoutExtension,
+                        artist = cleanTag(c.getString(2)) ?: UNKNOWN_ARTIST,
+                        album = cleanTag(c.getString(3)) ?: UNKNOWN_ALBUM,
+                        durationMs = c.getLong(4),
+                    )
+                }
+            }
+        }
+
         // 2) Recorrer las carpetas para encontrar lo que Android no indexó, y las listas .m3u8
         val lists = mutableListOf<File>()
         for (folder in folders) {
@@ -302,7 +325,7 @@ object LibraryStore {
                 if (!f.isFile) return@forEach
                 val ext = f.extension.lowercase(Locale.ROOT)
                 if (ext == "m3u" || ext == "m3u8") lists.add(f)
-                else if (f.kind() == FileKind.AUDIO && !byPath.containsKey(f.absolutePath)) {
+                else if ((f.kind() == FileKind.AUDIO || f.kind() == FileKind.VIDEO) && !byPath.containsKey(f.absolutePath)) {
                     byPath[f.absolutePath] = Song(f.absolutePath, f.nameWithoutExtension, UNKNOWN_ARTIST, UNKNOWN_ALBUM, 0L)
                 }
             }

@@ -429,25 +429,4 @@ fun XpTitleBackground(content: @Composable () -> Unit) {
 
 /** Esfera del botón Inicio: cristal azul con un destello blanco de cuatro puntas. */
 @Composable
-private fun StartOrb(modifier: Modifier) {
-    androidx.compose.foundation.Canvas(modifier) {
-        val r = size.minDimension / 2
-        val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
-        drawCircle(Color.Black.copy(alpha = 0.3f), r, c + androidx.compose.ui.geometry.Offset(0f, 1.5f))
-        drawCircle(Brush.radialGradient(listOf(Color(0xFFBFE6FF), Color(0xFF3D9BFF), Color(0xFF0B4FB8)),
-            center = c - androidx.compose.ui.geometry.Offset(r * 0.3f, r * 0.35f), radius = r * 1.4f), r, c)
-        drawCircle(Color.White.copy(alpha = 0.85f), r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-        // destello
-        val p = androidx.compose.ui.graphics.Path().apply {
-            moveTo(c.x, c.y - r * 0.62f)
-            quadraticBezierTo(c.x + r * 0.08f, c.y - r * 0.08f, c.x + r * 0.62f, c.y)
-            quadraticBezierTo(c.x + r * 0.08f, c.y + r * 0.08f, c.x, c.y + r * 0.62f)
-            quadraticBezierTo(c.x - r * 0.08f, c.y + r * 0.08f, c.x - r * 0.62f, c.y)
-            quadraticBezierTo(c.x - r * 0.08f, c.y - r * 0.08f, c.x, c.y - r * 0.62f)
-            close()
-        }
-        drawPath(p, Color.White)
-        drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent), startY = c.y - r, endY = c.y),
-            c - androidx.compose.ui.geometry.Offset(r * 0.6f, r * 0.92f), androidx.compose.ui.geometry.Size(r * 1.2f, r * 0.7f))
-    }
-}
+private fun StartOrb(modifier: Modifier) = NebulaOrb(modifier)

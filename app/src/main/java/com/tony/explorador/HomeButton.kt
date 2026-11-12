@@ -63,9 +63,6 @@ fun NotificationDot(modifier: Modifier = Modifier, size: androidx.compose.ui.uni
  */
 @Composable
 fun HomeButton(onClick: () -> Unit, modifier: Modifier = Modifier, @Suppress("UNUSED_PARAMETER") dark: Boolean = true) {
-    val t = rememberInfiniteTransition(label = "nebula")
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(14000, easing = LinearEasing)), label = "spin")
-    val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "tw")
     val press = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     Box(
@@ -82,7 +79,17 @@ fun HomeButton(onClick: () -> Unit, modifier: Modifier = Modifier, @Suppress("UN
             },
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        NebulaOrb(Modifier.fillMaxSize())
+    }
+}
+
+/** La nebulosa animada (se usa en el botón de regresar y en el botón Inicio). */
+@Composable
+fun NebulaOrb(modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "nebula")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(14000, easing = LinearEasing)), label = "spin")
+    val twinkle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "tw")
+        Canvas(modifier) {
             val w = size.width
             val c = Offset(w / 2f, w / 2f)
             val r = w / 2f
@@ -117,5 +124,4 @@ fun HomeButton(onClick: () -> Unit, modifier: Modifier = Modifier, @Suppress("UN
             // orilla
             drawCircle(Color.White.copy(alpha = 0.55f), r - w * 0.02f, c, style = Stroke(w * 0.04f))
         }
-    }
 }

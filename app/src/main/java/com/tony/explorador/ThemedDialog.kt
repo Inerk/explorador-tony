@@ -82,7 +82,7 @@ fun ThemedDialog(
         return
     }
     Dialog(onDismissRequest = onDismiss) {
-        val shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 3.dp)
+        val shape = RoundedCornerShape(16.dp)
         Column(
             Modifier.widthIn(max = 380.dp).fillMaxWidth().shadow(16.dp, shape).clip(shape)
                 .background(XpColors.TitleBottom).padding(start = 3.dp, end = 3.dp, bottom = 3.dp)
@@ -124,11 +124,11 @@ private fun CreditsLine(color: Color) {
 /** Botón gris redondeado de Windows XP (el principal con orilla azul). */
 @Composable
 fun XpPushButton(label: String, primary: Boolean = false, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(50)
     Box(
         Modifier.clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFECEBE6), Color(0xFFD6D0C5))))
-            .border(if (primary) 2.dp else 1.dp, if (primary) Color(0xFF6D8FD9) else Color(0xFF003C74), shape)
+            .background(Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFEDE6FF), Color(0xFFD5C8F7))))
+            .border(if (primary) 2.dp else 1.dp, if (primary) Color(0xFFD64FC4) else Color(0xFF5B3FD0), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center

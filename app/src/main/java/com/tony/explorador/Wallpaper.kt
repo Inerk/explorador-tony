@@ -59,6 +59,7 @@ data class WallpaperOption(val id: String, val name: String)
 
 val Wallpapers = listOf(
     WallpaperOption("nieve", "Muñeco de nieve"),
+    WallpaperOption("nebula", "Nebulosa"),
     WallpaperOption("xp", "Colinas"),
     WallpaperOption("wood", "Madera"),
     WallpaperOption("azul", "Azul clásico"),
@@ -80,6 +81,7 @@ fun WallpaperView(modifier: Modifier, id: String = LibraryStore.wallpaper) {
             )
         } else HillsWallpaper(modifier)
         "nieve" -> Image(painterResource(R.drawable.wp_nieve), null, contentScale = ContentScale.Crop, modifier = modifier)
+        "nebula" -> NebulaWallpaper(modifier)
         "wood" -> Image(painterResource(R.drawable.vt_table), null, contentScale = ContentScale.Crop, modifier = modifier)
         "azul" -> Box(modifier.background(Color(0xFF3A6EA5)))
         "noche" -> Box(modifier.background(Brush.verticalGradient(listOf(Color(0xFF0B1A3A), Color(0xFF26305E), Color(0xFF3B1E5E)))))
@@ -174,4 +176,32 @@ fun WallpaperDialog(onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
     )
+}
+
+/** Fondo de nebulosa dibujado: espacio profundo, nubes de colores y estrellas. */
+@Composable
+fun NebulaWallpaper(modifier: Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        drawRect(Brush.verticalGradient(listOf(Color(0xFF0B0820), Color(0xFF1A1145), Color(0xFF0B0820))))
+        fun cloud(x: Float, y: Float, r: Float, c: Color) {
+            val o = androidx.compose.ui.geometry.Offset(w * x, h * y)
+            drawCircle(Brush.radialGradient(listOf(c, Color.Transparent), center = o, radius = w * r), w * r, o)
+        }
+        cloud(0.25f, 0.28f, 0.75f, Color(0x99D64FC4))
+        cloud(0.8f, 0.42f, 0.7f, Color(0x884F7BFF))
+        cloud(0.45f, 0.7f, 0.8f, Color(0x777A3FE0))
+        cloud(0.7f, 0.2f, 0.4f, Color(0x6646D6E8))
+        cloud(0.2f, 0.82f, 0.45f, Color(0x55FF8A5A))
+        cloud(0.5f, 0.45f, 0.22f, Color(0x99FFFFFF))
+        // estrellas (siempre en el mismo lugar)
+        val rnd = java.util.Random(7)
+        repeat(170) {
+            val p = androidx.compose.ui.geometry.Offset(rnd.nextFloat() * w, rnd.nextFloat() * h)
+            val big = rnd.nextFloat() > 0.93f
+            drawCircle(Color.White.copy(alpha = 0.35f + rnd.nextFloat() * 0.65f), if (big) w * 0.005f else w * 0.0022f, p)
+            if (big) drawCircle(Color.White.copy(alpha = 0.15f), w * 0.012f, p)
+        }
+    }
 }

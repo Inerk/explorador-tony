@@ -69,7 +69,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import java.io.File
 import kotlin.math.roundToInt
 
-fun isVideoPath(path: String?): Boolean = path != null && File(path).kind() == FileKind.VIDEO
+fun isVideoPath(path: String?): Boolean = path != null && isVideoExtension(path.substringAfterLast('.', ""))
 
 /**
  * Un reproductor sólo puede pintar en una pantallita a la vez. Si se abren dos

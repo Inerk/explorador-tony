@@ -65,8 +65,8 @@ object WinZ {
     fun next(): Float { top += 1f; return top }
 }
 
-val XpRedButton = Brush.verticalGradient(listOf(Color(0xFFE88C6F), Color(0xFFC4401E)))
-val XpBlueButton = Brush.verticalGradient(listOf(Color(0xFF5C93F7), Color(0xFF2D63D9)))
+val XpRedButton = Brush.verticalGradient(listOf(Color(0xFFFF7AA8), Color(0xFFD0306A)))
+val XpBlueButton = Brush.verticalGradient(listOf(Color(0xFF9B7BFF), Color(0xFF5B3FD0)))
 
 /**
  * Marco de ventana estilo XP: barra de título para arrastrar, botones _ □ ✕
@@ -85,7 +85,7 @@ fun XpWindowFrame(
 ) {
     val density = LocalDensity.current
     val shape = if (state.maximized) RoundedCornerShape(0.dp)
-    else RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+    else RoundedCornerShape(16.dp)
 
     val base = if (state.maximized) Modifier.fillMaxSize()
     else Modifier

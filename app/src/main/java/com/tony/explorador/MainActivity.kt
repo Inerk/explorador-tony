@@ -80,11 +80,11 @@ fun ExploradorTheme(content: @Composable () -> Unit) {
         LibraryStore.theme == AppTheme.XP -> lightColorScheme(
             primary = XpColors.SelectBlue,
             onPrimary = androidx.compose.ui.graphics.Color.White,
-            primaryContainer = androidx.compose.ui.graphics.Color(0xFFC1D2EE),
+            primaryContainer = androidx.compose.ui.graphics.Color(0xFFDCD0FA),
             secondary = XpColors.StartMid,
-            secondaryContainer = androidx.compose.ui.graphics.Color(0xFFC1D2EE),
-            background = androidx.compose.ui.graphics.Color.White,
-            surface = androidx.compose.ui.graphics.Color.White,
+            secondaryContainer = androidx.compose.ui.graphics.Color(0xFFDCD0FA),
+            background = androidx.compose.ui.graphics.Color(0xFFFAF8FF),
+            surface = androidx.compose.ui.graphics.Color(0xFFFAF8FF),
             surfaceVariant = XpColors.Window,
         )
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->

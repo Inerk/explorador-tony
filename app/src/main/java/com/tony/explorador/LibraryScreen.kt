@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Stop
@@ -166,6 +167,7 @@ private sealed interface LibPage {
     data object MostPlayed : LibPage
     data object Folders : LibPage
     data object Covers : LibPage
+    data object MusicVideos : LibPage
     data object AnimatedCoversP : LibPage
 }
 
@@ -365,6 +367,8 @@ fun LibraryScreen(
                 }
                 LibPage.Folders -> FoldersPage()
                 LibPage.Covers -> CoversPage()
+                LibPage.MusicVideos -> SongList(songs.filter { isVideoPath(it.path) }, onPlay, onAdd = { addTo = it }, alphabet = true,
+                    empty = "No hay videos musicales.\nPon tus videos dentro de alguna de tus “Carpetas de música”\ny toca ⟳ para volver a buscar.")
                 LibPage.AnimatedCoversP -> AnimatedCoversPage()
             }
             }
@@ -433,6 +437,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.MostPlayed -> "Más escuchadas"
     LibPage.Folders -> "Carpetas de música"
     LibPage.Covers -> "Carátulas en internet"
+    LibPage.MusicVideos -> "Videos musicales"
     LibPage.AnimatedCoversP -> "Carátulas animadas"
 }
 
@@ -447,6 +452,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Canciones", "$songCount", Icons.Filled.MusicNote, Retro.Orange, LibPage.Songs),
         Entry("Artistas", "${LibraryStore.songs.map { it.artist }.distinct().size}", Icons.Filled.Person, Retro.Blue, LibPage.Artists),
         Entry("Álbumes", "${LibraryStore.songs.map { it.album }.distinct().size}", Icons.Filled.Album, Retro.Lime, LibPage.Albums),
+        Entry("Videos musicales", "${LibraryStore.songs.count { isVideoPath(it.path) }}", Icons.Filled.Movie, Retro.Purple, LibPage.MusicVideos),
         Entry("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, Retro.Pink, LibPage.Playlists),
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),

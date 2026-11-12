@@ -15,6 +15,9 @@ private val IMAGE_EXT = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heic"
 private val AUDIO_EXT = setOf("mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "opus", "amr", "mid", "midi")
 private val VIDEO_EXT = setOf("mp4", "mkv", "webm", "3gp", "mov", "m4v", "ts", "avi")
 
+/** Sólo por la extensión (rápido, sin tocar el disco). */
+fun isVideoExtension(ext: String): Boolean = ext.lowercase(Locale.ROOT) in VIDEO_EXT
+
 fun File.kind(): FileKind {
     if (isDirectory) return FileKind.FOLDER
     return when (extension.lowercase(Locale.ROOT)) {
