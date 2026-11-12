@@ -80,6 +80,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -858,8 +860,8 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
                 .clip(RoundedCornerShape(13.dp))
                 .background(if (active != null) Retro.Panel else Retro.Panel.copy(alpha = 0.55f))
                 .pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.awaitEachGesture {
-                        val down = androidx.compose.foundation.gestures.awaitFirstDown()
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
                         down.consume()
                         jump(down.position.y, size.height)
                         do {
