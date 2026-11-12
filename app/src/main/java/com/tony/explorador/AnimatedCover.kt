@@ -337,3 +337,17 @@ object AnimatedScanner {
         }
     }
 }
+
+private val hasAnimatedCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+private var hasAnimatedVersion = -1
+
+/** Si la canción tiene carátula animada (para pintar la estrella en las listas). */
+@Composable
+fun rememberHasAnimatedCover(path: String, album: String?): Boolean {
+    val v = AnimatedCovers.version
+    return produceState(if (hasAnimatedVersion == v) hasAnimatedCache[path] ?: false else false, path, v) {
+        if (hasAnimatedVersion != v) { hasAnimatedCache.clear(); hasAnimatedVersion = v }
+        value = hasAnimatedCache[path] ?: withContext(Dispatchers.IO) { AnimatedCovers.find(path, album) != null }
+            .also { hasAnimatedCache[path] = it }
+    }.value
+}

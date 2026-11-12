@@ -483,6 +483,7 @@ fun MusicPlayerScreen(
                             Text(artist, fontSize = 15.sp, color = Color.White.copy(alpha = 0.75f),
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        rememberAudioQuality(path)?.let { QualityPill(it, accent, Modifier.padding(top = 6.dp)) }
                     }
                     val starScale by animateFloatAsState(if (fav) 1.15f else 1f,
                         spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium), label = "star")
@@ -753,6 +754,10 @@ private fun CoverArt(
                         tint = Color.White.copy(alpha = 0.5f))
                 }
             }
+        }
+        // estrella diamante: esta canción tiene carátula animada
+        if (animated != null && collapse < 0.3f) {
+            DiamondStar(30.dp, Modifier.align(Alignment.TopEnd).padding(10.dp).graphicsLayer { alpha = 1f - collapse / 0.3f }, backdrop = true)
         }
         // ⋮ abajo a la derecha de la portada (se esconde al encogerse)
         if (collapse < 0.3f) {

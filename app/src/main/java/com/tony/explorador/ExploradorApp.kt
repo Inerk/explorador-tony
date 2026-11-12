@@ -8,6 +8,16 @@ import coil.decode.VideoFrameDecoder
 class ExploradorApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        // si la app truena, guarda el error para mostrarlo la próxima vez
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            runCatching {
+                java.io.File(filesDir, "ultimo_error.txt").writeText(
+                    "Explorador Tony v" + currentVersionName(this) + " · Android " + android.os.Build.VERSION.RELEASE + "\n" +
+                        android.util.Log.getStackTraceString(e).take(6000))
+            }
+            previous?.uncaughtException(t, e)
+        }
         LibraryStore.init(this)
         AnimatedCovers.init(this)
         CoverScanner.init(this)

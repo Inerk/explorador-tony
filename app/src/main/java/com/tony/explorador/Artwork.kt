@@ -174,7 +174,7 @@ suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
         r.setDataSource(path)
         r.embeddedPicture?.let { decodeSampled(it, 128) }
     } catch (_: Exception) { null } finally { runCatching { r.release() } }
-        ?: folderCover(File(path))?.let { Bitmap.createScaledBitmap(it, 128, 128 * it.height / it.width.coerceAtLeast(1), true) }
+        ?: folderCover(File(path))?.let { Bitmap.createScaledBitmap(it, 128, (128 * it.height / it.width.coerceAtLeast(1)).coerceAtLeast(1), true) }
     if (bmp != null) thumbCache.put(path, bmp) else noThumb.add(path)
     bmp
 }
@@ -207,3 +207,24 @@ fun invalidateTrack(path: String) {
     noThumb.remove(path)
     noBigCover.remove(path)
 }
+
+private val qualityCache = LruCache<String, String>(300)
+
+/** «MP3 · 320 kbps» de una canción (se calcula una vez y se recuerda). */
+@Composable
+fun rememberAudioQuality(path: String?): String? =
+    produceState<String?>(path?.let { qualityCache.get(it) }, path) {
+        if (path == null) { value = null; return@produceState }
+        qualityCache.get(path)?.let { value = it; return@produceState }
+        val q = withContext(Dispatchers.IO) {
+            val ext = File(path).extension.uppercase(Locale.ROOT)
+            val r = MediaMetadataRetriever()
+            val kbps = try {
+                r.setDataSource(path)
+                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull()?.let { (it + 500) / 1000 }
+            } catch (_: Exception) { null } finally { runCatching { r.release() } }
+            if (kbps != null && kbps > 0) "$ext · $kbps kbps" else ext
+        }
+        qualityCache.put(path, q)
+        value = q
+    }.value

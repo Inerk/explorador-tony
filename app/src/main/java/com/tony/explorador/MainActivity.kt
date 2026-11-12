@@ -362,6 +362,27 @@ fun AppRoot() {
             }
         }
 
+        // si la vez pasada la app se cerró sola, muestra el error para poder mandarlo
+        var crashText by remember { mutableStateOf(runCatching {
+            File(context.filesDir, "ultimo_error.txt").takeIf { it.isFile }?.readText() }.getOrNull()) }
+        crashText?.let { txt ->
+            val dismiss = { runCatching { File(context.filesDir, "ultimo_error.txt").delete() }; crashText = null }
+            ThemedDialog("La app se cerró la vez pasada", { dismiss() }, listOf(
+                DialogButton("Cerrar") { dismiss() },
+                DialogButton("Copiar error", true) {
+                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Error Explorador Tony", txt))
+                    android.widget.Toast.makeText(context, "Copiado. Pégaselo a Claude.", android.widget.Toast.LENGTH_LONG).show()
+                    dismiss()
+                })) {
+                Column {
+                    Text("Copia este texto y mándamelo para arreglarlo:")
+                    Text(txt.take(700), fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+
         if (choosingTheme) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { choosingTheme = false },

@@ -6,6 +6,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,5 +154,48 @@ fun ReliefIcon(icon: ImageVector, color: Color, size: Dp = 46.dp, modifier: Modi
             modifier = Modifier.size(iconSize).offset(y = 1.2.dp))
         Icon(icon, null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(iconSize).offset(y = (-0.8).dp))
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(iconSize))
+    }
+}
+
+/** Estrella tipo diamante (4 puntas): marca que la canción tiene carátula animada. */
+@Composable
+fun DiamondStar(size: Dp = 18.dp, modifier: Modifier = Modifier, backdrop: Boolean = false) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val c = Offset(w / 2f, w / 2f)
+        if (backdrop) drawCircle(Color.Black.copy(alpha = 0.45f), w / 2f, c)
+        val r = w * (if (backdrop) 0.38f else 0.5f)
+        val k = r * 0.22f   // qué tan "metidos" van los lados
+        fun star(rad: Float, kk: Float) = Path().apply {
+            moveTo(c.x, c.y - rad)
+            quadraticBezierTo(c.x + kk, c.y - kk, c.x + rad, c.y)
+            quadraticBezierTo(c.x + kk, c.y + kk, c.x, c.y + rad)
+            quadraticBezierTo(c.x - kk, c.y + kk, c.x - rad, c.y)
+            quadraticBezierTo(c.x - kk, c.y - kk, c.x, c.y - rad)
+            close()
+        }
+        val p = star(r, k)
+        drawPath(p, Brush.linearGradient(
+            listOf(Color.White, Color(0xFF9FE8FF), Color(0xFFC9A6FF), Color(0xFFFFB0E0)),
+            start = Offset(c.x - r, c.y - r), end = Offset(c.x + r, c.y + r)))
+        // faceta clara, como diamante
+        drawPath(star(r * 0.45f, k * 0.45f), Color.White.copy(alpha = 0.85f))
+        drawPath(p, Color.White.copy(alpha = 0.9f), style = Stroke(w * 0.04f))
+    }
+}
+
+/** Cápsula con el formato y la calidad: «MP3 · 320 kbps». */
+@Composable
+fun QualityPill(text: String, accent: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier.clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.08f))))
+            .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Canvas(Modifier.size(7.dp)) { drawCircle(accent) }
+        Spacer(Modifier.width(6.dp))
+        Text(text, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
     }
 }

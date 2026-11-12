@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.ImageSearch
@@ -165,6 +166,7 @@ private sealed interface LibPage {
     data object MostPlayed : LibPage
     data object Folders : LibPage
     data object Covers : LibPage
+    data object AnimatedCoversP : LibPage
 }
 
 @Composable
@@ -363,6 +365,7 @@ fun LibraryScreen(
                 }
                 LibPage.Folders -> FoldersPage()
                 LibPage.Covers -> CoversPage()
+                LibPage.AnimatedCoversP -> AnimatedCoversPage()
             }
             }
             }
@@ -429,7 +432,8 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.Favorites -> "Favoritas"
     LibPage.MostPlayed -> "Más escuchadas"
     LibPage.Folders -> "Carpetas de música"
-    LibPage.Covers -> "Buscar carátulas"
+    LibPage.Covers -> "Carátulas en internet"
+    LibPage.AnimatedCoversP -> "Carátulas animadas"
 }
 
 // ───────── Menú principal ─────────
@@ -447,8 +451,9 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
-        Entry("Buscar carátulas", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
+        Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
             Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
+        Entry("Carátulas animadas", if (AnimatedScanner.running) "…" else "", Icons.Filled.AutoAwesome, Retro.Teal, LibPage.AnimatedCoversP),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -552,6 +557,11 @@ private fun SongList(
         songs.forEachIndexed { i, s -> m.putIfAbsent(letterOf(s.title), i + 1) } // +1: el encabezado
         m
     }
+    // si una canción está dos veces en una lista, cada una necesita su propia llave
+    val keys = remember(songs) {
+        val seen = HashMap<String, Int>()
+        songs.map { s -> val n = (seen[s.path] ?: 0) + 1; seen[s.path] = n; if (n == 1) s.path else "${s.path}#$n" }
+    }
     val view = normalizeSongView(LibraryStore.songView)
     val isGrid = view.startsWith("grid")
     val scope = rememberCoroutineScope()
@@ -594,14 +604,14 @@ private fun SongList(
                 .graphicsLayer { scaleX = pinch.value; scaleY = pinch.value }
         ) {
             androidx.compose.animation.AnimatedContent(
-                targetState = if (isGrid) "grid" else view,
+                targetState = isGrid,
                 transitionSpec = {
                     (androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.scaleIn(spring(dampingRatio = 0.8f, stiffness = 300f), initialScale = 0.92f)) togetherWith
                         androidx.compose.animation.fadeOut(tween(160))
                 },
                 label = "songView"
-            ) { kind ->
-                if (kind == "grid") {
+            ) { grid ->
+                if (grid) {
                     val cols = view.removePrefix("grid").toIntOrNull() ?: 3
                     androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                         columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(cols),
@@ -610,7 +620,7 @@ private fun SongList(
                         contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 16.dp),
                     ) {
                         item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
-                        items(songs.size, key = { songs[it].path }) { i ->
+                        items(songs.size, key = { keys[it] }) { i ->
                             val song = songs[i]
                             // se van acomodando con animación cuando cambia el tamaño
                             Box(Modifier.animateItem()) {
@@ -623,7 +633,7 @@ private fun SongList(
                 } else {
                     LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
                         item { header() }
-                        itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
+                        itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
                             SongRow(
                                 song = song,
                                 rank = if (showCounts) i + 1 else null,
@@ -631,7 +641,7 @@ private fun SongList(
                                 onClick = { onPlay(songs, i, false) },
                                 onAdd = { onAdd(listOf(song)) },
                                 onRemove = onRemove?.let { { it(song) } },
-                                style = kind,
+                                style = if (view == "cards") "cards" else "compact",
                             )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
@@ -667,6 +677,7 @@ private fun SongRow(
     val fav = LibraryStore.isFavorite(song.path)
     val playing = NowPlaying.path == song.path
     val webCover = CoverScanner.found[song.path]
+    val hasAnimated = rememberHasAnimatedCover(song.path, song.album)
     val goTo = LocalLibGoTo.current
     var menu by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
@@ -717,6 +728,8 @@ private fun SongRow(
                     Icon(Icons.Filled.GraphicEq, null, tint = Retro.Orange, modifier = Modifier.size(size * 0.45f))
                 }
             }
+            if (hasAnimated) DiamondStar(if (size > 60.dp) 24.dp else 18.dp,
+                Modifier.align(Alignment.BottomEnd).offset(x = 3.dp, y = 3.dp), backdrop = true)
             // hay carátula disponible en internet: iconito para ponerla
             if (webCover != null) {
                 Box(
@@ -746,8 +759,11 @@ private fun SongRow(
             Cover(86.dp, 20.dp, Modifier.shadow(10.dp, RoundedCornerShape(20.dp)))
             Spacer(Modifier.width(18.dp))
             Column(Modifier.weight(1f)) {
-                Text(song.title, color = if (playing) Retro.Orange else Retro.Text, fontWeight = FontWeight.Bold, fontSize = 19.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(song.title, color = if (playing) Retro.Orange else Retro.Text, fontWeight = FontWeight.Bold, fontSize = 19.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (hasAnimated) { Spacer(Modifier.width(6.dp)); DiamondStar(16.dp) }
+                }
                 Text("${song.artist} - ${song.album}", color = Retro.Text.copy(alpha = 0.92f), fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(5.dp))
@@ -792,7 +808,11 @@ private fun SongRow(
             Cover(48.dp, 6.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(song.title, color = if (playing) Retro.Orange else Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(song.title, color = if (playing) Retro.Orange else Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
+                    if (hasAnimated) { Spacer(Modifier.width(6.dp)); DiamondStar(14.dp) }
+                }
                 val sub = buildString {
                     append(song.artist)
                     if (song.durationMs > 0) append(" · ").append(formatTime(song.durationMs))
@@ -1292,7 +1312,7 @@ private fun CoversPage() {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Carátulas normales · automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Búsqueda automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text("Busca en internet la portada de la música que no tiene. Cada vez que abras la app revisa lo nuevo y te avisa.",
                             color = Retro.SubText, fontSize = 13.sp)
                     }
@@ -1320,37 +1340,6 @@ private fun CoversPage() {
                         modifier = Modifier.padding(top = 10.dp).clickable { CoverScanner.resetChecked(); CoverScanner.start() })
                 }
                 Text("Va despacio a propósito (unas 18 búsquedas por minuto) para que el servicio no lo bloquee. Puedes seguir usando la app mientras.",
-                    color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
-            }
-        }
-        item {
-            // carátulas animadas: se buscan en el teléfono
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Carátulas animadas · automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Revisa Descargas, Películas, tus carpetas de música y cualquier carpeta «Carátulas animadas». " +
-                            "Si un video se llama como un álbum (ej. «Coldplay - Ghost Stories.mp4») se lo pone solo.",
-                            color = Retro.SubText, fontSize = 13.sp)
-                    }
-                    androidx.compose.material3.Switch(
-                        checked = AnimatedScanner.auto, onCheckedChange = { AnimatedScanner.changeAuto(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Retro.Orange, checkedThumbColor = Retro.OnAccent)
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                if (AnimatedScanner.running) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
-                } else {
-                    RetroButton("Buscar animadas en mi teléfono", Icons.Filled.Animation, Modifier.fillMaxWidth()) { AnimatedScanner.start() }
-                }
-                if (AnimatedScanner.status.isNotBlank()) Text(AnimatedScanner.status, color = Retro.SubText, fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp))
-                AnimatedScanner.assigned.take(8).forEach { (album, video) ->
-                    Text("✨ $album  ←  $video", color = Retro.Text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp))
-                }
-                Text("Por internet no se pueden buscar solas: Apple sólo las da con su servicio de paga para desarrolladores.",
                     color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
             }
         }
@@ -1387,6 +1376,51 @@ private fun CoversPage() {
                     }
                     Icon(Icons.Filled.CloudDownload, null, tint = Retro.Orange)
                 }
+            }
+        }
+    }
+}
+
+/** Página de carátulas animadas (aparte de las normales). */
+@Composable
+private fun AnimatedCoversPage() {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                DiamondStar(26.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Las canciones con esta estrella tienen carátula animada.", color = Retro.Text, fontSize = 14.sp)
+            }
+        }
+        item {
+            // carátulas animadas: se buscan en el teléfono
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Búsqueda automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Revisa Descargas, Películas, tus carpetas de música y cualquier carpeta «Carátulas animadas». " +
+                            "Si un video se llama como un álbum (ej. «Coldplay - Ghost Stories.mp4») se lo pone solo.",
+                            color = Retro.SubText, fontSize = 13.sp)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = AnimatedScanner.auto, onCheckedChange = { AnimatedScanner.changeAuto(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Retro.Orange, checkedThumbColor = Retro.OnAccent)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                if (AnimatedScanner.running) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
+                } else {
+                    RetroButton("Buscar animadas en mi teléfono", Icons.Filled.Animation, Modifier.fillMaxWidth()) { AnimatedScanner.start() }
+                }
+                if (AnimatedScanner.status.isNotBlank()) Text(AnimatedScanner.status, color = Retro.SubText, fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp))
+                AnimatedScanner.assigned.take(8).forEach { (album, video) ->
+                    Text("✨ $album  ←  $video", color = Retro.Text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp))
+                }
+                Text("Por internet no se pueden buscar solas: Apple sólo las da con su servicio de paga para desarrolladores.",
+                    color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
             }
         }
     }
