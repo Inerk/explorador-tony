@@ -23,11 +23,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
       - name: Renombrar APK
-        run: cp app/build/outputs/apk/release/app-release.apk Explorador-Tony-v1.0.${{ github.run_number }}.apk
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Explorador-Tony-v1.0.${{ github.run_number }}.apk
+          cp app/build/outputs/apk/release/app-release.apk Explorador-Tony.apk
       - name: Publicar versión
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Explorador Tony v1.0.${{ github.run_number }}
           body: ${{ github.event.head_commit.message }}
-          files: Explorador-Tony-v1.0.${{ github.run_number }}.apk
+          files: |
+            Explorador-Tony-v1.0.${{ github.run_number }}.apk
+            Explorador-Tony.apk
