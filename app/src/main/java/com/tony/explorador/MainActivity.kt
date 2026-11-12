@@ -134,13 +134,13 @@ fun AppRoot() {
     val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
     val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }
     fun open(o: Overlay) {
-        close(o); overlays.add(o)
+        overlays.remove(o); overlays.add(o)
         overlayStates[o] = androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
     }
     /** Cierra con animación; se quita de la lista cuando termina de salir. */
     fun close(o: Overlay) {
         val st = overlayStates[o]
-        if (st != null) st.targetState = false else close(o)
+        if (st != null) st.targetState = false else overlays.remove(o)
     }
     var choosingTheme by remember { mutableStateOf(false) }
     var homeSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
