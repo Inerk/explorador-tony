@@ -194,21 +194,32 @@ fun XpMediaWindow(
     }
 }
 
-/** Barras de ecualizador animadas (decorativas, se mueven al ritmo cuando hay música). */
+/** Ecualizador con las frecuencias reales de la canción (graves a la izquierda, agudos a la derecha). */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun Spectrum(playing: Boolean, modifier: Modifier) {
-    val bars = 18
+    val bars = SpectrumAnalyzer.BANDS
     val levels = remember { mutableStateListOf<Float>().apply { repeat(bars) { add(0f) } } }
     val peaks = remember { mutableStateListOf<Float>().apply { repeat(bars) { add(0f) } } }
-    LaunchedEffect(playing) {
+    val peakHold = remember { IntArray(bars) }
+    val isPlaying by androidx.compose.runtime.rememberUpdatedState(playing)
+    LaunchedEffect(Unit) {
         while (true) {
+            androidx.compose.runtime.withFrameNanos { }
+            val data = if (isPlaying) SpectrumAnalyzer.current() else null
             for (i in 0 until bars) {
-                val shape = 1f - (i.toFloat() / bars) * 0.55f // graves más altos
-                val target = if (playing) (Random.nextFloat() * 0.75f + 0.25f) * shape else 0f
-                levels[i] = levels[i] * 0.55f + target * 0.45f
-                peaks[i] = if (levels[i] > peaks[i]) levels[i] else (peaks[i] - 0.025f).coerceAtLeast(0f)
+                val target = data?.get(i)
+                val cur = levels[i]
+                // sube rápido, baja con "gravedad" como los ecualizadores de verdad
+                levels[i] = when {
+                    target == null -> (cur - 0.025f).coerceAtLeast(0f)
+                    target > cur -> cur + (target - cur) * 0.7f
+                    else -> (cur - 0.035f).coerceAtLeast(target)
+                }
+                if (levels[i] >= peaks[i]) { peaks[i] = levels[i]; peakHold[i] = 18 }
+                else if (peakHold[i] > 0) peakHold[i]--
+                else peaks[i] = (peaks[i] - 0.012f).coerceAtLeast(0f)
             }
-            delay(70)
         }
     }
     Canvas(modifier) {
@@ -218,7 +229,7 @@ private fun Spectrum(playing: Boolean, modifier: Modifier) {
         for (i in 0 until bars) {
             val x = i * (bw + gap)
             val h = size.height * levels[i]
-            // bloques tipo ecualizador: verde → amarillo → rojo
+            // bloques: verde → amarillo → rojo
             var y = size.height
             while (y > size.height - h) {
                 val frac = 1f - y / size.height
@@ -230,8 +241,10 @@ private fun Spectrum(playing: Boolean, modifier: Modifier) {
                 drawRect(c, Offset(x, y - seg), Size(bw, seg - 1f))
                 y -= seg
             }
-            val py = size.height - size.height * peaks[i]
-            drawRect(Color.White.copy(alpha = 0.8f), Offset(x, py - 2f), Size(bw, 2f))
+            if (peaks[i] > 0.01f) {
+                val py = size.height - size.height * peaks[i]
+                drawRect(Color.White.copy(alpha = 0.85f), Offset(x, py - 2f), Size(bw, 2f))
+            }
         }
     }
 }
