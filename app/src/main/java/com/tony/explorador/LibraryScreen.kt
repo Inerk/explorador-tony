@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
@@ -408,6 +409,8 @@ private fun SongRow(
     val thumb by produceState<android.graphics.Bitmap?>(null, song.path) { value = loadThumb(song.path) }
     val fav = LibraryStore.isFavorite(song.path)
     var menu by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
+    if (showInfo) SongInfoWindow(song.path, Retro.Orange, onDismiss = { showInfo = false })
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -448,6 +451,8 @@ private fun SongRow(
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Agregar a lista") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null) },
                     onClick = { menu = false; onAdd() })
+                DropdownMenuItem(text = { Text("Información") }, leadingIcon = { Icon(Icons.Filled.Info, null) },
+                    onClick = { menu = false; showInfo = true })
                 if (onRemove != null) {
                     DropdownMenuItem(text = { Text("Quitar de esta lista") }, leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, null) },
                         onClick = { menu = false; onRemove() })

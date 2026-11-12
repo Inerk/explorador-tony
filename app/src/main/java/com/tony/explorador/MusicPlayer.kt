@@ -31,6 +31,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -212,7 +213,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
 
 // ───────────────────────── Reproductor completo ─────────────────────────
 
-private enum class PanelMode { COVER, LYRICS, QUEUE, INFO }
+private enum class PanelMode { COVER, LYRICS, QUEUE }
 
 @Composable
 fun MusicPlayerScreen(
@@ -225,6 +226,7 @@ fun MusicPlayerScreen(
     BackHandler(onBack = onClose)
     val musicMenu by rememberUpdatedState(onMusicMenu)
     var mode by remember { mutableStateOf(PanelMode.COVER) }
+    var infoOpen by remember { mutableStateOf(false) }
     val tick = observePlayer(player, if (mode == PanelMode.COVER) 250L else 100L)
 
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
@@ -324,7 +326,7 @@ fun MusicPlayerScreen(
                                 onPrev = { player.seekToPreviousMediaItem() },
                                 onLongPress = onOpenCoverFlow,
                                 onSwipeDown = { mode = PanelMode.QUEUE },
-                                onSwipeUp = { mode = PanelMode.INFO },
+                                onSwipeUp = { infoOpen = true },
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -333,12 +335,11 @@ fun MusicPlayerScreen(
                                 onSeek = { player.seekTo(it); player.play() }
                             )
                             PanelMode.QUEUE -> QueuePanel(player, accent)
-                            PanelMode.INFO -> SongInfoPanel(player.currentMediaItem?.mediaId, accent, onBack = { mode = PanelMode.COVER })
                         }
                     }
                 }
 
-                if (mode == PanelMode.QUEUE || mode == PanelMode.INFO) {
+                if (mode == PanelMode.QUEUE) {
                     // Reproductor "en cinta" abajo mientras ves la lista; tócalo para volver a la portada
                     TapeBar(
                         cover = info?.cover,
@@ -464,6 +465,11 @@ fun MusicPlayerScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
+        }
+    }
+    if (infoOpen) {
+        player.currentMediaItem?.mediaId?.let { path ->
+            SongInfoWindow(path, accent, onDismiss = { infoOpen = false })
         }
     }
 }
@@ -847,58 +853,117 @@ private suspend fun loadSongDetails(path: String): SongDetails = kotlinx.corouti
     SongDetails(rows)
 }
 
+/** Ventanita con la información de la canción. Se quita tocando afuera o deslizándola hacia abajo. */
 @Composable
-private fun SongInfoPanel(path: String?, accent: Color, onBack: () -> Unit) {
-    if (path == null) return
+fun SongInfoWindow(path: String, accent: Color = Color(0xFF9FB4FF), onDismiss: () -> Unit) {
     val details by androidx.compose.runtime.produceState<SongDetails?>(null, path) { value = loadSongDetails(path) }
+    val info by rememberTrackInfo(path)
     val plays = LibraryStore.playCounts[path] ?: 0
     val last = LibraryStore.lastPlayed[path]
     val fav = LibraryStore.isFavorite(path)
-
-    LazyColumn(
-        Modifier.fillMaxSize()
-            .pointerInput(Unit) {
-                // deslizar hacia abajo regresa a la portada
-                var dy = 0f
-                detectVerticalDragGestures(onDragStart = { dy = 0f }) { _, d ->
-                    dy += d
-                    if (dy > 120f) { dy = -10000f; onBack() }
-                }
-            },
-        contentPadding = PaddingValues(vertical = 8.dp)
-    ) {
-        item {
-            // tarjetas grandes: veces escuchada y última vez
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                InfoStat(Modifier.weight(1f), "$plays", if (plays == 1) "reproducción" else "reproducciones", accent)
-                InfoStat(
-                    Modifier.weight(1f),
-                    last?.let { relativeTime(it) } ?: "Nunca",
-                    "última vez", accent
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            if (fav) {
-                Text("★ En tus favoritas", color = Color(0xFFFFC83D), fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp))
-            }
+    val scope = rememberCoroutineScope()
+    val drag = remember { Animatable(0f) }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
+    val close: () -> Unit = {
+        scope.launch {
+            appear.animateTo(0f, tween(140))
+            onDismiss()
         }
-        val d = details
-        if (d == null) {
-            item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp), color = accent) }
-        } else {
-            items(d.rows.size) { i ->
-                val (k, v) = d.rows[i]
-                Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
-                    Text(k, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.width(96.dp))
-                    Text(v, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = close,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            Modifier.fillMaxSize()
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = close
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                Modifier.fillMaxWidth(0.9f)
+                    .heightIn(max = 560.dp)
+                    .graphicsLayer {
+                        translationY = drag.value + (1f - appear.value) * 120f
+                        alpha = appear.value * (1f - (drag.value / 900f).coerceIn(0f, 0.6f))
+                        val sc = 0.92f + 0.08f * appear.value
+                        scaleX = sc; scaleY = sc
+                    }
+                    .shadow(24.dp, RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Brush.verticalGradient(listOf(Color(0xFF2A2C38), Color(0xFF17181F))))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {} // tocar dentro no la cierra
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragEnd = {
+                                scope.launch {
+                                    if (drag.value > 160f) {
+                                        drag.animateTo(1400f, tween(180)); onDismiss()
+                                    } else drag.animateTo(0f, spring(dampingRatio = 0.6f))
+                                }
+                            }
+                        ) { change, d ->
+                            change.consume()
+                            scope.launch { drag.snapTo((drag.value + d).coerceAtLeast(0f)) }
+                        }
+                    }
+            ) {
+                // asa para deslizar
+                Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp, 5.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f)))
                 }
-                if (i < d.rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
-            }
-            last?.let {
-                item {
-                    Text("Escuchada por última vez el ${formatDate(it)}", color = Color.White.copy(alpha = 0.5f),
-                        fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                // encabezado con portada
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center) {
+                        val cover = info?.cover
+                        if (cover != null) Image(remember(cover) { cover.asImageBitmap() }, null,
+                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.5f))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(info?.title ?: File(path).nameWithoutExtension, color = Color.White, fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(listOfNotNull(info?.artist, info?.album).joinToString(" · "), color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (fav) Icon(Icons.Filled.Star, "Favorita", tint = Color(0xFFFFC83D))
+                }
+                // tarjetas: reproducciones y última vez
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    InfoStat(Modifier.weight(1f), "$plays", if (plays == 1) "reproducción" else "reproducciones", accent)
+                    InfoStat(Modifier.weight(1f), last?.let { relativeTime(it) } ?: "Nunca", "última vez", accent)
+                }
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+                    val d = details
+                    if (d == null) {
+                        item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp), color = accent) }
+                    } else {
+                        items(d.rows.size) { i ->
+                            val (k, v) = d.rows[i]
+                            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+                                Text(k, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, modifier = Modifier.width(96.dp))
+                                Text(v, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            }
+                            if (i < d.rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f)))
+                        }
+                        last?.let {
+                            item {
+                                Text("Escuchada por última vez el ${formatDate(it)}", color = Color.White.copy(alpha = 0.45f),
+                                    fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                            }
+                        }
+                    }
                 }
             }
         }
