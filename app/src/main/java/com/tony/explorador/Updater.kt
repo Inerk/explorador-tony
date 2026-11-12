@@ -194,18 +194,7 @@ fun UpdateDialog(
             confirmButton = { TextButton(onClick = { onDownload(state.info) }) { Text("Actualizar") } },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Después") } }
         )
-        is UpdateState.Downloading -> AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Descargando ${state.info.tag}") },
-            text = {
-                Column {
-                    LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                    Text("${(state.progress * 100).toInt()} %")
-                }
-            },
-            confirmButton = {}
-        )
+        is UpdateState.Downloading -> XpDownloadDialog(state.info.tag, state.progress, state.info.size)
         is UpdateState.NeedsPermission -> AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Falta un permiso") },

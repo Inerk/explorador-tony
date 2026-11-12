@@ -15,6 +15,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -211,7 +212,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
 
 // ───────────────────────── Reproductor completo ─────────────────────────
 
-private enum class PanelMode { COVER, LYRICS, QUEUE }
+private enum class PanelMode { COVER, LYRICS, QUEUE, INFO }
 
 @Composable
 fun MusicPlayerScreen(
@@ -323,6 +324,7 @@ fun MusicPlayerScreen(
                                 onPrev = { player.seekToPreviousMediaItem() },
                                 onLongPress = onOpenCoverFlow,
                                 onSwipeDown = { mode = PanelMode.QUEUE },
+                                onSwipeUp = { mode = PanelMode.INFO },
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -331,11 +333,12 @@ fun MusicPlayerScreen(
                                 onSeek = { player.seekTo(it); player.play() }
                             )
                             PanelMode.QUEUE -> QueuePanel(player, accent)
+                            PanelMode.INFO -> SongInfoPanel(player.currentMediaItem?.mediaId, accent, onBack = { mode = PanelMode.COVER })
                         }
                     }
                 }
 
-                if (mode == PanelMode.QUEUE) {
+                if (mode == PanelMode.QUEUE || mode == PanelMode.INFO) {
                     // Reproductor "en cinta" abajo mientras ves la lista; tócalo para volver a la portada
                     TapeBar(
                         cover = info?.cover,
@@ -478,6 +481,7 @@ private fun CoverArt(
     onPrev: () -> Unit,
     onLongPress: () -> Unit,
     onSwipeDown: () -> Unit,
+    onSwipeUp: () -> Unit,
 ) {
     val scale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
@@ -488,6 +492,7 @@ private fun CoverArt(
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val swipeDown by rememberUpdatedState(onSwipeDown)
+    val swipeUp by rememberUpdatedState(onSwipeUp)
     val next by rememberUpdatedState(onNext)
     val prev by rememberUpdatedState(onPrev)
     val hasNext by rememberUpdatedState(canNext)
@@ -502,8 +507,9 @@ private fun CoverArt(
                     val w = size.width.toFloat()
                     var axis = 0 // 0 = sin decidir, 1 = horizontal, 2 = vertical
                     var fired = false
+                    var dy = 0f
                     detectDragGestures(
-                        onDragStart = { axis = 0; fired = false },
+                        onDragStart = { axis = 0; fired = false; dy = 0f },
                         onDragEnd = {
                             scope.launch {
                                 if (axis == 2) {
@@ -537,13 +543,15 @@ private fun CoverArt(
                             val resist = if ((drag.x < 0 && !hasNext) || (drag.x > 0 && !hasPrev)) 0.3f else 1f
                             scope.launch { offsetX.snapTo(offsetX.value + drag.x * resist) }
                         } else {
-                            // hacia abajo abre la lista; hacia arriba casi no se mueve
-                            val k = if (drag.y > 0) 0.5f else 0.15f
-                            scope.launch { offsetY.snapTo((offsetY.value + drag.y * k).coerceIn(-w * 0.05f, w * 0.4f)) }
-                            // en cuanto baja un poquito, se abre la lista (sin esperar a soltar)
-                            if (!fired && offsetY.value > w * 0.05f) {
+                            // abajo abre la lista, arriba abre la información (al instante, sin esperar a soltar)
+                            dy += drag.y
+                            scope.launch { offsetY.snapTo((offsetY.value + drag.y * 0.4f).coerceIn(-w * 0.15f, w * 0.4f)) }
+                            if (!fired && dy > w * 0.08f) {
                                 fired = true
                                 swipeDown()
+                            } else if (!fired && dy < -w * 0.08f) {
+                                fired = true
+                                swipeUp()
                             }
                         }
                     }
@@ -782,5 +790,140 @@ private fun TapeBar(
         Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.15f))) {
             Box(Modifier.fillMaxWidth(progress).height(3.dp).background(accent))
         }
+    }
+}
+
+// ───────────── Información de la canción (deslizar la portada hacia arriba) ─────────────
+
+private data class SongDetails(
+    val rows: List<Pair<String, String>>,
+)
+
+private suspend fun loadSongDetails(path: String): SongDetails = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val f = File(path)
+    val rows = mutableListOf<Pair<String, String>>()
+    val r = android.media.MediaMetadataRetriever()
+    var mime: String? = null
+    var bitrate: String? = null
+    var sampleRate: String? = null
+    var bits: String? = null
+    var year: String? = null
+    var genre: String? = null
+    var duration: Long = 0
+    var track: String? = null
+    var composer: String? = null
+    try {
+        r.setDataSource(path)
+        mime = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+        bitrate = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)
+        year = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR)
+        genre = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_GENRE)
+        track = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+        composer = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+        duration = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            sampleRate = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
+            bits = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
+        }
+    } catch (_: Exception) {
+    } finally {
+        runCatching { r.release() }
+    }
+    val ext = f.extension.uppercase(Locale.ROOT)
+    rows += "Formato" to (if (mime != null) "$ext ($mime)" else ext)
+    bitrate?.toLongOrNull()?.let { rows += "Calidad" to "${it / 1000} kbps" }
+    sampleRate?.toLongOrNull()?.let { sr ->
+        rows += "Frecuencia" to String.format(Locale.US, "%.1f kHz", sr / 1000.0) + (bits?.let { " · $it bits" } ?: "")
+    }
+    if (duration > 0) rows += "Duración" to formatTime(duration)
+    rows += "Tamaño" to formatSize(f.length())
+    year?.takeIf { it.isNotBlank() && it != "0" }?.let { rows += "Año" to it }
+    genre?.takeIf { it.isNotBlank() }?.let { rows += "Género" to it }
+    track?.takeIf { it.isNotBlank() }?.let { rows += "Pista" to it }
+    composer?.takeIf { it.isNotBlank() }?.let { rows += "Compositor" to it }
+    rows += "Carpeta" to (f.parent ?: "")
+    rows += "Archivo" to f.name
+    rows += "Modificado" to formatDate(f.lastModified())
+    SongDetails(rows)
+}
+
+@Composable
+private fun SongInfoPanel(path: String?, accent: Color, onBack: () -> Unit) {
+    if (path == null) return
+    val details by androidx.compose.runtime.produceState<SongDetails?>(null, path) { value = loadSongDetails(path) }
+    val plays = LibraryStore.playCounts[path] ?: 0
+    val last = LibraryStore.lastPlayed[path]
+    val fav = LibraryStore.isFavorite(path)
+
+    LazyColumn(
+        Modifier.fillMaxSize()
+            .pointerInput(Unit) {
+                // deslizar hacia abajo regresa a la portada
+                var dy = 0f
+                detectVerticalDragGestures(onDragStart = { dy = 0f }) { _, d ->
+                    dy += d
+                    if (dy > 120f) { dy = -10000f; onBack() }
+                }
+            },
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        item {
+            // tarjetas grandes: veces escuchada y última vez
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                InfoStat(Modifier.weight(1f), "$plays", if (plays == 1) "reproducción" else "reproducciones", accent)
+                InfoStat(
+                    Modifier.weight(1f),
+                    last?.let { relativeTime(it) } ?: "Nunca",
+                    "última vez", accent
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            if (fav) {
+                Text("★ En tus favoritas", color = Color(0xFFFFC83D), fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp))
+            }
+        }
+        val d = details
+        if (d == null) {
+            item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp), color = accent) }
+        } else {
+            items(d.rows.size) { i ->
+                val (k, v) = d.rows[i]
+                Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+                    Text(k, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.width(96.dp))
+                    Text(v, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                }
+                if (i < d.rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
+            }
+            last?.let {
+                item {
+                    Text("Escuchada por última vez el ${formatDate(it)}", color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoStat(modifier: Modifier, big: String, small: String, accent: Color) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.10f)).padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(big, color = accent, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(small, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+    }
+}
+
+private fun relativeTime(millis: Long): String {
+    val diff = System.currentTimeMillis() - millis
+    val min = diff / 60_000
+    return when {
+        min < 1 -> "Ahora"
+        min < 60 -> "Hace $min min"
+        min < 60 * 24 -> "Hace ${min / 60} h"
+        min < 60 * 24 * 30 -> "Hace ${min / (60 * 24)} días"
+        else -> formatDate(millis).substringBefore(' ')
     }
 }
