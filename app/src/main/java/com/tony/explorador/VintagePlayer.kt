@@ -93,17 +93,9 @@ import kotlin.random.Random
 
 // ───────────────────────── Datos para el tocadiscos ─────────────────────────
 
-/** Qué tan adentro del disco va la pluma (0 = orilla, 1 = cerca del centro) según pista y avance. */
-private fun armPosition(info: TrackInfo?, path: String?, progress: Float): Float {
-    val song = path?.let { LibraryStore.songFor(it) }
-    val albumSongs = song?.let { s -> LibraryStore.songs.filter { it.album == s.album } }.orEmpty()
-    val total = (info?.trackTotal ?: albumSongs.size).coerceAtLeast(1)
-    val number = (info?.trackNumber
-        ?: albumSongs.sortedBy { it.title.lowercase(Locale.ROOT) }.indexOfFirst { it.path == path }.let { if (it >= 0) it + 1 else 1 })
-        .coerceIn(1, total)
-    // cada canción ocupa su "franja" del disco; la pluma avanza dentro de ella mientras suena
-    return ((number - 1) + progress.coerceIn(0f, 1f)) / total
-}
+/** Qué tan adentro del disco va la pluma: de la orilla al centro conforme avanza la canción. */
+@Suppress("UNUSED_PARAMETER")
+private fun armPosition(info: TrackInfo?, path: String?, progress: Float): Float = progress.coerceIn(0f, 1f)
 
 /** Las canciones que siguen y las que ya sonaron, en el orden real (respeta aleatorio). */
 private fun neighbours(player: Player, forward: Boolean, max: Int): List<Int> {
@@ -168,7 +160,7 @@ fun VintagePlayerScreen(
 
     Box(Modifier.fillMaxSize().pointerInput(Unit) {}) {
         WoodTable(Modifier.fillMaxSize())
-        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 6.dp)) {
             // Barra superior
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onClose) { Icon(Icons.Filled.KeyboardArrowDown, "Cerrar", tint = Vintage.Cream, modifier = Modifier.size(30.dp)) }
@@ -204,7 +196,7 @@ fun VintagePlayerScreen(
                 // Discos que siguen (izquierda) · datos · los que ya sonaron (derecha)
                 Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.Top) {
                     RecordPile(
-                        player = player, forward = true, label = "Siguen", total = remainingCount(player),
+                        player = player, forward = false, label = "Ya sonaron", total = player.currentMediaItemIndex.coerceAtLeast(0),
                         modifier = Modifier.width(104.dp)
                     )
                     Column(Modifier.weight(1f).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -219,7 +211,7 @@ fun VintagePlayerScreen(
                             modifier = Modifier.padding(top = 2.dp).clickable { path?.let { LibraryStore.toggleFavorite(it) } })
                     }
                     RecordPile(
-                        player = player, forward = false, label = "Ya sonaron", total = player.currentMediaItemIndex.coerceAtLeast(0),
+                        player = player, forward = true, label = "Siguen", total = remainingCount(player),
                         modifier = Modifier.width(104.dp)
                     )
                 }
@@ -336,10 +328,10 @@ fun Turntable(
         if (albumKey != shownKey) {
             swapping = true
             kotlinx.coroutines.delay(240)                 // la pluma se levanta primero
-            slide.animateTo(1.3f, tween(340, easing = FastOutSlowInEasing))
+            slide.animateTo(-1.3f, tween(340, easing = FastOutSlowInEasing))
             shownKey = albumKey
             shownCover = cover
-            slide.snapTo(-1.3f)
+            slide.snapTo(1.3f)
             slide.animateTo(0f, tween(420, easing = FastOutSlowInEasing))
             swapping = false
         }
@@ -409,15 +401,15 @@ fun Turntable(
 
 /** Medidas tomadas de las fotos (en fracciones, para que funcionen a cualquier tamaño). */
 private object Deck {
-    const val ASPECT = 1536f / 1024f
-    const val CENTER_X = 622f / 1536f       // centro del plato
-    const val CENTER_Y = 493f / 1024f
-    const val RECORD_R = 376f / 1536f       // radio del disco (fracción del ancho)
+    const val ASPECT = 1345f / 932f
+    const val CENTER_X = 526f / 1345f       // centro del plato
+    const val CENTER_Y = 446f / 932f
+    const val RECORD_R = 376f / 1345f       // radio del disco (fracción del ancho)
     const val REC_OUTER = 618f / 627f       // el disco ocupa casi toda su imagen
     const val LABEL = 0.354f                // etiqueta = 35 % del disco
-    const val PIVOT_X = 1316f / 1536f       // eje de la pluma sobre la base
-    const val PIVOT_Y = 205f / 1024f
-    const val ARM_LEN = 640f / 1536f        // de eje a aguja (fracción del ancho)
+    const val PIVOT_X = 1220f / 1345f       // eje de la pluma sobre la base
+    const val PIVOT_Y = 158f / 932f
+    const val ARM_LEN = 640f / 1345f        // de eje a aguja (fracción del ancho)
     // en la foto de la pluma
     const val IMG_PIVOT_X = 357f / 724f
     const val IMG_PIVOT_Y = 400f / 2172f
@@ -585,10 +577,10 @@ private fun RecordPile(player: Player, forward: Boolean, label: String, total: I
                 androidx.compose.runtime.key(path, i) {
                     Sleeve(
                         path = path,
-                        vinylOnRight = forward,
+                        vinylOnRight = !forward,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .offset(x = (if (forward) -1 else 1).let { s -> (depth * 4 * s).dp }, y = (-depth * 7).dp)
+                            .offset(x = (if (forward) 1 else -1).let { s -> (depth * 4 * s).dp }, y = (-depth * 7).dp)
                             .rotate((if (depth % 2 == 0) -3f else 4f) * if (forward) 1 else -1)
                             .clickable { player.seekTo(i, 0L); player.play() }
                     )
