@@ -261,7 +261,7 @@ fun LibraryScreen(
                 }
             }
     ) {
-    val d = drawer.value
+    val d = drawer.value.coerceIn(0f, 1f) // el resorte puede pasarse tantito de 0 o de 1
     Column(
         Modifier.fillMaxSize()
             .graphicsLayer {
