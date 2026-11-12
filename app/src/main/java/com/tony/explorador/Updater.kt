@@ -18,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -221,4 +223,69 @@ fun UpdateDialog(
             confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
         )
     }
+}
+
+data class ReleaseNote(val tag: String, val date: String, val notes: String)
+
+/** Lista de todas las versiones publicadas, de la más nueva a la más vieja. */
+suspend fun fetchReleaseHistory(): List<ReleaseNote> = withContext(Dispatchers.IO) {
+    val conn = (URL("https://api.github.com/repos/Inerk/explorador-tony/releases?per_page=60").openConnection() as HttpURLConnection).apply {
+        connectTimeout = 10_000
+        readTimeout = 15_000
+        setRequestProperty("Accept", "application/vnd.github+json")
+        setRequestProperty("User-Agent", "ExploradorTony")
+    }
+    try {
+        if (conn.responseCode != 200) error("GitHub respondió ${conn.responseCode}")
+        val arr = org.json.JSONArray(conn.inputStream.bufferedReader().readText())
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            val iso = o.optString("published_at", "")
+            val date = if (iso.length >= 10) iso.substring(8, 10) + "/" + iso.substring(5, 7) + "/" + iso.substring(0, 4) else ""
+            ReleaseNote(o.getString("tag_name"), date, o.optString("body", "").trim())
+        }
+    } finally {
+        conn.disconnect()
+    }
+}
+
+@Composable
+fun VersionHistoryDialog(currentName: String, onDismiss: () -> Unit) {
+    val result by androidx.compose.runtime.produceState<Result<List<ReleaseNote>>?>(null) {
+        value = runCatching { fetchReleaseHistory() }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Historial de versiones") },
+        text = {
+            val r = result
+            when {
+                r == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                r.isFailure -> Text("No se pudo cargar el historial. Revisa tu conexión a internet.")
+                else -> androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                    val list = r.getOrDefault(emptyList())
+                    items(list.size) { i ->
+                        val n = list[i]
+                        val installed = n.tag.removePrefix("v") == currentName
+                        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Text(n.tag, style = MaterialTheme.typography.titleMedium,
+                                    color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                if (installed) Text("  · la que tienes", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.weight(1f))
+                                Text(n.date, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (n.notes.isNotBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(n.notes, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                        if (i < list.lastIndex) androidx.compose.material3.HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
+    )
 }

@@ -306,18 +306,8 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
             ) {
                 // bloque de color a la izquierda
                 if (Retro.isWmp) {
-                    Box(Modifier.width(64.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        Box(
-                            Modifier.size(44.dp).clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(e.color.copy(alpha = 0.6f).compositeOverWhite(), e.color, e.color.copy(alpha = 0.9f).darken())))
-                                .border(1.5.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.9f), e.color.darken())), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            // brillo de cristal
-                            Box(Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(28.dp, 12.dp).clip(RoundedCornerShape(50))
-                                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.65f), Color.Transparent))))
-                            Icon(e.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                        }
+                    Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        GlassOrb(e.icon, e.color, 44.dp)
                     }
                 } else {
                     Box(

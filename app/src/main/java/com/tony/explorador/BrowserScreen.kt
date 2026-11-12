@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VideoFile
@@ -151,6 +152,7 @@ fun BrowserScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var importCandidate by remember { mutableStateOf<File?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
     val skin = skinFor(LibraryStore.theme)
 
     val files by produceState(initialValue = emptyList<File>(), currentDir, sortMode, ascending, showHidden, refreshKey) {
@@ -347,6 +349,10 @@ fun BrowserScreen(
                                 leadingIcon = { Icon(Icons.Filled.SystemUpdate, null) },
                                 onClick = { more = false; onCheckUpdates() })
                             DropdownMenuItem(
+                                text = { Text("Historial de versiones") },
+                                leadingIcon = { Icon(Icons.Filled.History, null) },
+                                onClick = { more = false; showHistory = true })
+                            DropdownMenuItem(
                                 text = { Text("Tema: ${LibraryStore.theme.label}") },
                                 leadingIcon = { Icon(Icons.Filled.Palette, null) },
                                 onClick = { more = false; onChooseTheme() })
@@ -444,6 +450,8 @@ fun BrowserScreen(
             }
         }
     }
+
+    if (showHistory) VersionHistoryDialog(versionName, onDismiss = { showHistory = false })
 
     importCandidate?.let { f ->
         AlertDialog(

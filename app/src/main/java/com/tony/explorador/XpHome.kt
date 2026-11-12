@@ -218,17 +218,18 @@ fun XpDesktop(
                 modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(bottom = 42.dp),
                 onUserClick = { startOpen = false; accountOpen = true },
                 entries = listOf(
-                    Triple("Explorador de archivos", Icons.Filled.FolderOpen) { onOpenFolder(internal) },
-                    Triple("Música", Icons.Filled.LibraryMusic) { onOpenMusic() },
-                    Triple("Imágenes", Icons.Filled.PhotoLibrary) { onOpenGallery() },
-                    Triple("Videos", Icons.Filled.Movie) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) },
+                    Triple("Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) },
+                    Triple("Música", XpIconKind.MUSIC) { onOpenMusic() },
+                    Triple("Imágenes", XpIconKind.PICTURES) { onOpenGallery() },
+                    Triple("Videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) },
+                    Triple("Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) },
                 ),
                 places = listOf(
-                    Triple("Mi PC", Icons.Filled.Computer) { showWindow(myPc) },
-                    Triple("Mis documentos", Icons.Filled.Description) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) },
-                    Triple("Panel de control", Icons.Filled.Settings) { showWindow(settings) },
-                    Triple("Tema", Icons.Filled.Palette) { onChooseTheme() },
-                    Triple("Actualizar ($versionName)", Icons.Filled.SystemUpdate) { onCheckUpdates() },
+                    Triple("Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) },
+                    Triple("Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) },
+                    Triple("Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) },
+                    Triple("Panel de control", XpIconKind.SETTINGS) { showWindow(settings) },
+                    Triple("Actualizar ($versionName)", XpIconKind.DRIVE) { onCheckUpdates() },
                 ),
                 onPicked = { startOpen = false }
             )
@@ -320,12 +321,10 @@ private fun Taskbar(
                 .padding(start = 10.dp, end = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(22.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.9f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.FolderOpen, null, tint = XpColors.StartMid, modifier = Modifier.size(16.dp))
-            }
+            androidx.compose.foundation.Image(
+                androidx.compose.ui.res.painterResource(R.drawable.app_logo), null,
+                modifier = Modifier.size(26.dp).clip(RoundedCornerShape(6.dp))
+            )
             Spacer(Modifier.width(6.dp))
             Text(
                 "Inicio",
@@ -374,8 +373,8 @@ private fun Taskbar(
 @Composable
 private fun StartMenu(
     modifier: Modifier,
-    entries: List<Triple<String, ImageVector, () -> Unit>>,
-    places: List<Triple<String, ImageVector, () -> Unit>>,
+    entries: List<Triple<String, XpIconKind, () -> Unit>>,
+    places: List<Triple<String, XpIconKind, () -> Unit>>,
     onPicked: () -> Unit,
     onUserClick: () -> Unit,
 ) {
@@ -398,15 +397,15 @@ private fun StartMenu(
                 shadow = Shadow(Color.Black.copy(alpha = 0.5f), Offset(1f, 1f), 2f)))
         }
         Box(Modifier.fillMaxWidth().height(2.dp).background(XpColors.StartMenuOrange))
-        Row(Modifier.fillMaxWidth().height(280.dp)) {
+        Row(Modifier.fillMaxWidth().height(300.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(vertical = 6.dp)) {
                 entries.forEach { (label, icon, action) ->
-                    StartEntry(label, icon, Color.Black, FontWeight.SemiBold, iconSize = 30) { onPicked(); action() }
+                    StartEntry(label, icon, Color.Black, FontWeight.SemiBold, iconSize = 36) { onPicked(); action() }
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight().background(XpColors.SidePanel).padding(vertical = 6.dp)) {
                 places.forEach { (label, icon, action) ->
-                    StartEntry(label, icon, Color(0xFF0A246A), FontWeight.Bold, iconSize = 22) { onPicked(); action() }
+                    StartEntry(label, icon, Color(0xFF0A246A), FontWeight.Bold, iconSize = 28) { onPicked(); action() }
                 }
             }
         }
@@ -415,12 +414,12 @@ private fun StartMenu(
 }
 
 @Composable
-private fun StartEntry(label: String, icon: ImageVector, color: Color, weight: FontWeight, iconSize: Int, onClick: () -> Unit) {
+private fun StartEntry(label: String, icon: XpIconKind, color: Color, weight: FontWeight, iconSize: Int, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = XpColors.SideHeader, modifier = Modifier.size(iconSize.dp))
+        XpIcon(icon, iconSize.dp)
         Spacer(Modifier.width(8.dp))
         Text(label, color = color, fontSize = 13.sp, fontWeight = weight, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }

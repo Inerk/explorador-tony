@@ -22,6 +22,15 @@ enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DO
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
     Canvas(modifier.size(size)) {
+        // sombra en el piso para que se vea con volumen
+        drawOval(
+            Brush.radialGradient(
+                listOf(Color.Black.copy(alpha = 0.38f), Color.Transparent),
+                center = Offset(this.size.width * 0.54f, this.size.height * 0.92f), radius = this.size.width * 0.46f
+            ),
+            topLeft = Offset(this.size.width * 0.08f, this.size.height * 0.84f),
+            size = Size(this.size.width * 0.92f, this.size.height * 0.16f)
+        )
         when (kind) {
             XpIconKind.COMPUTER -> drawComputer()
             XpIconKind.DOCUMENTS -> { drawFolder(); drawPaperEmblem() }

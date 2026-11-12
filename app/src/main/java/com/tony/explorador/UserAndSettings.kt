@@ -200,6 +200,7 @@ fun ControlPanelContent(
 ) {
     var musicSkinOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
+    var historyOpen by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize().background(Color.White)) {
         item {
@@ -216,10 +217,12 @@ fun ControlPanelContent(
         item { PanelItem(XpIconKind.MUSIC, "Tema del reproductor", LibraryStore.musicSkin.label) { musicSkinOpen = true } }
         item { PanelItem(XpIconKind.FOLDER, "Carpetas de música", "Dónde busca canciones la app") { onMusicFolders() } }
         item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName") { onUpdates() } }
+        item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
         item { PanelItem(XpIconKind.COMPUTER, "Acerca de", "Explorador Tony") { aboutOpen = true } }
     }
 
     if (musicSkinOpen) MusicSkinDialog(onDismiss = { musicSkinOpen = false })
+    if (historyOpen) VersionHistoryDialog(versionName, onDismiss = { historyOpen = false })
     if (aboutOpen) {
         AlertDialog(
             onDismissRequest = { aboutOpen = false },
