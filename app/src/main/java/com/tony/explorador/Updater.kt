@@ -22,6 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
@@ -165,52 +167,38 @@ fun UpdateDialog(
 ) {
     when (state) {
         UpdateState.Idle -> {}
-        UpdateState.Checking -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Buscando actualizaciones…") },
-            text = { LinearProgressIndicator(Modifier.fillMaxWidth()) },
-            confirmButton = {}
-        )
-        UpdateState.UpToDate -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Estás al día") },
-            text = { Text("Ya tienes la versión más nueva (v$currentName).") },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
-        )
-        is UpdateState.Available -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Nueva versión ${state.info.tag}") },
-            text = {
-                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                    Text("Tienes la v$currentName. Tamaño: ${formatSize(state.info.size)}",
-                        style = MaterialTheme.typography.bodySmall)
-                    if (state.info.notes.isNotBlank()) {
-                        Spacer(Modifier.height(12.dp))
-                        Text("Qué cambió:", style = MaterialTheme.typography.titleSmall)
-                        Text(state.info.notes)
-                    }
+        UpdateState.Checking -> ThemedDialog("Buscando actualizaciones…", onDismiss, emptyList()) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        UpdateState.UpToDate -> ThemedDialog("Estás al día", onDismiss, listOf(DialogButton("Aceptar", true, onDismiss)), credits = true) {
+            Text("Ya tienes la versión más nueva (v$currentName).")
+        }
+        is UpdateState.Available -> ThemedDialog(
+            "Nueva versión ${state.info.tag}", onDismiss,
+            listOf(DialogButton("Después", onClick = onDismiss), DialogButton("Actualizar", true) { onDownload(state.info) }),
+            credits = true,
+        ) {
+            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                Text("Tienes la v$currentName. Tamaño: ${formatSize(state.info.size)}", fontSize = 13.sp)
+                val notes = cleanReleaseNotes(state.info.notes)
+                if (notes.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("Qué cambió:", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text(notes, fontSize = 14.sp)
                 }
-            },
-            confirmButton = { TextButton(onClick = { onDownload(state.info) }) { Text("Actualizar") } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Después") } }
-        )
+            }
+        }
         is UpdateState.Downloading -> XpDownloadDialog(state.info.tag, state.progress, state.info.size)
-        is UpdateState.NeedsPermission -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Falta un permiso") },
-            text = {
-                Text("La primera vez, Android pide permitir que Explorador Tony instale apps. " +
-                    "Actívalo en la pantalla que se abre, regresa y toca Instalar.")
-            },
-            confirmButton = { TextButton(onClick = { onInstall(state.apk) }) { Text("Instalar") } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
-        )
-        is UpdateState.Error -> AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("No se pudo actualizar") },
-            text = { Text(state.message) },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } }
-        )
+        is UpdateState.NeedsPermission -> ThemedDialog(
+            "Falta un permiso", onDismiss,
+            listOf(DialogButton("Cancelar", onClick = onDismiss), DialogButton("Instalar", true) { onInstall(state.apk) }),
+        ) {
+            Text("La primera vez, Android pide permitir que Explorador Tony instale apps. " +
+                "Actívalo en la pantalla que se abre, regresa y toca Instalar.")
+        }
+        is UpdateState.Error -> ThemedDialog("No se pudo actualizar", onDismiss, listOf(DialogButton("Aceptar", true, onDismiss))) {
+            Text(state.message)
+        }
     }
 }
 
@@ -231,7 +219,7 @@ suspend fun fetchReleaseHistory(): List<ReleaseNote> = withContext(Dispatchers.I
             val o = arr.getJSONObject(i)
             val iso = o.optString("published_at", "")
             val date = if (iso.length >= 10) iso.substring(8, 10) + "/" + iso.substring(5, 7) + "/" + iso.substring(0, 4) else ""
-            ReleaseNote(o.getString("tag_name"), date, o.optString("body", "").trim())
+            ReleaseNote(o.getString("tag_name"), date, cleanReleaseNotes(o.optString("body", "")))
         }
     } finally {
         conn.disconnect()
@@ -243,10 +231,7 @@ fun VersionHistoryDialog(currentName: String, onDismiss: () -> Unit) {
     val result by androidx.compose.runtime.produceState<Result<List<ReleaseNote>>?>(null) {
         value = runCatching { fetchReleaseHistory() }
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Historial de versiones") },
-        text = {
+    ThemedDialog("Historial de versiones", onDismiss, listOf(DialogButton("Cerrar", true, onDismiss)), credits = true) {
             val r = result
             when {
                 r == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -259,9 +244,9 @@ fun VersionHistoryDialog(currentName: String, onDismiss: () -> Unit) {
                         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                 Text(n.tag, style = MaterialTheme.typography.titleMedium,
-                                    color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                    color = if (installed) Color(0xFF2D63D9) else androidx.compose.material3.LocalContentColor.current)
                                 if (installed) Text("  · la que tienes", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary)
+                                    color = Color(0xFF2D63D9))
                                 Spacer(Modifier.weight(1f))
                                 Text(n.date, style = MaterialTheme.typography.bodySmall)
                             }
@@ -274,7 +259,5 @@ fun VersionHistoryDialog(currentName: String, onDismiss: () -> Unit) {
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }
-    )
+    }
 }

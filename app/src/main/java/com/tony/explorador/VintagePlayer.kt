@@ -154,6 +154,7 @@ fun VintagePlayerScreen(
     val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     val lyrics = info?.lyrics.orEmpty()
     val song = path?.let { LibraryStore.songFor(it) }
+    val animatedCover by rememberAnimatedCover(path, song?.album ?: album)
     val albumCount = song?.let { s -> LibraryStore.songs.count { it.album == s.album } } ?: 0
     val trackLabel = info?.trackNumber?.let { n ->
         "Pista $n" + ((info?.trackTotal ?: albumCount.takeIf { it > 1 })?.let { " de $it" } ?: "")
@@ -221,6 +222,8 @@ fun VintagePlayerScreen(
                         onFavorite = { path?.let { LibraryStore.toggleFavorite(it) } },
                         modifier = Modifier.weight(1f).fillMaxSize(),
                         video = if (isVideoPath(path)) player else null,
+                        animated = animatedCover,
+                        playing = player.isPlaying,
                     )
                     RecordCrate(
                         player = player, total = remainingCount(player),
@@ -862,6 +865,8 @@ private fun JacketAndNote(
     onFavorite: () -> Unit,
     modifier: Modifier,
     video: androidx.media3.common.Player? = null,
+    animated: java.io.File? = null,
+    playing: Boolean = true,
 ) {
     val noteOut = remember { Animatable(1f) }
     var shownTitle by remember { mutableStateOf(title) }
@@ -889,6 +894,10 @@ private fun JacketAndNote(
             if (video != null) {
                 // un video se ve en la funda como a través de un cristal
                 VideoGlass(video, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
+            } else if (animated != null) {
+                AnimatedCoverView(animated, playing, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
+                Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.18f })
             } else if (cover != null) {
                 // el estuche ES la portada, con un poco de textura de cartón gastado encima
                 Image(remember(cover) { cover.asImageBitmap() }, null, contentScale = ContentScale.Crop,

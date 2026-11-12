@@ -30,6 +30,11 @@ val DefaultCoverColors = CoverColors(
     onAccent = Color(0xFF0B0C12),
 )
 
+/** Colores de la canción que suena ahora (el tema Original pinta la biblioteca con ellos). */
+object NowPlaying {
+    var colors by androidx.compose.runtime.mutableStateOf(DefaultCoverColors)
+}
+
 data class TrackInfo(
     val path: String,
     val title: String?,

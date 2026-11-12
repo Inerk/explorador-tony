@@ -98,7 +98,7 @@ fun XpClockWindow(onClose: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier.width(236.dp).shadow(14.dp, shape).clip(shape)
             .background(XpColors.TitleBottom).padding(start = 3.dp, end = 3.dp, bottom = 3.dp)
-            .clickable(enabled = false) {}
+            .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
     ) {
         Row(
             Modifier.fillMaxWidth().height(26.dp).background(XpColors.titleBrush).padding(start = 6.dp, end = 2.dp),

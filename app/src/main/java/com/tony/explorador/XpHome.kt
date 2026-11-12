@@ -210,15 +210,11 @@ fun XpDesktop(
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
                 )
             }
-        }
-
-        // Ventanita del video que se estaba viendo
-        val video = VideoSession.player
-        if (VideoSession.floating && video != null && !VideoSession.window.minimized) {
-            Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = 42.dp)) {
-                val vw = VideoSession.window
+            // Ventanita del video que se estaba viendo
+            val video = VideoSession.player
+            if (VideoSession.floating && video != null && !VideoSession.window.minimized) {
                 XpWindowFrame(
-                    state = vw,
+                    state = VideoSession.window,
                     title = VideoSession.currentTitle(),
                     icon = { XpIcon(XpIconKind.VIDEO_PLAYER, 18.dp) },
                     onClose = { VideoSession.release() },
@@ -231,6 +227,13 @@ fun XpDesktop(
         }
 
         if (clockOpen) {
+            // tocar fuera del reloj lo cierra
+            Box(
+                Modifier.fillMaxSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { clockOpen = false }
+            )
             XpClockWindow(
                 onClose = { clockOpen = false },
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = 48.dp)

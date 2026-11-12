@@ -9,6 +9,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         LibraryStore.init(this)
+        AnimatedCovers.init(this)
     }
 
     override fun newImageLoader(): ImageLoader =

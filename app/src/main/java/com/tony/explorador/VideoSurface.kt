@@ -97,7 +97,7 @@ object VideoSurfaces {
 
 /** El video del reproductor. crop = llena el cuadro recortando; si no, se ve completo. */
 @Composable
-fun VideoView(player: Player, modifier: Modifier = Modifier, crop: Boolean = true) {
+fun VideoView(player: Player, modifier: Modifier = Modifier, crop: Boolean = true, background: Color = Color.Black) {
     var videoSize by remember(player) { mutableStateOf(player.videoSize) }
     DisposableEffect(player) {
         val l = object : Player.Listener {
@@ -106,7 +106,7 @@ fun VideoView(player: Player, modifier: Modifier = Modifier, crop: Boolean = tru
         player.addListener(l)
         onDispose { player.removeListener(l) }
     }
-    BoxWithConstraints(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier.background(background), contentAlignment = Alignment.Center) {
         val vw = videoSize.width * videoSize.pixelWidthHeightRatio
         val vh = videoSize.height.toFloat()
         val ratio = if (vw > 0 && vh > 0) vw / vh else 16f / 9f

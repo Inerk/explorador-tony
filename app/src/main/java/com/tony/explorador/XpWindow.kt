@@ -32,6 +32,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +54,15 @@ class WinState(width: Dp, height: Dp, val minWidth: Dp = 220.dp, val minHeight: 
     var open by mutableStateOf(false)
     var minimized by mutableStateOf(false)
     var maximized by mutableStateOf(false)
+    /** Orden de encimado: la última que tocaste queda arriba, como en Windows. */
+    var z by mutableStateOf(0f)
+    fun toFront() { if (z < WinZ.top) z = WinZ.next() }
+}
+
+object WinZ {
+    var top = 0f
+        private set
+    fun next(): Float { top += 1f; return top }
 }
 
 val XpRedButton = Brush.verticalGradient(listOf(Color(0xFFE88C6F), Color(0xFFC4401E)))
@@ -79,7 +92,17 @@ fun XpWindowFrame(
         .offset { IntOffset(state.offset.x.roundToInt(), state.offset.y.roundToInt()) }
         .size(state.width, state.height)
 
-    Box(modifier.then(base).shadow(14.dp, shape).clip(shape).background(XpColors.TitleBottom)) {
+    // al aparecer, queda encima de las demás
+    androidx.compose.runtime.LaunchedEffect(Unit) { state.toFront() }
+    Box(Modifier.zIndex(state.z).then(modifier).then(base)
+        .pointerInput(Unit) {
+            // cualquier toque en la ventana la pasa al frente (sin quitarle el toque a lo de adentro)
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                state.toFront()
+            }
+        }
+        .shadow(14.dp, shape).clip(shape).background(XpColors.TitleBottom)) {
         Column(Modifier.fillMaxSize().padding(start = 3.dp, end = 3.dp, bottom = 3.dp)) {
             Row(
                 Modifier.fillMaxWidth().height(30.dp)

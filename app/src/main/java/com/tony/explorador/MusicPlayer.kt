@@ -175,6 +175,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
     val colors = info?.colors ?: DefaultCoverColors
     val accent by animateColorAsState(colors.accent, tween(600), label = "miniAccent")
+    androidx.compose.runtime.LaunchedEffect(info?.colors) { info?.colors?.let { NowPlaying.colors = it } }
     val title = info?.title ?: player.mediaMetadata.title?.toString() ?: ""
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
@@ -296,6 +297,8 @@ fun MusicPlayerScreen(
     val position = player.currentPosition + tick * 0L
     val lyrics = info?.lyrics.orEmpty()
     val lyricIndex = currentLyricIndex(lyrics, position)
+    val animatedCover by rememberAnimatedCover(player.currentMediaItem?.mediaId,
+        player.currentMediaItem?.mediaId?.let { LibraryStore.songFor(it)?.album } ?: album)
 
     Box(
         Modifier.fillMaxSize()
@@ -396,6 +399,7 @@ fun MusicPlayerScreen(
                                 CoverArt(
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
+                                    animated = animatedCover,
                                     playing = player.isPlaying,
                                     accent = accent,
                                     size = lerpDp(side, QueueThumb, p),
@@ -595,6 +599,7 @@ fun MusicPlayerScreen(
 private fun CoverArt(
     cover: Bitmap?,
     video: Player?,
+    animated: java.io.File? = null,
     playing: Boolean,
     accent: Color,
     size: androidx.compose.ui.unit.Dp,
@@ -700,6 +705,11 @@ private fun CoverArt(
     ) {
         // si es un video, se ve en la portada como a través de un cristal
         if (video != null) VideoGlass(video, Modifier.fillMaxSize())
+        else if (animated != null) Box(Modifier.fillMaxSize()) {
+            // carátula animada encima de la normal (así no se ve negro mientras arranca)
+            cover?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+            AnimatedCoverView(animated, playing, Modifier.fillMaxSize())
+        }
         else Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
             if (bmp != null) {
                 Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",

@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
@@ -88,12 +89,14 @@ fun SongMenuWindow(
     var confirmDelete by remember { mutableStateOf(false) }
     var tagOnline by remember { mutableStateOf(false) }
     var lyricsOnline by remember { mutableStateOf(false) }
+    var animatedCover by remember { mutableStateOf(false) }
 
     val options = listOf(
         MenuOption("Lista de repro", Icons.AutoMirrored.Filled.PlaylistAdd) { addToList = true },
         MenuOption(if (fav) "Quitar favorito" else "Favorito", if (fav) Icons.Filled.Star else Icons.Filled.StarBorder,
             if (fav) Color(0xFFFFC83D) else Color.White) { LibraryStore.toggleFavorite(path) },
         MenuOption("Carátula", Icons.Filled.Image) { showCover = true },
+        MenuOption("Carát. animada", Icons.Filled.Animation, Color(0xFFFFB0E0)) { animatedCover = true },
         MenuOption("Info./Etiq.", Icons.Filled.Info) { onInfo() },
         MenuOption("Letra", Icons.Filled.Lyrics) { onLyrics() },
         MenuOption("Etiquetar web", Icons.Filled.TravelExplore, Color(0xFF8FD3FF)) { tagOnline = true },
@@ -200,6 +203,7 @@ fun SongMenuWindow(
         }
     }
 
+    if (animatedCover) AnimatedCoverDialog(path, song?.album ?: info?.album, onDismiss = { animatedCover = false })
     if (tagOnline) TagSearchDialog(path, accent, onDismiss = { tagOnline = false; onDismiss() })
     if (lyricsOnline) LyricsSearchDialog(path, accent, onDismiss = { lyricsOnline = false; onDismiss() })
 

@@ -222,6 +222,11 @@ fun ControlPanelContent(
         item { PanelItem(XpIconKind.FOLDER, "Carpetas de música", "Dónde busca canciones la app") { onMusicFolders() } }
         item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName") { onUpdates() } }
         item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
+        item {
+            Text("★ $APP_CREDITS · v$versionName", fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                color = Color(0xFF555555), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
+        }
         item { PanelItem(XpIconKind.COMPUTER, "Acerca de", "Explorador Tony") { aboutOpen = true } }
     }
 

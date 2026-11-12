@@ -101,3 +101,46 @@ fun BrassMedallion(icon: ImageVector, color: Color, size: Dp = 46.dp, modifier: 
         Icon(icon, null, tint = Vintage.Cream, modifier = Modifier.size(size * 0.48f))
     }
 }
+
+/**
+ * Ícono plano en 2D pero con relieve (tema Original): cuadrito redondeado con bisel,
+ * brillo arriba, sombra abajo y el dibujo como "estampado" encima.
+ */
+@Composable
+fun ReliefIcon(icon: ImageVector, color: Color, size: Dp = 46.dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(size + 6.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.toPx()
+            val o = Offset((this.size.width - s) / 2f, (this.size.height - s) / 2f - 1.dp.toPx())
+            val r = androidx.compose.ui.geometry.CornerRadius(s * 0.28f)
+            val sz = androidx.compose.ui.geometry.Size(s, s)
+            // sombra en el piso
+            drawRoundRect(Color.Black.copy(alpha = 0.35f), o + Offset(0f, 3.dp.toPx()), sz, r)
+            // canto de abajo (más oscuro): da el grosor
+            drawRoundRect(lerp(color, Color.Black, 0.45f), o + Offset(0f, 2.dp.toPx()), sz, r)
+            // cara
+            drawRoundRect(
+                Brush.verticalGradient(listOf(lerp(color, Color.White, 0.35f), color, lerp(color, Color.Black, 0.18f)),
+                    startY = o.y, endY = o.y + s),
+                o, sz, r
+            )
+            // brillo del bisel arriba
+            drawRoundRect(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), startY = o.y, endY = o.y + s * 0.5f),
+                o, sz, r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.4.dp.toPx())
+            )
+            // reflejo suave en la mitad de arriba
+            drawRoundRect(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.Transparent), startY = o.y, endY = o.y + s * 0.55f),
+                o + Offset(s * 0.06f, s * 0.05f), androidx.compose.ui.geometry.Size(s * 0.88f, s * 0.45f),
+                androidx.compose.ui.geometry.CornerRadius(s * 0.22f)
+            )
+        }
+        val iconSize = size * 0.56f
+        // dibujo "estampado": sombra oscura abajo, luz arriba y el ícono blanco
+        Icon(icon, null, tint = lerp(color, Color.Black, 0.55f).copy(alpha = 0.8f),
+            modifier = Modifier.size(iconSize).offset(y = 1.2.dp))
+        Icon(icon, null, tint = Color.White.copy(alpha = 0.35f), modifier = Modifier.size(iconSize).offset(y = (-0.8).dp))
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(iconSize))
+    }
+}

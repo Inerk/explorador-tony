@@ -79,6 +79,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -99,32 +101,40 @@ import java.util.Locale
 private object Retro {
     private val wmp get() = LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
+    private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
     val isWmp get() = wmp
     val isVintage get() = vin
-    private fun pick(walkman: Color, media: Color, vintage: Color) = if (vin) vintage else if (wmp) media else walkman
-    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D))
-    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A))
-    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass)
-    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight)
-    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E))
-    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream)
-    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim)
-    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream)
-    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight)
+    val isOriginal get() = org
+    private val now get() = NowPlaying.colors
+    private fun pick(walkman: Color, media: Color, vintage: Color, original: Color = walkman) =
+        if (org) original else if (vin) vintage else if (wmp) media else walkman
+    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D), now.bottom)
+    /** Fondo: en Original es el degradado de la portada que suena, como en el reproductor. */
+    val bgBrush: Brush get() = if (org) Brush.verticalGradient(listOf(now.top, now.bottom, Color(0xFF07080B)))
+        else Brush.verticalGradient(listOf(Bg, Bg))
+    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f))
+    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass, now.accent)
+    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight, now.accent.copy(alpha = 0.7f))
+    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E), now.onAccent)
+    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream, Color.White)
+    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim, Color.White.copy(alpha = 0.6f))
+    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream, Color.White)
+    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight, Color.White)
     val metal: Brush get() = when {
+        org -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent))
         vin -> Brush.verticalGradient(listOf(Color(0xFF8B5A2B), Color(0xFF5A3517), Color(0xFF3A2212)))
         wmp -> Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
         else -> Brush.verticalGradient(listOf(Color(0xFFE9EBEF), Color(0xFFB9BDC6), Color(0xFF8C919C)))
     }
     // colores de cada sección
-    val Red get() = pick(Color(0xFFE53935), Color(0xFF5B8DEF), Color(0xFFB5562A))
-    val Blue get() = pick(Color(0xFF1E88E5), Color(0xFF2D7DD2), Color(0xFF2F6B66))
-    val Lime get() = pick(Color(0xFF7CB342), Color(0xFF2FBF9A), Color(0xFF6B7A2E))
-    val Pink get() = pick(Color(0xFFD81B60), Color(0xFF8E6CEF), Color(0xFF8E2C2C))
-    val Yellow get() = pick(Color(0xFFFDD835), Color(0xFFF2C94C), Color(0xFFC9A24A))
-    val Teal get() = pick(Color(0xFF00ACC1), Color(0xFF2EC4E6), Color(0xFF3E7A8A))
-    val Purple get() = pick(Color(0xFF8E24AA), Color(0xFF7B61FF), Color(0xFF6A3B5C))
-    val Gray get() = pick(Color(0xFF78909C), Color(0xFF6F86A8), Color(0xFF6E5A48))
+    val Red get() = pick(Color(0xFFE53935), Color(0xFF5B8DEF), Color(0xFFB5562A), Color(0xFFFF5A5F))
+    val Blue get() = pick(Color(0xFF1E88E5), Color(0xFF2D7DD2), Color(0xFF2F6B66), Color(0xFF4D8DFF))
+    val Lime get() = pick(Color(0xFF7CB342), Color(0xFF2FBF9A), Color(0xFF6B7A2E), Color(0xFF34C759))
+    val Pink get() = pick(Color(0xFFD81B60), Color(0xFF8E6CEF), Color(0xFF8E2C2C), Color(0xFFFF4FA3))
+    val Yellow get() = pick(Color(0xFFFDD835), Color(0xFFF2C94C), Color(0xFFC9A24A), Color(0xFFFFC83D))
+    val Teal get() = pick(Color(0xFF00ACC1), Color(0xFF2EC4E6), Color(0xFF3E7A8A), Color(0xFF2FD3E0))
+    val Purple get() = pick(Color(0xFF8E24AA), Color(0xFF7B61FF), Color(0xFF6A3B5C), Color(0xFFAF6BFF))
+    val Gray get() = pick(Color(0xFF78909C), Color(0xFF6F86A8), Color(0xFF6E5A48), Color(0xFF8E9BB0))
 }
 
 private sealed interface LibPage {
@@ -157,7 +167,21 @@ fun LibraryScreen(
     val page = stack.last()
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
-    BackHandler { pop() }
+    // menú principal que se desliza encima de donde estés (0 = escondido, 1 = abierto)
+    val drawer = remember { androidx.compose.animation.core.Animatable(0f) }
+    var screenW by remember { androidx.compose.runtime.mutableFloatStateOf(1080f) }
+    val drawerSpring = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.8f, stiffness = 320f)
+    fun setDrawer(open: Boolean, velocity: Float = 0f) {
+        scope.launch { drawer.animateTo(if (open) 1f else 0f, drawerSpring, initialVelocity = velocity) }
+    }
+    fun openFromDrawer(p: LibPage) {
+        if (stack.last() != p) {
+            while (stack.size > 1) stack.removeAt(stack.lastIndex)
+            if (p != LibPage.Menu) stack.add(p)
+        }
+        setDrawer(false)
+    }
+    BackHandler { if (drawer.targetValue > 0f) setDrawer(false) else pop() }
     LaunchedEffect(openRequest) {
         openRequest?.let { (kind, value) ->
             while (stack.size > 1) stack.removeAt(stack.lastIndex)
@@ -174,24 +198,47 @@ fun LibraryScreen(
     val songs = LibraryStore.songs
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
 
-    Column(
-        Modifier.fillMaxSize().background(Retro.Bg).pointerInput(Unit) {
-            // deslizar rápido a la derecha en cualquier parte → regresa al menú principal
-            val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-            var total = 0f
-            detectHorizontalDragGestures(
-                onDragStart = { tracker.resetTracking(); total = 0f },
-                onDragEnd = {
-                    val v = tracker.calculateVelocity().x
-                    if (v > 1500f && total > 70f) {
-                        while (stack.size > 1) stack.removeAt(stack.lastIndex)
-                    }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .onSizeChanged { screenW = it.width.toFloat().coerceAtLeast(1f) }
+            .pointerInput(Unit) {
+                // deslizar a la derecha jala el menú principal encima (sigue tu dedo, como la portada)
+                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                var active = false
+                detectHorizontalDragGestures(
+                    onDragStart = { tracker.resetTracking(); active = stack.size > 1 || drawer.value > 0f },
+                    onDragEnd = {
+                        if (!active) return@detectHorizontalDragGestures
+                        val v = tracker.calculateVelocity().x
+                        val open = when {
+                            v > 700f -> true
+                            v < -700f -> false
+                            else -> drawer.value > 0.4f
+                        }
+                        setDrawer(open, v / (screenW * 0.86f))
+                    },
+                    onDragCancel = { if (active) setDrawer(drawer.value > 0.5f) }
+                ) { change, drag ->
+                    if (!active) return@detectHorizontalDragGestures
+                    change.consume()
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    scope.launch { drawer.snapTo((drawer.value + drag / (screenW * 0.86f)).coerceIn(0f, 1f)) }
                 }
-            ) { change, drag ->
-                tracker.addPosition(change.uptimeMillis, change.position)
-                total += drag
             }
-        }
+    ) {
+    val d = drawer.value
+    Column(
+        Modifier.fillMaxSize()
+            .graphicsLayer {
+                // la pantalla de atrás se hace a un lado, se encoge y se ladea un poquito
+                translationX = d * 44.dp.toPx()
+                val sc = 1f - 0.08f * d
+                scaleX = sc; scaleY = sc
+                rotationZ = 1.6f * d
+                shape = RoundedCornerShape((26 * d).dp)
+                clip = d > 0f
+            }
+            .background(Retro.bgBrush)
     ) {
         // Encabezado metálico
         Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
@@ -229,14 +276,19 @@ fun LibraryScreen(
             androidx.compose.animation.AnimatedContent(
                 targetState = stack.size to page,
                 transitionSpec = {
+                    // como la portada: entra con resorte, la de atrás se hace a un lado y se encoge
                     val forward = targetState.first >= initialState.first
                     val dir = if (forward) 1 else -1
-                    (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(300)) { dir * it / 3 } +
-                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260)) +
-                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(300), initialScale = if (forward) 0.96f else 1.04f)) togetherWith
-                        (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(260)) { -dir * it / 4 } +
-                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)) +
-                            androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(260), targetScale = if (forward) 0.94f else 1.04f))
+                    val move = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.82f, stiffness = 300f)
+                    val grow = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.82f, stiffness = 300f)
+                    ((androidx.compose.animation.slideInHorizontally(move) { dir * it * 2 / 3 } +
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                        androidx.compose.animation.scaleIn(grow, initialScale = 0.9f)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(move) { -dir * it / 5 } +
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(240)) +
+                            androidx.compose.animation.scaleOut(grow, targetScale = 0.9f))).apply {
+                        targetContentZIndex = if (forward) 1f else -1f
+                    }
                 },
                 label = "pages"
             ) { (_, shownPage) ->
@@ -281,6 +333,36 @@ fun LibraryScreen(
         }
         miniPlayer()
     }
+    if (d > 0f) {
+        // velo oscuro: tocarlo cierra el menú
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f * d))
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { setDrawer(false) }
+        )
+        // el menú principal, entrando desde la izquierda
+        Column(
+            Modifier.fillMaxHeight().fillMaxWidth(0.86f)
+                .graphicsLayer {
+                    translationX = (d - 1f) * size.width
+                    shadowElevation = 24.dp.toPx() * d
+                    shape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
+                    clip = true
+                }
+                .background(Retro.bgBrush)
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+        ) {
+            Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
+                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Música", color = Retro.HeaderText, fontWeight = FontWeight.Black, fontSize = 20.sp,
+                        fontFamily = if (Retro.isVintage) FontFamily.Serif else null, modifier = Modifier.weight(1f))
+                    Text("♪ ${songs.size}", color = Retro.Orange, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
+            Box(Modifier.weight(1f)) { MainMenu(songs.size, onOpen = { openFromDrawer(it) }, current = stack.last()) }
+        }
+    }
+    }
 
     addTo?.let { toAdd ->
         AddToPlaylistDialog(
@@ -316,7 +398,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
 // ───────── Menú principal ─────────
 
 @Composable
-private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
+private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage? = null) {
     var skinDialog by remember { mutableStateOf(false) }
     if (skinDialog) MusicSkinDialog(onDismiss = { skinDialog = false })
     data class Entry(val label: String, val sub: String, val icon: ImageVector, val color: Color, val page: LibPage)
@@ -328,20 +410,24 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
-        Entry("Tema del reproductor", if (Retro.isVintage) "Vintage" else if (Retro.isWmp) "Media Player" else "Walkman", Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
+        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(entries) { e ->
             Row(
                 Modifier.fillMaxWidth().height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Retro.Panel)
-                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
+                    .background(if (current == e.page && e.page != LibPage.Menu) Retro.Orange.copy(alpha = 0.22f) else Retro.Panel)
+                    .border(1.dp, if (current == e.page && e.page != LibPage.Menu) Retro.Orange else Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
                     .clickable { if (e.label == "Tema del reproductor") skinDialog = true else onOpen(e.page) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // bloque de color a la izquierda
-                if (Retro.isVintage) {
+                if (Retro.isOriginal) {
+                    Box(Modifier.width(68.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        ReliefIcon(e.icon, e.color, 46.dp)
+                    }
+                } else if (Retro.isVintage) {
                     Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
                         BrassMedallion(e.icon, e.color, 44.dp)
                     }
@@ -537,11 +623,12 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
             ) {
                 Box(
                     Modifier.size(52.dp).clip(if (icon == Icons.Filled.Person) CircleShape else RoundedCornerShape(6.dp))
-                        .background(color.copy(alpha = 0.85f)),
+                        .background(if (Retro.isOriginal && thumb == null) Color.Transparent else color.copy(alpha = 0.85f)),
                     contentAlignment = Alignment.Center
                 ) {
                     val b = thumb
                     if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    else if (Retro.isOriginal) ReliefIcon(icon, color, 42.dp)
                     else Icon(icon, null, tint = Color.White)
                 }
                 Spacer(Modifier.width(14.dp))
