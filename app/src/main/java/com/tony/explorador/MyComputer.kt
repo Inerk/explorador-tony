@@ -118,7 +118,7 @@ private fun systemInfo(context: Context): List<SysInfo> {
         SysInfo("Memoria RAM", "${formatSize(mem.availMem)} libres de ${formatSize(mem.totalMem)}"),
         SysInfo("Batería", if (battery in 0..100) "$battery %" else "—"),
         SysInfo("Pantalla", "${dm.widthPixels} × ${dm.heightPixels}"),
-        SysInfo("Explorador Tony", "v${currentVersionName(context)}"),
+        SysInfo("Explorador Tony", "v${currentVersionName(context)} beta"),
     )
 }
 

@@ -39,7 +39,7 @@ import androidx.compose.ui.window.Dialog
 data class DialogButton(val label: String, val primary: Boolean = false, val onClick: () -> Unit)
 
 /** Quién hizo la app. */
-const val APP_CREDITS = "Explorador Tony · creado por Tony"
+const val APP_CREDITS = "Explorador Tony (versión beta) · creado por Tony"
 
 /** Quita de las notas de versión las líneas internas que no le dicen nada al usuario. */
 fun cleanReleaseNotes(text: String): String =

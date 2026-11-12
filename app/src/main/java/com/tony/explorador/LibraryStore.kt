@@ -90,7 +90,7 @@ object LibraryStore {
 
     val avatarFile get() = File(appContext.filesDir, "avatar.jpg")
     val wallpaperFile get() = File(appContext.filesDir, "fondo.jpg")
-    var wallpaper by mutableStateOf("xp")
+    var wallpaper by mutableStateOf("nieve")
         private set
     var wallpaperVersion by mutableStateOf(0)
         private set
@@ -434,7 +434,8 @@ object LibraryStore {
         o.optJSONObject("favorites")?.let { m -> m.keys().forEach { k -> favorites[k] = m.getLong(k) } }
         o.optJSONObject("counts")?.let { m -> m.keys().forEach { k -> playCounts[k] = m.getInt(k) } }
         o.optJSONObject("last")?.let { m -> m.keys().forEach { k -> lastPlayed[k] = m.getLong(k) } }
-        o.optString("theme").let { t -> AppTheme.entries.firstOrNull { it.name == t }?.let { theme = it } }
+        // por ahora el único tema es el clásico XP (versión beta)
+        theme = AppTheme.XP
         o.optString("user").takeIf { it.isNotBlank() }?.let { userName = it }
         avatar = o.optInt("avatar", 0)
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }

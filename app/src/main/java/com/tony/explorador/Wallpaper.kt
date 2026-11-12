@@ -58,6 +58,7 @@ import kotlinx.coroutines.withContext
 data class WallpaperOption(val id: String, val name: String)
 
 val Wallpapers = listOf(
+    WallpaperOption("nieve", "Muñeco de nieve"),
     WallpaperOption("xp", "Colinas"),
     WallpaperOption("wood", "Madera"),
     WallpaperOption("azul", "Azul clásico"),
@@ -78,6 +79,7 @@ fun WallpaperView(modifier: Modifier, id: String = LibraryStore.wallpaper) {
                 contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier
             )
         } else HillsWallpaper(modifier)
+        "nieve" -> Image(painterResource(R.drawable.wp_nieve), null, contentScale = ContentScale.Crop, modifier = modifier)
         "wood" -> Image(painterResource(R.drawable.vt_table), null, contentScale = ContentScale.Crop, modifier = modifier)
         "azul" -> Box(modifier.background(Color(0xFF3A6EA5)))
         "noche" -> Box(modifier.background(Brush.verticalGradient(listOf(Color(0xFF0B1A3A), Color(0xFF26305E), Color(0xFF3B1E5E)))))

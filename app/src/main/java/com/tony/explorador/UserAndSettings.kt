@@ -212,7 +212,6 @@ fun ControlPanelContent(
                 Text("Elige una categoría", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
-        item { PanelItem(XpIconKind.SETTINGS, "Apariencia y temas", "Cambia el tema de toda la app") { onTheme() } }
         item { PanelItem(XpIconKind.PICTURES, "Fondo de pantalla", "Elige el fondo del escritorio o usa una foto tuya") { onWallpaper() } }
         item {
             PanelItem(null, "Cuentas de usuario", "Tu nombre y tu imagen", avatar = true) { onAccount() }
@@ -220,7 +219,7 @@ fun ControlPanelContent(
         item { PanelItem(XpIconKind.MUSIC, "Tema del reproductor", LibraryStore.musicSkin.label) { musicSkinOpen = true } }
         item { PanelItem(XpIconKind.COMPUTER, "Ventana del reproductor", LibraryStore.windowSkin.label) { windowSkinOpen = true } }
         item { PanelItem(XpIconKind.FOLDER, "Carpetas de música", "Dónde busca canciones la app") { onMusicFolders() } }
-        item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName") { onUpdates() } }
+        item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName (beta)") { onUpdates() } }
         item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
         item {
             Text("★ $APP_CREDITS · v$versionName", fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,

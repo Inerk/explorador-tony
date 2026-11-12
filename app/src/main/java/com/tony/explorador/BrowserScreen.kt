@@ -383,7 +383,7 @@ fun BrowserScreen(
                                 text = { Text("Historial de versiones") },
                                 leadingIcon = { Icon(Icons.Filled.History, null) },
                                 onClick = { more = false; showHistory = true })
-                            DropdownMenuItem(
+                            if (false) DropdownMenuItem(
                                 text = { Text("Tema: ${LibraryStore.theme.label}") },
                                 leadingIcon = { Icon(Icons.Filled.Palette, null) },
                                 onClick = { more = false; onChooseTheme() })
