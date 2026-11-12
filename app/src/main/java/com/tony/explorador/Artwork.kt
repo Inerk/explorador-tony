@@ -47,7 +47,7 @@ private val cache = LruCache<String, TrackInfo>(12)
 /** Carga portada, etiquetas, colores y letra de la canción actual (en segundo plano). */
 @Composable
 fun rememberTrackInfo(path: String?): State<TrackInfo?> =
-    produceState<TrackInfo?>(initialValue = path?.let { cache.get(it) }, path) {
+    produceState<TrackInfo?>(initialValue = path?.let { cache.get(it) }, path, LibraryStore.tagsVersion) {
         if (path == null) { value = null; return@produceState }
         cache.get(path)?.let { value = it; return@produceState }
         val info = loadTrackInfo(path)
@@ -185,3 +185,12 @@ suspend fun loadCover(path: String): Bitmap? = withContext(Dispatchers.IO) {
 
 /** Portada ya cargada (sin esperar), para que no parpadee al moverse. */
 fun peekCover(path: String): Bitmap? = bigCoverCache.get(path)
+
+/** Olvida lo que había en caché de una canción (después de etiquetarla o bajarle letra). */
+fun invalidateTrack(path: String) {
+    cache.remove(path)
+    thumbCache.remove(path)
+    bigCoverCache.remove(path)
+    noThumb.remove(path)
+    noBigCover.remove(path)
+}

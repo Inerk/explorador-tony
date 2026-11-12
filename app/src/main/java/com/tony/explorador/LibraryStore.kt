@@ -50,6 +50,25 @@ object LibraryStore {
         private set
     var playlistFiles by mutableStateOf<List<File>>(emptyList())
         private set
+    /** Sube cada vez que cambian etiquetas o letras, para que las pantallas se recarguen. */
+    var tagsVersion by mutableStateOf(0)
+        private set
+
+    fun bumpTags() { tagsVersion++ }
+
+    /** Actualiza los datos de una canción después de etiquetarla. */
+    fun updateSongTags(path: String, title: String?, artist: String?, album: String?) {
+        songs = songs.map { s ->
+            if (s.path != path) s else s.copy(
+                title = title?.takeIf { it.isNotBlank() } ?: s.title,
+                artist = artist?.takeIf { it.isNotBlank() } ?: s.artist,
+                album = album?.takeIf { it.isNotBlank() } ?: s.album,
+            )
+        }
+        val list = songs
+        io.launch { runCatching { saveSongsCache(list) } }
+        tagsVersion++
+    }
 
     val musicFolders = mutableStateListOf<String>()
     val favorites = mutableStateMapOf<String, Long>()       // ruta → cuándo se marcó

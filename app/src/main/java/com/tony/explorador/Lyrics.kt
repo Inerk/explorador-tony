@@ -57,12 +57,18 @@ fun parseLrc(text: String): List<LyricLine> {
         val lyric = wordTag.replace(line.substring(pos), "").trim()
         times.forEach { t -> lines.add(LyricLine((t - offset).coerceAtLeast(0), lyric)) }
     }
+    if (lines.isEmpty()) {
+        // letra sin tiempos: se muestra completa, sin resaltar línea
+        val tag = Regex("""^\[[a-zA-Z]+:.*]$""")
+        return text.lineSequence().map { it.trim() }.filterNot { tag.matches(it) }
+            .toList().dropWhile { it.isBlank() }.map { LyricLine(-1L, it) }
+    }
     return lines.sortedBy { it.timeMs }
 }
 
 /** Índice de la línea que se está cantando en este momento (-1 si aún no empieza). */
 fun currentLyricIndex(lines: List<LyricLine>, positionMs: Long): Int {
-    if (lines.isEmpty() || positionMs < lines.first().timeMs) return -1
+    if (lines.isEmpty() || lines.first().timeMs < 0 || positionMs < lines.first().timeMs) return -1
     var lo = 0
     var hi = lines.lastIndex
     while (lo < hi) {

@@ -180,7 +180,7 @@ fun VintagePlayerScreen(
             Spacer(Modifier.height(6.dp))
             if (lyricsMode) {
                 Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(12.dp)) {
-                    LyricsPanelVintage(lyrics, currentLyricIndex(lyrics, position)) { player.seekTo(it); player.play() }
+                    LyricsPanelVintage(path, lyrics, currentLyricIndex(lyrics, position)) { player.seekTo(it); player.play() }
                 }
             } else {
                 // Tocadiscos
@@ -753,10 +753,9 @@ fun RadioDial(progress: Float, onChange: (Float) -> Unit, onEnd: (Float) -> Unit
 }
 
 @Composable
-private fun LyricsPanelVintage(lines: List<LyricLine>, current: Int, onSeek: (Long) -> Unit) {
+private fun LyricsPanelVintage(path: String?, lines: List<LyricLine>, current: Int, onSeek: (Long) -> Unit) {
     if (lines.isEmpty()) {
-        Text("Esta canción no tiene letra.\nPon un archivo .lrc con el mismo nombre en la misma carpeta.",
-            color = Vintage.CreamDim, fontFamily = FontFamily.Serif, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        NoLyricsPrompt(path, Vintage.CreamDim, Vintage.Brass, serif = true)
         return
     }
     val state = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -769,7 +768,7 @@ private fun LyricsPanelVintage(lines: List<LyricLine>, current: Int, onSeek: (Lo
                 color = if (active) Vintage.BrassLight else Vintage.Cream.copy(alpha = 0.45f),
                 fontFamily = FontFamily.Serif, fontSize = if (active) 24.sp else 19.sp,
                 fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                modifier = Modifier.fillMaxWidth().clickable { onSeek(lines[i].timeMs) }.padding(vertical = 8.dp)
+                modifier = Modifier.fillMaxWidth().clickable { if (lines[i].timeMs >= 0) onSeek(lines[i].timeMs) }.padding(vertical = 8.dp)
             )
         }
     }

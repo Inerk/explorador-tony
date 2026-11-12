@@ -28,7 +28,9 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -84,6 +86,8 @@ fun SongMenuWindow(
     var addToList by remember { mutableStateOf(false) }
     var showCover by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var tagOnline by remember { mutableStateOf(false) }
+    var lyricsOnline by remember { mutableStateOf(false) }
 
     val options = listOf(
         MenuOption("Lista de repro", Icons.AutoMirrored.Filled.PlaylistAdd) { addToList = true },
@@ -92,6 +96,8 @@ fun SongMenuWindow(
         MenuOption("Carátula", Icons.Filled.Image) { showCover = true },
         MenuOption("Info./Etiq.", Icons.Filled.Info) { onInfo() },
         MenuOption("Letra", Icons.Filled.Lyrics) { onLyrics() },
+        MenuOption("Etiquetar web", Icons.Filled.TravelExplore, Color(0xFF8FD3FF)) { tagOnline = true },
+        MenuOption("Buscar letra", Icons.Filled.Search, Color(0xFF8FD3FF)) { lyricsOnline = true },
         MenuOption("Compartir", Icons.Filled.Share) { shareFiles(context, listOf(File(path))) },
         MenuOption("Artista", Icons.Filled.Mic) { onGoTo("artist", artist) },
         MenuOption("Álbum", Icons.Filled.Album) { onGoTo("album", album) },
@@ -193,6 +199,9 @@ fun SongMenuWindow(
             }
         }
     }
+
+    if (tagOnline) TagSearchDialog(path, accent, onDismiss = { tagOnline = false; onDismiss() })
+    if (lyricsOnline) LyricsSearchDialog(path, accent, onDismiss = { lyricsOnline = false; onDismiss() })
 
     if (confirmDelete) {
         AlertDialog(

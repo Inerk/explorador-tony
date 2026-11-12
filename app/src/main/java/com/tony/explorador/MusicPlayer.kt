@@ -378,7 +378,7 @@ fun MusicPlayerScreen(
                         label = "panel"
                     ) { lyr ->
                         if (lyr) {
-                            LyricsPanel(lines = lyrics, current = lyricIndex, accent = accent,
+                            LyricsPanel(path = player.currentMediaItem?.mediaId, lines = lyrics, current = lyricIndex, accent = accent,
                                 onSeek = { player.seekTo(it); player.play() })
                         } else {
                             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -801,14 +801,9 @@ fun WaveSeekBar(
 }
 
 @Composable
-private fun LyricsPanel(lines: List<LyricLine>, current: Int, accent: Color, onSeek: (Long) -> Unit) {
+private fun LyricsPanel(path: String?, lines: List<LyricLine>, current: Int, accent: Color, onSeek: (Long) -> Unit) {
     if (lines.isEmpty()) {
-        Text(
-            "Esta canción no tiene letra.\n\nPon un archivo .lrc con el mismo nombre que la canción, en la misma carpeta.\nEjemplo: Canción.mp3 → Canción.lrc",
-            textAlign = TextAlign.Center,
-            color = Color.White.copy(alpha = 0.75f),
-            modifier = Modifier.padding(16.dp)
-        )
+        NoLyricsPrompt(path, Color.White.copy(alpha = 0.75f), accent, serif = false)
         return
     }
     val state = rememberLazyListState()
@@ -833,7 +828,7 @@ private fun LyricsPanel(lines: List<LyricLine>, current: Int, accent: Color, onS
                 modifier = Modifier.fillMaxWidth()
                     .alpha(alpha)
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSeek(line.timeMs) }
+                    .clickable { if (line.timeMs >= 0) onSeek(line.timeMs) }
                     .padding(vertical = 9.dp, horizontal = 4.dp)
             )
             if (active) {

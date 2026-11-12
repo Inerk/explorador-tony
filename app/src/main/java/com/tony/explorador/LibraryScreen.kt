@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
@@ -453,11 +455,15 @@ private fun SongRow(
     onAdd: () -> Unit,
     onRemove: (() -> Unit)?,
 ) {
-    val thumb by produceState<android.graphics.Bitmap?>(null, song.path) { value = loadThumb(song.path) }
+    val thumb by produceState<android.graphics.Bitmap?>(null, song.path, LibraryStore.tagsVersion) { value = loadThumb(song.path) }
     val fav = LibraryStore.isFavorite(song.path)
     var menu by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
     if (showInfo) SongInfoWindow(song.path, Retro.Orange, onDismiss = { showInfo = false })
+    var tagOnline by remember { mutableStateOf(false) }
+    var lyricsOnline by remember { mutableStateOf(false) }
+    if (tagOnline) TagSearchDialog(song.path, Retro.Orange, onDismiss = { tagOnline = false })
+    if (lyricsOnline) LyricsSearchDialog(song.path, Retro.Orange, onDismiss = { lyricsOnline = false })
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -500,6 +506,10 @@ private fun SongRow(
                     onClick = { menu = false; onAdd() })
                 DropdownMenuItem(text = { Text("Información") }, leadingIcon = { Icon(Icons.Filled.Info, null) },
                     onClick = { menu = false; showInfo = true })
+                DropdownMenuItem(text = { Text("Etiquetar desde internet") }, leadingIcon = { Icon(Icons.Filled.TravelExplore, null) },
+                    onClick = { menu = false; tagOnline = true })
+                DropdownMenuItem(text = { Text("Buscar letra") }, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                    onClick = { menu = false; lyricsOnline = true })
                 if (onRemove != null) {
                     DropdownMenuItem(text = { Text("Quitar de esta lista") }, leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, null) },
                         onClick = { menu = false; onRemove() })
@@ -520,7 +530,7 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
     Box(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().padding(end = if (groups.size > 25) 26.dp else 0.dp), state = listState, contentPadding = PaddingValues(vertical = 6.dp)) {
         items(groups.entries.toList(), key = { it.key }) { (name, list) ->
-            val thumb by produceState<android.graphics.Bitmap?>(null, name) { value = loadThumb(list.first().path) }
+            val thumb by produceState<android.graphics.Bitmap?>(null, name, LibraryStore.tagsVersion) { value = loadThumb(list.first().path) }
             Row(
                 Modifier.fillMaxWidth().clickable { onOpen(name) }.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
