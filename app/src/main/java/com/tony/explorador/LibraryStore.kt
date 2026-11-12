@@ -109,6 +109,25 @@ object LibraryStore {
         private set
     fun changeWindowSkin(s: WindowSkin) { windowSkin = s; save() }
 
+    // ───── Vistas del explorador, galería y videos ─────
+    /** "list", "compact", "grid", "big" */
+    var explorerView by mutableStateOf("list")
+        private set
+    fun changeExplorerView(v: String) { explorerView = v; save() }
+    /** "grid" o "list" */
+    var galleryView by mutableStateOf("grid")
+        private set
+    var videoView by mutableStateOf("grid")
+        private set
+    /** Carpetas elegidas (vacío = todas las del teléfono). */
+    val galleryFolders = mutableStateListOf<String>()
+    val videoFolders = mutableStateListOf<String>()
+    fun changeMediaView(videos: Boolean, v: String) { if (videos) videoView = v else galleryView = v; save() }
+    fun setMediaFolders(videos: Boolean, folders: Collection<String>) {
+        val l = if (videos) videoFolders else galleryFolders
+        l.clear(); l.addAll(folders.distinct()); save()
+    }
+
     // ───── Escritorio ─────
     val desktopIds = mutableStateListOf<String>()           // íconos visibles
     val desktopPos = mutableStateMapOf<String, String>()    // id → "columna,fila"
@@ -380,6 +399,11 @@ object LibraryStore {
             put("musicSkin", musicSkin.name)
             put("windowSkin", windowSkin.name)
             put("wallpaper", wallpaper)
+            put("explorerView", explorerView)
+            put("galleryView", galleryView)
+            put("videoView", videoView)
+            put("galleryFolders", JSONArray(galleryFolders.toList()))
+            put("videoFolders", JSONArray(videoFolders.toList()))
             put("desktopConfigured", desktopConfigured)
             put("desktopIds", JSONArray(desktopIds.toList()))
             put("desktopPos", JSONObject(desktopPos.toMap()))
@@ -406,6 +430,11 @@ object LibraryStore {
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }
         o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
+        o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
+        o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
+        o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }
+        o.optJSONArray("galleryFolders")?.let { a -> for (i in 0 until a.length()) galleryFolders.add(a.getString(i)) }
+        o.optJSONArray("videoFolders")?.let { a -> for (i in 0 until a.length()) videoFolders.add(a.getString(i)) }
         desktopConfigured = o.optBoolean("desktopConfigured", false)
         o.optJSONArray("desktopIds")?.let { a -> for (i in 0 until a.length()) desktopIds.add(a.getString(i)) }
         o.optJSONObject("desktopPos")?.let { m -> m.keys().forEach { k -> desktopPos[k] = m.getString(k) } }

@@ -437,7 +437,8 @@ fun MusicPlayerScreen(
                 val path = player.currentMediaItem?.mediaId
                 val fav = path != null && LibraryStore.isFavorite(path)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
+                    // tocar el nombre cierra la letra y regresa a la portada
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = lyricsMode) { lyricsMode = false }) {
                         Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                         if (artist.isNotEmpty()) {

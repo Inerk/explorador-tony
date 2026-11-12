@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -46,6 +46,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.SETTINGS -> drawControlPanel()
             XpIconKind.PLAYER -> drawPlayer()
             XpIconKind.GALLERY -> drawGallery()
+            XpIconKind.VIDEO_PLAYER -> drawVideoPlayer()
         }
     }
 }
@@ -300,4 +301,61 @@ private fun DrawScope.drawGallery() {
     photo(-14f, -w * 0.04f, h * 0.02f, Color(0xFFFF9A5A))
     photo(8f, w * 0.05f, -h * 0.02f, Color(0xFF9B7BEA))
     photo(-2f, 0f, h * 0.06f, Color(0xFF3D8BFF))
+}
+
+/** Videos: claqueta de cine con un botón de play azul brillante. */
+private fun DrawScope.drawVideoPlayer() {
+    val w = size.width
+    val h = size.height
+    // cuerpo de la claqueta
+    val bo = Offset(w * 0.1f, h * 0.36f)
+    val bs = Size(w * 0.72f, h * 0.46f)
+    drawRoundRect(Color.Black.copy(alpha = 0.2f), bo + Offset(w * 0.02f, h * 0.03f), bs, CornerRadius(w * 0.05f))
+    drawRoundRect(Brush.verticalGradient(listOf(Color(0xFF4A4F5C), Color(0xFF1E2128)), startY = bo.y, endY = bo.y + bs.height),
+        bo, bs, CornerRadius(w * 0.05f))
+    // líneas de texto de la claqueta
+    for (i in 0..2) {
+        val y = bo.y + bs.height * (0.3f + i * 0.22f)
+        drawLine(Color.White.copy(alpha = 0.55f), Offset(bo.x + bs.width * 0.08f, y), Offset(bo.x + bs.width * (0.42f - i * 0.06f), y), w * 0.022f)
+    }
+    // barra de arriba con rayas, un poco abierta
+    rotate(-14f, Offset(bo.x, bo.y)) {
+        val to = Offset(bo.x, bo.y - h * 0.13f)
+        val ts = Size(bs.width, h * 0.12f)
+        drawRect(Color(0xFF1E2128), to, ts)
+        val stripes = 5
+        for (i in 0 until stripes) {
+            val x0 = to.x + ts.width * i / stripes
+            val p = Path().apply {
+                moveTo(x0 + ts.width * 0.05f, to.y); lineTo(x0 + ts.width / stripes * 0.75f, to.y)
+                lineTo(x0 + ts.width / stripes * 0.45f, to.y + ts.height); lineTo(x0 - ts.width * 0.05f, to.y + ts.height); close()
+            }
+            drawPath(p, Color.White)
+        }
+        drawRect(Color(0xFF111111), to, ts, style = Stroke(w * 0.012f))
+    }
+    // franja fija debajo de la barra
+    val so = Offset(bo.x, bo.y)
+    val ss = Size(bs.width, h * 0.1f)
+    drawRect(Color(0xFF1E2128), so, ss)
+    for (i in 0 until 5) {
+        val x0 = so.x + ss.width * i / 5
+        val p = Path().apply {
+            moveTo(x0 + ss.width * 0.06f, so.y); lineTo(x0 + ss.width / 5 * 0.8f, so.y)
+            lineTo(x0 + ss.width / 5 * 0.5f, so.y + ss.height); lineTo(x0 - ss.width * 0.04f, so.y + ss.height); close()
+        }
+        drawPath(p, Color.White)
+    }
+    // botón de play
+    val c = Offset(w * 0.7f, h * 0.68f)
+    val r = w * 0.22f
+    drawCircle(Brush.radialGradient(listOf(Color(0xFF9FD8FF), Color(0xFF2E86FF), Color(0xFF0B3FA8)),
+        center = Offset(c.x - r * 0.3f, c.y - r * 0.35f), radius = r * 1.5f), r, c)
+    drawCircle(Color(0xFF0A2F7A), r, c, style = Stroke(w * 0.015f))
+    val tri = Path().apply {
+        moveTo(c.x - r * 0.28f, c.y - r * 0.42f); lineTo(c.x + r * 0.48f, c.y); lineTo(c.x - r * 0.28f, c.y + r * 0.42f); close()
+    }
+    drawPath(tri, Color.White)
+    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent), startY = c.y - r, endY = c.y),
+        Offset(c.x - r * 0.62f, c.y - r * 0.92f), Size(r * 1.24f, r * 0.8f))
 }

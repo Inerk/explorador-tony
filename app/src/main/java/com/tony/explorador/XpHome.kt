@@ -95,6 +95,7 @@ fun XpDesktop(
     onOpenFolder: (File) -> Unit,
     onOpenMusic: () -> Unit,
     onOpenGallery: () -> Unit,
+    onOpenVideos: () -> Unit,
     onCheckUpdates: () -> Unit,
     onChooseTheme: () -> Unit,
     versionName: String,
@@ -127,7 +128,7 @@ fun XpDesktop(
         add(DeskApp("music", "Música", XpIconKind.PLAYER) { onOpenMusic() })
         add(DeskApp("pictures", "Galería", XpIconKind.GALLERY) { onOpenGallery() })
         add(DeskApp("camera", "Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
-        add(DeskApp("videos", "Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
+        add(DeskApp("videos", "Videos", XpIconKind.VIDEO_PLAYER) { onOpenVideos() })
         add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
         add(DeskApp("panel", "Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
         add(DeskApp("explorer", "Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) })

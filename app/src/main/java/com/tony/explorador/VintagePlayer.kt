@@ -179,6 +179,17 @@ fun VintagePlayerScreen(
 
             Spacer(Modifier.height(6.dp))
             if (lyricsMode) {
+                // tocar el nombre de la canción cierra la letra
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { lyricsMode = false }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(title, color = Vintage.Cream, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold, fontSize = 20.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    if (artist.isNotBlank()) Text(artist, color = Vintage.CreamDim, fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic,
+                        fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(6.dp))
                 Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.35f)).padding(12.dp)) {
                     LyricsPanelVintage(path, lyrics, currentLyricIndex(lyrics, position)) { player.seekTo(it); player.play() }
                 }

@@ -70,6 +70,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -123,6 +124,8 @@ fun BrowserScreen(
     onChooseTheme: () -> Unit,
     homeSignal: Int,
     onOpenGallery: () -> Unit,
+    onOpenVideos: () -> Unit,
+    onOpenPdf: (File) -> Unit,
     folderRequest: File?,
     onFolderHandled: () -> Unit,
     versionName: String,
@@ -197,7 +200,11 @@ fun BrowserScreen(
             }
             FileKind.OTHER -> {
                 val ext = file.extension.lowercase(Locale.ROOT)
-                if (ext == "m3u8" || ext == "m3u") importCandidate = file else openExternally(context, file)
+                when (ext) {
+                    "m3u8", "m3u" -> importCandidate = file
+                    "pdf" -> onOpenPdf(file)
+                    else -> openExternally(context, file)
+                }
             }
         }
     }
@@ -225,6 +232,7 @@ fun BrowserScreen(
             onOpenFolder = { goTo(it) },
             onOpenMusic = onOpenLibrary,
             onOpenGallery = onOpenGallery,
+            onOpenVideos = onOpenVideos,
             onCheckUpdates = onCheckUpdates,
             onChooseTheme = onChooseTheme,
             versionName = versionName,
@@ -315,6 +323,20 @@ fun BrowserScreen(
                             IconButton(onClick = { goTo(null) }) { Icon(Icons.Filled.Home, "Inicio") }
                         }
                         IconButton(onClick = { searchActive = true }) { Icon(Icons.Filled.Search, "Buscar") }
+                        if (currentDir != null) {
+                            var viewMenu by remember { mutableStateOf(false) }
+                            val view = ExplorerView.of(LibraryStore.explorerView)
+                            IconButton(onClick = { viewMenu = true }) { Icon(view.icon, "Vista") }
+                            DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
+                                ExplorerView.entries.forEach { v ->
+                                    DropdownMenuItem(
+                                        text = { Text(v.label, fontWeight = if (v == view) FontWeight.Bold else null) },
+                                        leadingIcon = { Icon(v.icon, null, tint = if (v == view) MaterialTheme.colorScheme.primary else LocalContentColor.current) },
+                                        onClick = { LibraryStore.changeExplorerView(v.id); viewMenu = false }
+                                    )
+                                }
+                            }
+                        }
                         if (currentDir != null) {
                             var sortMenu by remember { mutableStateOf(false) }
                             IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar") }
@@ -407,7 +429,7 @@ fun BrowserScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
-                currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary)
+                currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary, onOpenGallery = onOpenGallery, onOpenVideos = onOpenVideos)
                 else -> {
                     Column(Modifier.fillMaxSize()) {
                         val dir = currentDir
@@ -423,25 +445,32 @@ fun BrowserScreen(
                             }
                         } else {
                             val listState = rememberLazyListState()
-                            LaunchedEffect(currentDir) { listState.scrollToItem(0) }
-                            LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                            val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                            LaunchedEffect(currentDir) { listState.scrollToItem(0); gridState.scrollToItem(0) }
+                            val clickFile: (File) -> Unit = { file ->
+                                if (selection.isNotEmpty()) toggleSelect(file)
+                                else {
+                                    val siblings = if (searchResults != null)
+                                        file.parentFile?.let { listFolder(it, sortMode, ascending, showHidden) } ?: listOf(file)
+                                    else shownFiles
+                                    openFile(file, siblings)
+                                }
+                            }
+                            when (ExplorerView.of(LibraryStore.explorerView)) {
+                                ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile) { toggleSelect(it) }
+                                ExplorerView.GRID -> FileGrid(shownFiles, selection, big = false, showHidden = showHidden, state = gridState, onClick = clickFile) { toggleSelect(it) }
+                                ExplorerView.BIG -> FileGrid(shownFiles, selection, big = true, showHidden = showHidden, state = gridState, onClick = clickFile) { toggleSelect(it) }
+                                ExplorerView.LIST -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                                 items(shownFiles, key = { it.absolutePath }) { file ->
                                     FileRow(
                                         file = file,
                                         selected = file in selection,
                                         showPath = searchResults != null,
                                         showHidden = showHidden,
-                                        onClick = {
-                                            if (selection.isNotEmpty()) toggleSelect(file)
-                                            else {
-                                                val siblings = if (searchResults != null)
-                                                    file.parentFile?.let { listFolder(it, sortMode, ascending, showHidden) } ?: listOf(file)
-                                                else shownFiles
-                                                openFile(file, siblings)
-                                            }
-                                        },
+                                        onClick = { clickFile(file) },
                                         onLongClick = { toggleSelect(file) }
                                     )
+                                }
                                 }
                             }
                         }
@@ -535,16 +564,16 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit, onOpenMusic: () -> Unit) {
+private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit, onOpenMusic: () -> Unit, onOpenGallery: () -> Unit, onOpenVideos: () -> Unit) {
     val internal = roots.first().file
     val shortcuts = listOf(
         Triple("Descargas", Icons.Filled.Download, File(internal, Environment.DIRECTORY_DOWNLOADS)),
         Triple("Cámara", Icons.Filled.PhotoCamera, File(internal, Environment.DIRECTORY_DCIM)),
-        Triple("Imágenes", Icons.Filled.PhotoLibrary, File(internal, Environment.DIRECTORY_PICTURES)),
+        Triple("Galería", Icons.Filled.PhotoLibrary, File(internal, Environment.DIRECTORY_PICTURES)),
         Triple("Música", Icons.Filled.LibraryMusic, File(internal, Environment.DIRECTORY_MUSIC)),
-        Triple("Películas", Icons.Filled.Movie, File(internal, Environment.DIRECTORY_MOVIES)),
+        Triple("Videos", Icons.Filled.Movie, File(internal, Environment.DIRECTORY_MOVIES)),
         Triple("Documentos", Icons.Filled.Drafts, File(internal, Environment.DIRECTORY_DOCUMENTS)),
-    ).filter { it.third.exists() }
+    ).filter { it.first == "Galería" || it.first == "Videos" || it.third.exists() }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         item {
@@ -590,7 +619,14 @@ private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit, onOpen
             items(shortcuts) { (label, icon, dir) ->
                 Row(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .clickable { if (label == "Música") onOpenMusic() else onOpen(dir) }.padding(12.dp),
+                        .clickable {
+                            when (label) {
+                                "Música" -> onOpenMusic()
+                                "Galería" -> onOpenGallery()
+                                "Videos" -> onOpenVideos()
+                                else -> onOpen(dir)
+                            }
+                        }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(icon, null, tint = MaterialTheme.colorScheme.secondary)
@@ -670,7 +706,8 @@ private fun FileRow(
                             modifier = Modifier.size(18.dp).align(Alignment.BottomEnd))
                     }
                 }
-                else -> Icon(kindIcon(kind), null, modifier = Modifier.size(32.dp), tint = kindColor(kind))
+                FileKind.AUDIO -> FilePreview(file, kind, 32.dp, Modifier.fillMaxSize())
+                else -> Icon(fileIcon(file, kind), null, modifier = Modifier.size(32.dp), tint = fileColor(file, kind))
             }
             if (selected) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)))
@@ -686,21 +723,6 @@ private fun FileRow(
     }
 }
 
-private fun kindIcon(kind: FileKind): ImageVector = when (kind) {
-    FileKind.FOLDER -> Icons.Filled.Folder
-    FileKind.IMAGE -> Icons.Filled.Image
-    FileKind.AUDIO -> Icons.Filled.AudioFile
-    FileKind.VIDEO -> Icons.Filled.VideoFile
-    FileKind.OTHER -> Icons.AutoMirrored.Filled.InsertDriveFile
-}
-
-private fun kindColor(kind: FileKind): Color = when (kind) {
-    FileKind.FOLDER -> Color(0xFFF5B800)
-    FileKind.IMAGE -> Color(0xFF43A047)
-    FileKind.AUDIO -> Color(0xFFE53935)
-    FileKind.VIDEO -> Color(0xFF8E24AA)
-    FileKind.OTHER -> Color(0xFF757575)
-}
 
 @Composable
 private fun NameDialog(

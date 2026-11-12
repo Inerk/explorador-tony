@@ -114,6 +114,8 @@ sealed interface Overlay {
     data object CoverFlow : Overlay
     data object MyPc : Overlay
     data object Gallery : Overlay
+    data object Videos : Overlay
+    data class Pdf(val file: File) : Overlay
 }
 
 @Composable
@@ -214,6 +216,8 @@ fun AppRoot() {
             onChooseTheme = { choosingTheme = true },
             homeSignal = homeSignal,
             onOpenGallery = { open(Overlay.Gallery) },
+            onOpenVideos = { open(Overlay.Videos) },
+            onOpenPdf = { open(Overlay.Pdf(it)) },
             folderRequest = folderRequest,
             onFolderHandled = { folderRequest = null },
             versionName = versionName,
@@ -262,6 +266,12 @@ fun AppRoot() {
                         onClose = { close(o) },
                         onHome = { goHome() }
                     )
+                    Overlay.Videos -> VideosScreen(
+                        onOpenVideo = { files, index -> controller?.pause(); open(Overlay.Video(files, index)) },
+                        onClose = { close(o) },
+                        onHome = { goHome() }
+                    )
+                    is Overlay.Pdf -> PdfViewerScreen(o.file, onClose = { close(o) }, onHome = { goHome() })
                     Overlay.MyPc -> MyComputerScreen(
                         onOpenFolder = { f -> close(o); folderRequest = f },
                         onOpenMusic = { close(o); open(Overlay.Library) },
@@ -415,7 +425,7 @@ private fun enterFor(o: Overlay): androidx.compose.animation.EnterTransition = w
         androidx.compose.animation.scaleIn(smooth, initialScale = 0.86f,
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
     // secciones: entran deslizándose de lado
-    Overlay.Library, Overlay.MyPc, Overlay.Gallery -> androidx.compose.animation.slideInHorizontally(smoothOffset) { it / 3 } +
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos -> androidx.compose.animation.slideInHorizontally(smoothOffset) { it / 3 } +
         androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
         androidx.compose.animation.scaleIn(smooth, initialScale = 0.95f)
     // fotos, videos, carrusel: zoom desde el centro
@@ -428,7 +438,7 @@ private fun exitFor(o: Overlay): androidx.compose.animation.ExitTransition = whe
         androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
         androidx.compose.animation.scaleOut(smooth, targetScale = 0.86f,
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
-    Overlay.Library, Overlay.MyPc, Overlay.Gallery -> androidx.compose.animation.slideOutHorizontally(smoothOffset) { it / 3 } +
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos -> androidx.compose.animation.slideOutHorizontally(smoothOffset) { it / 3 } +
         androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
         androidx.compose.animation.scaleOut(smooth, targetScale = 0.95f)
     else -> androidx.compose.animation.scaleOut(smooth, targetScale = 0.82f) +
