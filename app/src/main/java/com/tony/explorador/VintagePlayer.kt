@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -283,30 +284,15 @@ fun VintagePlayerScreen(
 
 @Composable
 fun WoodTable(modifier: Modifier) {
-    val grain = remember {
-        val r = Random(7)
-        List(46) { Triple(r.nextFloat(), r.nextFloat() * 0.5f + 0.2f, r.nextFloat()) }
-    }
-    Canvas(modifier) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF4A2C19), Vintage.Walnut, Color(0xFF2A190F))))
-        // vetas de la madera
-        grain.forEach { (y0, amp, a) ->
-            val y = y0 * size.height
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f, y)
-                var x = 0f
-                while (x <= size.width) {
-                    lineTo(x, y + sin(x / size.width * 6f + a * 10f) * amp * 18f)
-                    x += 12f
-                }
-            }
-            drawPath(path, Color.Black.copy(alpha = 0.10f + a * 0.12f), style = Stroke(1f + a * 2.5f))
+    Box(modifier) {
+        Image(
+            androidx.compose.ui.res.painterResource(R.drawable.vt_table), null,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
+        )
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)),
+                center = Offset(size.width / 2, size.height * 0.42f), radius = size.maxDimension * 0.8f))
         }
-        // brillo de barniz y viñeta
-        drawRect(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.06f), Color.Transparent, Color.White.copy(alpha = 0.03f)),
-            start = Offset.Zero, end = Offset(size.width, size.height)))
-        drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
-            center = Offset(size.width / 2, size.height * 0.45f), radius = size.maxDimension * 0.75f))
     }
 }
 
@@ -364,63 +350,120 @@ fun Turntable(
     val armGoal = if (playing && !swapping) armTarget.coerceIn(0f, 1f) else -0.35f
     val arm by animateFloatAsState(armGoal, tween(if (armGoal < 0f) 320 else 520, easing = FastOutSlowInEasing), label = "arm")
 
-    BoxWithConstraints(modifier.aspectRatio(1.28f)) {
+    val plinthImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_plinth)
+    val armImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_arm)
+    val recordImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_record)
+
+    BoxWithConstraints(modifier.aspectRatio(Deck.ASPECT)) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
         val density = androidx.compose.ui.platform.LocalDensity.current
-        val recordR = h * 0.44f
-        val center = Offset(w * 0.06f + recordR, h * 0.5f)
-        val recordDp = with(density) { (recordR * 2).toDp() }
+        val center = Offset(w * Deck.CENTER_X, h * Deck.CENTER_Y)
+        val recordR = w * Deck.RECORD_R
+        val recordBox = recordR * 2f / Deck.REC_OUTER       // la imagen del disco trae un poco de margen
+        val recordDp = with(density) { recordBox.toDp() }
 
-        // base de madera
-        Canvas(Modifier.fillMaxSize()) { drawPlinth() }
+        // base del tocadiscos (foto)
+        Canvas(Modifier.fillMaxSize()) {
+            drawImage(plinthImg, dstSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt()),
+                filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+        }
 
-        // el disco (gira) con la portada como etiqueta
+        // el disco: la foto del vinilo no gira (sus brillos son la luz del cuarto), gira la etiqueta con la portada
         Box(
             Modifier
-                .offset { androidx.compose.ui.unit.IntOffset((center.x - recordR + slide.value * w).toInt(), (center.y - recordR).toInt()) }
+                .offset { androidx.compose.ui.unit.IntOffset((center.x - recordBox / 2 + slide.value * w).toInt(), (center.y - recordBox / 2).toInt()) }
                 .size(recordDp)
                 .graphicsLayer { alpha = 1f - (abs(slide.value) - 0.9f).coerceIn(0f, 0.4f) / 0.4f }
                 .combinedClickable(onClick = onTap, onLongClick = onLongPress)
         ) {
-            Canvas(Modifier.fillMaxSize()) { drawPlatterAndVinyl() }
-            Box(
-                Modifier.align(Alignment.Center).size(recordDp * 0.36f)
-                    .graphicsLayer { rotationZ = angle }
-                    .clip(CircleShape).background(Vintage.Burgundy),
-                contentAlignment = Alignment.Center
-            ) {
-                val c = shownCover
-                if (c != null) Image(remember(c) { c.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                else Text("♪", color = Vintage.Cream, fontSize = if (compact) 14.sp else 30.sp, fontFamily = FontFamily.Serif)
+            Image(recordImg, null, modifier = Modifier.fillMaxSize(), filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
+            val c = shownCover
+            if (c != null) {
+                Box(
+                    Modifier.align(Alignment.Center).size(recordDp * Deck.LABEL)
+                        .graphicsLayer { rotationZ = angle }
+                        .clip(CircleShape),
+                ) {
+                    Image(remember(c) { c.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    // un poco de sombra en la orilla de la etiqueta, como papel pegado al vinilo
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f)),
+                            radius = size.minDimension / 2), size.minDimension / 2)
+                    }
+                }
             }
-            // brillo del vinilo (no gira: es la luz del cuarto) + eje
+            // eje metálico al centro
             Canvas(Modifier.fillMaxSize()) {
-                val c = Offset(size.width / 2, size.height / 2)
-                val r = size.minDimension / 2
-                drawCircle(
-                    Brush.sweepGradient(
-                        0f to Color.Transparent, 0.10f to Color.White.copy(alpha = 0.16f), 0.18f to Color.Transparent,
-                        0.55f to Color.Transparent, 0.62f to Color.White.copy(alpha = 0.12f), 0.70f to Color.Transparent,
-                        1f to Color.Transparent, center = c
-                    ), r * 0.97f, c
-                )
-                drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFF9A9AA0)), center = c, radius = r * 0.03f), r * 0.025f, c)
+                val cc = Offset(size.width / 2, size.height / 2)
+                val r = size.minDimension * 0.016f
+                drawCircle(Color.Black.copy(alpha = 0.4f), r * 1.3f, cc + Offset(1.5f, 2f))
+                drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFF9A9AA0), Color(0xFF55555A)), center = cc - Offset(r * 0.3f, r * 0.3f), radius = r * 1.2f), r, cc)
             }
         }
 
-        // la pluma
-        Canvas(Modifier.fillMaxSize()) { drawTonearm(center, recordR, arm, playing) }
+        // la pluma (foto), girando sobre su eje
+        Canvas(Modifier.fillMaxSize()) { drawArmImage(armImg, center, recordR, arm) }
+    }
+}
 
-        // detalles de la consola
-        if (!compact) {
-            Text("33⅓", color = Vintage.BrassLight, fontFamily = FontFamily.Serif, fontSize = 11.sp,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 10.dp))
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 58.dp, bottom = 14.dp).size(8.dp).clip(CircleShape)
-                    .background(if (playing) Color(0xFFFF4A2A) else Color(0xFF4A1A10))
-            )
+/** Medidas tomadas de las fotos (en fracciones, para que funcionen a cualquier tamaño). */
+private object Deck {
+    const val ASPECT = 1536f / 1024f
+    const val CENTER_X = 622f / 1536f       // centro del plato
+    const val CENTER_Y = 493f / 1024f
+    const val RECORD_R = 376f / 1536f       // radio del disco (fracción del ancho)
+    const val REC_OUTER = 618f / 627f       // el disco ocupa casi toda su imagen
+    const val LABEL = 0.354f                // etiqueta = 35 % del disco
+    const val PIVOT_X = 1316f / 1536f       // eje de la pluma sobre la base
+    const val PIVOT_Y = 160f / 1024f
+    const val ARM_LEN = 640f / 1536f        // de eje a aguja (fracción del ancho)
+    // en la foto de la pluma
+    const val IMG_PIVOT_X = 357f / 724f
+    const val IMG_PIVOT_Y = 400f / 2172f
+    const val IMG_TIP_X = 310f / 724f
+    const val IMG_TIP_Y = 2148f / 2172f
+}
+
+private fun DrawScope.drawArmImage(img: androidx.compose.ui.graphics.ImageBitmap, center: Offset, recordR: Float, arm: Float) {
+    val pivot = Offset(size.width * Deck.PIVOT_X, size.height * Deck.PIVOT_Y)
+    val len = size.width * Deck.ARM_LEN
+    // escala de la foto para que de eje a aguja mida "len"
+    val vImg = Offset((Deck.IMG_TIP_X - Deck.IMG_PIVOT_X) * img.width, (Deck.IMG_TIP_Y - Deck.IMG_PIVOT_Y) * img.height)
+    val scale = len / vImg.getDistance()
+    fun tip(theta: Float): Offset {
+        val t = theta * PI.toFloat() / 180f
+        val v = vImg * scale
+        return pivot + Offset(v.x * cos(t) - v.y * sin(t), v.x * sin(t) + v.y * cos(t))
+    }
+    fun thetaFor(radius: Float): Float {
+        var lo = 0f; var hi = 90f
+        repeat(28) {
+            val mid = (lo + hi) / 2
+            if ((tip(mid) - center).getDistance() > radius) lo = mid else hi = mid
         }
+        return (lo + hi) / 2
+    }
+    val outer = thetaFor(recordR * 0.93f)
+    val inner = thetaFor(recordR * 0.40f)
+    val rest = 0f
+    val theta = if (arm < 0f) rest + (outer - rest) * (1f + arm / 0.35f).coerceIn(0f, 1f) else outer + (inner - outer) * arm
+
+    val dstW = img.width * scale
+    val dstH = img.height * scale
+    val topLeft = pivot - Offset(Deck.IMG_PIVOT_X * dstW, Deck.IMG_PIVOT_Y * dstH)
+    rotate(theta, pivot) {
+        // sombra de la pluma sobre la base
+        drawImage(
+            img, dstOffset = androidx.compose.ui.unit.IntOffset((topLeft.x + dstW * 0.03f).toInt(), (topLeft.y + dstW * 0.05f).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(dstW.toInt(), dstH.toInt()),
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Black.copy(alpha = 0.35f), androidx.compose.ui.graphics.BlendMode.SrcIn)
+        )
+        drawImage(
+            img, dstOffset = androidx.compose.ui.unit.IntOffset(topLeft.x.toInt(), topLeft.y.toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(dstW.toInt(), dstH.toInt()),
+            filterQuality = androidx.compose.ui.graphics.FilterQuality.High
+        )
     }
 }
 
@@ -562,25 +605,22 @@ private fun RecordPile(player: Player, forward: Boolean, label: String, total: I
 @Composable
 private fun Sleeve(path: String, vinylOnRight: Boolean, modifier: Modifier) {
     val thumb by produceState<Bitmap?>(null, path) { value = loadThumb(path) }
-    Box(modifier.size(84.dp, 72.dp)) {
-        // el disco asomándose de la funda
-        Canvas(Modifier.size(64.dp).align(if (vinylOnRight) Alignment.CenterEnd else Alignment.CenterStart)) {
-            val c = Offset(size.width / 2, size.height / 2)
-            drawCircle(Color(0xFF0E0E10), size.minDimension / 2, c)
-            drawCircle(Color.White.copy(alpha = 0.08f), size.minDimension * 0.38f, c, style = Stroke(1f))
-            drawCircle(Vintage.Burgundy, size.minDimension * 0.16f, c)
-        }
-        // la funda con la portada
-        Box(
-            Modifier.size(64.dp).align(if (vinylOnRight) Alignment.CenterStart else Alignment.CenterEnd)
-                .shadow(6.dp, RoundedCornerShape(2.dp))
-                .background(Vintage.Cream)
-                .border(1.dp, Color(0xFF8A7A5A)),
-            contentAlignment = Alignment.Center
-        ) {
-            val b = thumb
-            if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().padding(2.dp))
-            else Icon(Icons.Filled.MusicNote, null, tint = Vintage.TeakDark)
+    // funda: 1484x1060 en la foto; el frente cuadrado va de x 97..1052, y 66..976
+    BoxWithConstraints(modifier.size(98.dp, 70.dp)) {
+        Image(
+            androidx.compose.ui.res.painterResource(R.drawable.vt_sleeve), null,
+            modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = if (vinylOnRight) 1f else -1f }
+        )
+        val frontW = maxWidth * (955f / 1484f)
+        val frontH = maxHeight * (910f / 1060f)
+        val left = if (vinylOnRight) maxWidth * (97f / 1484f) else maxWidth - maxWidth * (97f / 1484f) - frontW
+        val b = thumb
+        if (b != null) {
+            Image(
+                remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop,
+                modifier = Modifier.offset(left + frontW * 0.05f, maxHeight * (66f / 1060f) + frontH * 0.05f)
+                    .size(frontW * 0.9f, frontH * 0.9f)
+            )
         }
     }
 }
