@@ -196,6 +196,7 @@ private fun MovableIcon(
         Column(Modifier.fillMaxWidth().padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Box {
                 XpIcon(app.kind, 54.dp)
+                if (app.id == "updates" && UpdateBadge.available) NotificationDot(Modifier.align(Alignment.TopEnd))
                 if (isShortcut) ShortcutArrow(Modifier.align(Alignment.BottomStart))
             }
             Spacer(Modifier.size(2.dp))

@@ -288,7 +288,10 @@ private fun Taskbar(
                 .padding(start = 6.dp, end = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StartOrb(Modifier.size(26.dp))
+            Box {
+                StartOrb(Modifier.size(26.dp))
+                if (UpdateBadge.available) NotificationDot(Modifier.align(Alignment.TopEnd), 10.dp)
+            }
             Spacer(Modifier.width(5.dp))
             Text(
                 "Inicio",
@@ -390,7 +393,10 @@ private fun StartEntry(app: DeskApp, color: Color, weight: FontWeight, iconSize:
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            XpIcon(app.kind, iconSize.dp)
+            Box {
+                XpIcon(app.kind, iconSize.dp)
+                if (app.id == "updates" && UpdateBadge.available) NotificationDot(Modifier.align(Alignment.TopEnd), 12.dp)
+            }
             Spacer(Modifier.width(8.dp))
             Text(app.label, color = color, fontSize = 13.sp, fontWeight = weight, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }

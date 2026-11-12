@@ -212,6 +212,7 @@ fun AppRoot() {
             if (manual) updateState = UpdateState.Checking
             try {
                 val info = fetchLatestRelease()
+                UpdateBadge.available = info.versionCode > currentVersionCode(context)
                 updateState = when {
                     info.versionCode > currentVersionCode(context) -> UpdateState.Available(info)
                     manual -> UpdateState.UpToDate
