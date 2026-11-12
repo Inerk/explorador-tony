@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -75,6 +77,16 @@ fun ExploradorTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     val scheme = when {
+        LibraryStore.theme == AppTheme.XP -> lightColorScheme(
+            primary = XpColors.SelectBlue,
+            onPrimary = androidx.compose.ui.graphics.Color.White,
+            primaryContainer = androidx.compose.ui.graphics.Color(0xFFC1D2EE),
+            secondary = XpColors.StartMid,
+            secondaryContainer = androidx.compose.ui.graphics.Color(0xFFC1D2EE),
+            background = androidx.compose.ui.graphics.Color.White,
+            surface = androidx.compose.ui.graphics.Color.White,
+            surfaceVariant = XpColors.Window,
+        )
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         dark -> darkColorScheme()
@@ -98,6 +110,7 @@ sealed interface Overlay {
     data class Images(val files: List<File>, val index: Int) : Overlay
     data class Video(val files: List<File>, val index: Int) : Overlay
     data object Music : Overlay
+    data object Library : Overlay
 }
 
 @Composable
@@ -115,7 +128,10 @@ fun AppRoot() {
     }
 
     val controller = rememberMediaController()
-    var overlay by remember { mutableStateOf<Overlay?>(null) }
+    val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
+    fun open(o: Overlay) { overlays.remove(o); overlays.add(o) }
+    fun closeTop() { if (overlays.isNotEmpty()) overlays.removeAt(overlays.lastIndex) }
+    var choosingTheme by remember { mutableStateOf(false) }
 
     // ── Actualizaciones desde GitHub ──
     val scope = rememberCoroutineScope()
@@ -153,27 +169,68 @@ fun AppRoot() {
     Box(Modifier.fillMaxSize()) {
         BrowserScreen(
             controller = controller,
-            onOpenImages = { files, index -> overlay = Overlay.Images(files, index) },
+            onOpenImages = { files, index -> open(Overlay.Images(files, index)) },
             onOpenVideo = { files, index ->
                 controller?.pause()
-                overlay = Overlay.Video(files, index)
+                open(Overlay.Video(files, index))
             },
             onPlayMusic = { files, index ->
                 controller?.let { playMusic(it, files, index) }
-                overlay = Overlay.Music
+                open(Overlay.Music)
             },
-            onOpenMusicPlayer = { overlay = Overlay.Music },
+            onOpenMusicPlayer = { open(Overlay.Music) },
+            onOpenLibrary = { open(Overlay.Library) },
+            onChooseTheme = { choosingTheme = true },
             versionName = versionName,
             onCheckUpdates = { checkUpdates(manual = true) },
         )
 
-        when (val o = overlay) {
-            is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlay = null })
-            is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlay = null })
-            Overlay.Music -> if (controller != null) {
-                MusicPlayerScreen(controller, onClose = { overlay = null })
+        overlays.toList().forEach { o ->
+            androidx.compose.runtime.key(o) {
+                when (o) {
+                    is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlays.remove(o) })
+                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlays.remove(o) })
+                    Overlay.Music -> if (controller != null) {
+                        MusicPlayerScreen(controller, onClose = { overlays.remove(o) })
+                    }
+                    Overlay.Library -> LibraryScreen(
+                        onPlay = { songs, index, shuffle ->
+                            controller?.let {
+                                it.shuffleModeEnabled = shuffle
+                                playMusic(it, songs.map { s -> s.file }, index)
+                            }
+                            open(Overlay.Music)
+                        },
+                        onClose = { overlays.remove(o) },
+                        miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) }
+                    )
+                }
             }
-            null -> {}
+        }
+
+        if (choosingTheme) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { choosingTheme = false },
+                title = { Text("Tema") },
+                text = {
+                    Column {
+                        AppTheme.entries.forEach { t ->
+                            androidx.compose.foundation.layout.Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { LibraryStore.setTheme(t); choosingTheme = false }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = LibraryStore.theme == t,
+                                    onClick = { LibraryStore.setTheme(t); choosingTheme = false })
+                                Text(t.label)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { choosingTheme = false }) { Text("Cerrar") } }
+            )
         }
 
         UpdateDialog(

@@ -137,3 +137,20 @@ private fun colorsFrom(bitmap: Bitmap): CoverColors {
 
 private fun darken(color: Int, amount: Float): Int =
     ColorUtils.blendARGB(color, 0xFF000000.toInt(), amount)
+
+private val thumbCache = LruCache<String, Bitmap>(120)
+private val noThumb = java.util.Collections.synchronizedSet(HashSet<String>())
+
+/** Miniatura de la portada para las listas (pequeña y en caché). */
+suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
+    thumbCache.get(path)?.let { return@withContext it }
+    if (path in noThumb) return@withContext null
+    val r = MediaMetadataRetriever()
+    val bmp = try {
+        r.setDataSource(path)
+        r.embeddedPicture?.let { decodeSampled(it, 128) }
+    } catch (_: Exception) { null } finally { runCatching { r.release() } }
+        ?: folderCover(File(path))?.let { Bitmap.createScaledBitmap(it, 128, 128 * it.height / it.width.coerceAtLeast(1), true) }
+    if (bmp != null) thumbCache.put(path, bmp) else noThumb.add(path)
+    bmp
+}

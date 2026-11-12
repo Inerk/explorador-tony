@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.AlertDialog
@@ -117,6 +118,8 @@ fun BrowserScreen(
     onOpenVideo: (List<File>, Int) -> Unit,
     onPlayMusic: (List<File>, Int) -> Unit,
     onOpenMusicPlayer: () -> Unit,
+    onOpenLibrary: () -> Unit,
+    onChooseTheme: () -> Unit,
     versionName: String,
     onCheckUpdates: () -> Unit,
 ) {
@@ -143,6 +146,8 @@ fun BrowserScreen(
     var renameTarget by remember { mutableStateOf<File?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var importCandidate by remember { mutableStateOf<File?>(null) }
+    val skin = skinFor(LibraryStore.theme)
 
     val files by produceState(initialValue = emptyList<File>(), currentDir, sortMode, ascending, showHidden, refreshKey) {
         val dir = currentDir
@@ -181,7 +186,10 @@ fun BrowserScreen(
                 val list = siblings.filter { it.kind() == FileKind.AUDIO }
                 onPlayMusic(list, list.indexOf(file).coerceAtLeast(0))
             }
-            FileKind.OTHER -> openExternally(context, file)
+            FileKind.OTHER -> {
+                val ext = file.extension.lowercase(Locale.ROOT)
+                if (ext == "m3u8" || ext == "m3u") importCandidate = file else openExternally(context, file)
+            }
         }
     }
 
@@ -201,6 +209,19 @@ fun BrowserScreen(
     }
 
     val shownFiles = searchResults ?: files
+
+    if (skin.isRetro && currentDir == null && !searchActive) {
+        XpDesktop(
+            roots = roots,
+            onOpenFolder = { goTo(it) },
+            onOpenMusic = onOpenLibrary,
+            onCheckUpdates = onCheckUpdates,
+            onChooseTheme = onChooseTheme,
+            versionName = versionName,
+            miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = onOpenMusicPlayer) }
+        )
+        return
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -254,7 +275,13 @@ fun BrowserScreen(
                         )
                     }
                 )
-                else -> TopAppBar(
+                else -> Box(if (skin.titleBar != null) Modifier.background(skin.titleBar) else Modifier) { TopAppBar(
+                    colors = if (skin.titleBar != null) TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = Color.White,
+                        navigationIconContentColor = Color.White,
+                        actionIconContentColor = Color.White,
+                    ) else TopAppBarDefaults.topAppBarColors(),
                     navigationIcon = {
                         if (currentDir != null) {
                             IconButton(onClick = { if (isRoot) goTo(null) else goTo(currentDir?.parentFile) }) {
@@ -307,9 +334,13 @@ fun BrowserScreen(
                                 text = { Text("Buscar actualizaciones\nVersión $versionName") },
                                 leadingIcon = { Icon(Icons.Filled.SystemUpdate, null) },
                                 onClick = { more = false; onCheckUpdates() })
+                            DropdownMenuItem(
+                                text = { Text("Tema: ${LibraryStore.theme.label}") },
+                                leadingIcon = { Icon(Icons.Filled.Palette, null) },
+                                onClick = { more = false; onChooseTheme() })
                         }
                     }
-                )
+                ) }
             }
         },
         bottomBar = {
@@ -358,7 +389,7 @@ fun BrowserScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
-                currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) })
+                currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary)
                 else -> {
                     Column(Modifier.fillMaxSize()) {
                         val dir = currentDir
@@ -400,6 +431,27 @@ fun BrowserScreen(
                 }
             }
         }
+    }
+
+    importCandidate?.let { f ->
+        AlertDialog(
+            onDismissRequest = { importCandidate = null },
+            title = { Text("Lista de reproducción") },
+            text = { Text("¿Quieres importar \"${f.nameWithoutExtension}\" a tus listas de música?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    importCandidate = null
+                    scope.launch {
+                        if (LibraryStore.songs.isEmpty()) LibraryStore.scan()
+                        val (_, n) = LibraryStore.importM3u(f)
+                        snackbar.showSnackbar("Lista importada con $n canciones. Está en Música → Listas.")
+                    }
+                }) { Text("Importar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { importCandidate = null; openExternally(context, f) }) { Text("Abrir con otra app") }
+            }
+        )
     }
 
     if (showNewFolder) {
@@ -463,7 +515,7 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit) {
+private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit, onOpenMusic: () -> Unit) {
     val internal = roots.first().file
     val shortcuts = listOf(
         Triple("Descargas", Icons.Filled.Download, File(internal, Environment.DIRECTORY_DOWNLOADS)),
@@ -518,7 +570,7 @@ private fun HomeContent(roots: List<StorageRoot>, onOpen: (File) -> Unit) {
             items(shortcuts) { (label, icon, dir) ->
                 Row(
                     modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .clickable { onOpen(dir) }.padding(12.dp),
+                        .clickable { if (label == "Música") onOpenMusic() else onOpen(dir) }.padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(icon, null, tint = MaterialTheme.colorScheme.secondary)

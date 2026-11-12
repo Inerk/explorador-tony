@@ -6,6 +6,24 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -49,8 +67,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -243,7 +259,7 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
 
         CompositionLocalProvider(LocalContentColor provides Color.White) {
             Column(
-                modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp),
+                modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Barra superior
@@ -269,14 +285,18 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
                 }
 
                 // Panel central: portada / letra / lista
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
                     Crossfade(targetState = mode, animationSpec = tween(350), label = "panel") { m ->
                         when (m) {
                             PanelMode.COVER -> CoverArt(
                                 cover = info?.cover,
                                 playing = player.isPlaying,
                                 accent = accent,
-                                onTap = { if (lyrics.isNotEmpty()) mode = PanelMode.LYRICS }
+                                onTap = { if (lyrics.isNotEmpty()) mode = PanelMode.LYRICS },
+                                canNext = player.hasNextMediaItem(),
+                                canPrev = player.hasPreviousMediaItem(),
+                                onNext = { player.seekToNextMediaItem() },
+                                onPrev = { player.seekToPreviousMediaItem() },
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -291,37 +311,49 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
 
                 // Título y artista
                 Spacer(Modifier.height(12.dp))
-                Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (artist.isNotEmpty()) {
-                    Text(artist, fontSize = 15.sp, color = Color.White.copy(alpha = 0.75f),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val path = player.currentMediaItem?.mediaId
+                val fav = path != null && LibraryStore.isFavorite(path)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (artist.isNotEmpty()) {
+                            Text(artist, fontSize = 15.sp, color = Color.White.copy(alpha = 0.75f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    val starScale by animateFloatAsState(if (fav) 1.15f else 1f,
+                        spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium), label = "star")
+                    IconButton(onClick = { path?.let { LibraryStore.toggleFavorite(it) } }) {
+                        Icon(
+                            if (fav) Icons.Filled.Star else Icons.Filled.StarBorder,
+                            contentDescription = "Favorita",
+                            tint = if (fav) Color(0xFFFFC83D) else Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(30.dp).graphicsLayer { scaleX = starScale; scaleY = starScale }
+                        )
+                    }
                 }
                 // Vistazo de la letra bajo la portada
                 if (mode == PanelMode.COVER && lyrics.isNotEmpty()) {
                     val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
                     Text(
-                        line, fontSize = 14.sp, color = accent, textAlign = TextAlign.Center,
+                        line, fontSize = 14.sp, color = accent, textAlign = TextAlign.Start,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp).clickable { mode = PanelMode.LYRICS }
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { mode = PanelMode.LYRICS }
                     )
                 }
 
                 // Barra de avance
                 Spacer(Modifier.height(10.dp))
-                Slider(
-                    value = if (dragging) dragValue else if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                    onValueChange = { dragging = true; dragValue = it },
-                    onValueChangeFinished = {
-                        player.seekTo((dragValue * duration).toLong())
+                WaveSeekBar(
+                    progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                    playing = player.isPlaying,
+                    accent = accent,
+                    onSeekChange = { dragging = true; dragValue = it },
+                    onSeekEnd = {
+                        player.seekTo((it * duration).toLong())
                         dragging = false
                     },
-                    colors = SliderDefaults.colors(
-                        thumbColor = accent,
-                        activeTrackColor = accent,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(formatTime(if (dragging) (dragValue * duration).toLong() else position),
@@ -382,25 +414,80 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
 }
 
 @Composable
-private fun CoverArt(cover: Bitmap?, playing: Boolean, accent: Color, onTap: () -> Unit) {
+private fun CoverArt(
+    cover: Bitmap?,
+    playing: Boolean,
+    accent: Color,
+    onTap: () -> Unit,
+    canNext: Boolean,
+    canPrev: Boolean,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+) {
     val scale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
         label = "coverScale"
     )
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val side = minOf(maxWidth, maxHeight) * 0.92f
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val next by rememberUpdatedState(onNext)
+    val prev by rememberUpdatedState(onPrev)
+    val hasNext by rememberUpdatedState(canNext)
+    val hasPrev by rememberUpdatedState(canPrev)
+
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        val side = minOf(maxWidth, maxHeight)
         val shape = RoundedCornerShape(22.dp)
         Box(
             modifier = Modifier.size(side)
-                .graphicsLayer { scaleX = scale; scaleY = scale }
-                .shadow(32.dp, shape, ambientColor = accent, spotColor = accent)
+                .pointerInput(Unit) {
+                    val w = size.width.toFloat()
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            scope.launch {
+                                val v = offsetX.value
+                                when {
+                                    v < -w * 0.22f && hasNext -> {
+                                        offsetX.animateTo(-w * 1.2f, tween(170))
+                                        next()
+                                        offsetX.snapTo(w * 1.2f)
+                                        offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                    }
+                                    v > w * 0.22f && hasPrev -> {
+                                        offsetX.animateTo(w * 1.2f, tween(170))
+                                        prev()
+                                        offsetX.snapTo(-w * 1.2f)
+                                        offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                    }
+                                    else -> offsetX.animateTo(0f, spring(dampingRatio = 0.5f))
+                                }
+                            }
+                        },
+                        onDragCancel = { scope.launch { offsetX.animateTo(0f) } }
+                    ) { change, drag ->
+                        change.consume()
+                        // si no hay a dónde ir, se siente como liga
+                        val resist = if ((drag < 0 && !hasNext) || (drag > 0 && !hasPrev)) 0.3f else 1f
+                        scope.launch { offsetX.snapTo(offsetX.value + drag * resist) }
+                    }
+                }
+                .graphicsLayer {
+                    val frac = (offsetX.value / size.width).coerceIn(-1.5f, 1.5f)
+                    translationX = offsetX.value
+                    rotationZ = frac * 8f
+                    val s = scale * (1f - kotlin.math.abs(frac) * 0.12f)
+                    scaleX = s
+                    scaleY = s
+                    alpha = 1f - kotlin.math.abs(frac) * 0.5f
+                }
+                .shadow(36.dp, shape, ambientColor = accent, spotColor = accent)
                 .clip(shape)
                 .background(Color.White.copy(alpha = 0.08f))
                 .clickable(onClick = onTap),
             contentAlignment = Alignment.Center
         ) {
-            Crossfade(targetState = cover, animationSpec = tween(600), label = "cover") { bmp ->
+            Crossfade(targetState = cover, animationSpec = tween(400), label = "cover") { bmp ->
                 if (bmp != null) {
                     Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
                         contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -412,6 +499,85 @@ private fun CoverArt(cover: Bitmap?, playing: Boolean, accent: Color, onTap: () 
                 }
             }
         }
+    }
+}
+
+/** Barra de avance con onda animada mientras suena (se aplana al pausar). */
+@Composable
+fun WaveSeekBar(
+    progress: Float,
+    playing: Boolean,
+    accent: Color,
+    onSeekChange: (Float) -> Unit,
+    onSeekEnd: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragFrac by remember { mutableFloatStateOf(0f) }
+    val amplitude by animateFloatAsState(if (playing && !dragging) 1f else 0f, tween(600), label = "amp")
+    val thumb by animateDpAsState(if (dragging) 12.dp else 7.dp, spring(dampingRatio = 0.5f), label = "thumb")
+    val glow by animateFloatAsState(if (dragging) 1f else 0.45f, tween(250), label = "glow")
+    val phase by rememberInfiniteTransition(label = "wave").animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing)),
+        label = "phase"
+    )
+    val change by rememberUpdatedState(onSeekChange)
+    val end by rememberUpdatedState(onSeekEnd)
+    val shown = if (dragging) dragFrac else progress
+
+    Canvas(
+        modifier = modifier.fillMaxWidth().height(40.dp)
+            .pointerInput(Unit) {
+                detectTapGestures { o -> end((o.x / size.width).coerceIn(0f, 1f)) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { o ->
+                        dragging = true
+                        dragFrac = (o.x / size.width).coerceIn(0f, 1f)
+                        change(dragFrac)
+                    },
+                    onDragEnd = { dragging = false; end(dragFrac) },
+                    onDragCancel = { dragging = false }
+                ) { c, d ->
+                    c.consume()
+                    dragFrac = (dragFrac + d / size.width).coerceIn(0f, 1f)
+                    change(dragFrac)
+                }
+            }
+    ) {
+        val midY = size.height / 2f
+        val x = size.width * shown
+        val stroke = 4.dp.toPx()
+        // lo que falta
+        drawLine(Color.White.copy(alpha = 0.22f), Offset(x, midY), Offset(size.width, midY),
+            strokeWidth = stroke, cap = StrokeCap.Round)
+        // lo que ya sonó: onda
+        if (x > 1f) {
+            val path = Path()
+            val waveLen = 26.dp.toPx()
+            val amp = 3.5.dp.toPx() * amplitude
+            path.moveTo(0f, midY)
+            var px = 0f
+            while (px <= x) {
+                // la onda se apaga cerca del círculo para que se vea limpia
+                val fade = ((x - px) / (waveLen * 0.6f)).coerceIn(0f, 1f)
+                path.lineTo(px, midY + amp * fade * kotlin.math.sin(px / waveLen * 2f * Math.PI.toFloat() - phase))
+                px += 2f
+            }
+            path.lineTo(x, midY)
+            drawPath(
+                path,
+                brush = Brush.horizontalGradient(listOf(accent.copy(alpha = 0.55f), accent), startX = 0f, endX = x),
+                style = Stroke(width = stroke, cap = StrokeCap.Round)
+            )
+        }
+        // círculo con brillo
+        drawCircle(accent.copy(alpha = 0.22f * glow * 2f), radius = thumb.toPx() * 2.4f, center = Offset(x, midY))
+        drawCircle(accent, radius = thumb.toPx(), center = Offset(x, midY))
+        drawCircle(Color.White, radius = thumb.toPx() * 0.38f, center = Offset(x, midY))
     }
 }
 
