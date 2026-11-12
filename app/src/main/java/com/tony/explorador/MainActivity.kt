@@ -175,7 +175,10 @@ fun AppRoot() {
     }
     /** Al empezar a deslizar el reproductor: la biblioteca se pone debajo para que se vea. */
     var peekedLibrary by remember { mutableStateOf(false) }
+    var libMenuOpen by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var libMenuClose by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     fun peekMusicMenu() {
+        libMenuOpen++
         if (Overlay.Library !in overlays) {
             val i = overlays.indexOf(Overlay.Music).coerceAtLeast(0)
             overlays.add(i, Overlay.Library)
@@ -185,6 +188,7 @@ fun AppRoot() {
     }
     fun cancelMusicMenu() {
         if (peekedLibrary) { overlays.remove(Overlay.Library); overlayStates.remove(Overlay.Library) }
+        else libMenuClose++
         peekedLibrary = false
     }
     /** El reproductor ya salió de la pantalla deslizándose: se quita sin otra animación. */
@@ -234,6 +238,7 @@ fun AppRoot() {
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(20_000)
         if (CoverScanner.auto && LibraryStore.songs.isNotEmpty()) CoverScanner.start()
+        if (AnimatedScanner.auto && LibraryStore.songs.isNotEmpty()) AnimatedScanner.start()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -349,7 +354,8 @@ fun AppRoot() {
                         openRequest = libraryRequest,
                         onRequestHandled = { libraryRequest = null },
                         onOpenFolder = { goTo("folder", it) },
-                        startAtSongs = peekedLibrary,
+                        menuOpenSignal = libMenuOpen,
+                        menuCloseSignal = libMenuClose,
                     )
                 }
                 }

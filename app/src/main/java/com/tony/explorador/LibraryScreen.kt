@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.GridView
@@ -80,6 +81,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.shadow
@@ -173,12 +177,12 @@ fun LibraryScreen(
     openRequest: Pair<String, String>? = null,
     onRequestHandled: () -> Unit = {},
     onOpenFolder: (String) -> Unit = {},
-    startAtSongs: Boolean = false,
+    menuOpenSignal: Int = 0,
+    menuCloseSignal: Int = 0,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // al llegar deslizando desde el reproductor, abre directo en «Todas las canciones»
-    val stack = remember { mutableStateListOf<LibPage>(LibPage.Menu).apply { if (startAtSongs) add(LibPage.Songs) } }
+    val stack = remember { mutableStateListOf<LibPage>(LibPage.Menu) }
     val page = stack.last()
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
@@ -197,6 +201,9 @@ fun LibraryScreen(
         setDrawer(false)
     }
     BackHandler { if (drawer.targetValue > 0f) setDrawer(false) else pop() }
+    // al deslizar el reproductor: si estabas en una lista, el menú principal ya aparece encima
+    LaunchedEffect(menuOpenSignal) { if (menuOpenSignal > 0 && stack.size > 1) drawer.snapTo(1f) }
+    LaunchedEffect(menuCloseSignal) { if (menuCloseSignal > 0) drawer.snapTo(0f) }
     LaunchedEffect(openRequest) {
         openRequest?.let { (kind, value) ->
             while (stack.size > 1) stack.removeAt(stack.lastIndex)
@@ -211,6 +218,7 @@ fun LibraryScreen(
     LaunchedEffect(Unit) {
         LibraryStore.scan()
         if (CoverScanner.auto) CoverScanner.start()
+        if (AnimatedScanner.auto) AnimatedScanner.start()
     }
     val libGoTo: (String, String) -> Unit = { kind, value ->
         when (kind) {
@@ -421,7 +429,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.Favorites -> "Favoritas"
     LibPage.MostPlayed -> "Más escuchadas"
     LibPage.Folders -> "Carpetas de música"
-    LibPage.Covers -> "Carátulas en internet"
+    LibPage.Covers -> "Buscar carátulas"
 }
 
 // ───────── Menú principal ─────────
@@ -439,7 +447,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
-        Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
+        Entry("Buscar carátulas", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
             Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
@@ -538,51 +546,108 @@ private fun SongList(
         return
     }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val letters = remember(songs) {
         val m = LinkedHashMap<String, Int>()
-        songs.forEachIndexed { i, s -> m.putIfAbsent(letterOf(s.title), i + 2) } // +2: encabezado y botones
+        songs.forEachIndexed { i, s -> m.putIfAbsent(letterOf(s.title), i + 1) } // +1: el encabezado
         m
     }
-    val view = LibraryStore.songView
-    val viewButton: @Composable () -> Unit = { SongViewButton() }
-    if (view == "grid") {
-        // cuadrícula de portadas
-        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
-            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(112.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 16.dp),
+    val view = normalizeSongView(LibraryStore.songView)
+    val isGrid = view.startsWith("grid")
+    val scope = rememberCoroutineScope()
+    // al cambiar de vista se queda en la misma canción
+    var anchor by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    fun changeView(v: String) {
+        anchor = if (isGrid) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex
+        LibraryStore.changeSongView(v)
+    }
+    LaunchedEffect(view) {
+        if (view.startsWith("grid")) gridState.scrollToItem(anchor) else listState.scrollToItem(anchor)
+    }
+    // pellizcar con dos dedos: abrir = íconos más grandes, cerrar = más chicos
+    val pinch = remember { androidx.compose.animation.core.Animatable(1f) }
+    Column(Modifier.fillMaxSize()) {
+        // los botones de arriba se quedan fijos aunque bajes la lista
+        PlayBar(songs, onPlay) { SongViewButton(view, onPick = { changeView(it) }) }
+        Box(
+            Modifier.weight(1f).fillMaxWidth()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var zoom = 1f
+                        var pinching = false
+                        do {
+                            val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            if (event.changes.count { it.pressed } >= 2) {
+                                pinching = true
+                                zoom *= event.calculateZoom()
+                                scope.launch { pinch.snapTo(zoom.coerceIn(0.82f, 1.18f)) }
+                                event.changes.forEach { it.consume() }
+                                val i = SONG_VIEWS.indexOf(normalizeSongView(LibraryStore.songView))
+                                if (zoom > 1.3f && i < SONG_VIEWS.lastIndex) { changeView(SONG_VIEWS[i + 1]); zoom = 1f }
+                                else if (zoom < 0.77f && i > 0) { changeView(SONG_VIEWS[i - 1]); zoom = 1f }
+                            }
+                        } while (event.changes.any { it.pressed })
+                        if (pinching) scope.launch { pinch.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 400f)) }
+                    }
+                }
+                .graphicsLayer { scaleX = pinch.value; scaleY = pinch.value }
         ) {
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { PlayBar(songs, onPlay, viewButton) }
-            items(songs.size, key = { songs[it].path }) { i ->
-                val song = songs[i]
-                SongRow(song, if (showCounts) i + 1 else null, if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
-                    onClick = { onPlay(songs, i, false) }, onAdd = { onAdd(listOf(song)) },
-                    onRemove = onRemove?.let { { it(song) } }, style = "tile")
+            androidx.compose.animation.AnimatedContent(
+                targetState = if (isGrid) "grid" else view,
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(tween(220)) + androidx.compose.animation.scaleIn(spring(dampingRatio = 0.8f, stiffness = 300f), initialScale = 0.92f)) togetherWith
+                        androidx.compose.animation.fadeOut(tween(160))
+                },
+                label = "songView"
+            ) { kind ->
+                if (kind == "grid") {
+                    val cols = view.removePrefix("grid").toIntOrNull() ?: 3
+                    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(cols),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp),
+                        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 16.dp),
+                    ) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
+                        items(songs.size, key = { songs[it].path }) { i ->
+                            val song = songs[i]
+                            // se van acomodando con animación cuando cambia el tamaño
+                            Box(Modifier.animateItem()) {
+                                SongRow(song, if (showCounts) i + 1 else null, if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
+                                    onClick = { onPlay(songs, i, false) }, onAdd = { onAdd(listOf(song)) },
+                                    onRemove = onRemove?.let { { it(song) } }, style = "tile")
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
+                        item { header() }
+                        itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
+                            SongRow(
+                                song = song,
+                                rank = if (showCounts) i + 1 else null,
+                                count = if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
+                                onClick = { onPlay(songs, i, false) },
+                                onAdd = { onAdd(listOf(song)) },
+                                onRemove = onRemove?.let { { it(song) } },
+                                style = kind,
+                            )
+                        }
+                        item { Spacer(Modifier.height(16.dp)) }
+                    }
+                }
+            }
+            if (alphabet && songs.size > 25) AlphabetScroller(letters) { target ->
+                scope.launch { if (isGrid) gridState.scrollToItem(target) else listState.scrollToItem(target) }
             }
         }
-        return
-    }
-    Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
-        item { header() }
-        item { PlayBar(songs, onPlay, viewButton) }
-        itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
-            SongRow(
-                song = song,
-                rank = if (showCounts) i + 1 else null,
-                count = if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
-                onClick = { onPlay(songs, i, false) },
-                onAdd = { onAdd(listOf(song)) },
-                onRemove = onRemove?.let { { it(song) } },
-                style = view,
-            )
-        }
-        item { Spacer(Modifier.height(16.dp)) }
-    }
-    if (alphabet && songs.size > 25) AlphabetScroller(listState, letters)
     }
 }
+
+/** Vistas de canciones de la más chica a la más grande (en ese orden se pasa al pellizcar). */
+private val SONG_VIEWS = listOf("compact", "cards", "grid4", "grid3", "grid2")
+private fun normalizeSongView(v: String) = if (v == "grid") "grid3" else if (v in SONG_VIEWS) v else "compact"
 
 /** Para abrir artista, álbum o carpeta desde la información de una canción. */
 private val LocalLibGoTo = androidx.compose.runtime.staticCompositionLocalOf<(String, String) -> Unit> { { _, _ -> } }
@@ -749,6 +814,7 @@ private fun SongRow(
 
 @Composable
 private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color: Color, onOpen: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val letters = remember(groups) {
         val m = LinkedHashMap<String, Int>()
@@ -782,7 +848,7 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
             }
         }
     }
-    if (groups.size > 25) AlphabetScroller(listState, letters)
+    if (groups.size > 25) AlphabetScroller(letters) { t -> scope.launch { listState.scrollToItem(t) } }
     }
 }
 
@@ -1091,7 +1157,7 @@ private fun letterOf(text: String): String {
 }
 
 @Composable
-private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyListState, firstIndex: Map<String, Int>) {
+private fun AlphabetScroller(firstIndex: Map<String, Int>, onJump: (Int) -> Unit) {
     var active by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     fun jump(y: Float, h: Int) {
@@ -1100,7 +1166,7 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
         // si esa letra no tiene canciones, se va a la siguiente que sí
         val target = LETTERS.drop(i).firstNotNullOfOrNull { firstIndex[it] }
             ?: LETTERS.take(i).reversed().firstNotNullOfOrNull { firstIndex[it] } ?: return
-        scope.launch { listState.scrollToItem(target) }
+        onJump(target)
     }
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -1151,26 +1217,30 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
 }
 
 
-/** Botón para elegir cómo se ven las canciones. */
+/** Botón para elegir cómo se ven las canciones (también se cambia pellizcando la lista). */
 @Composable
-private fun SongViewButton() {
+private fun SongViewButton(current: String, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val options = listOf(
         Triple("compact", "Lista compacta", Icons.Filled.ViewHeadline),
         Triple("cards", "Tarjetas con portada", Icons.Filled.ViewAgenda),
-        Triple("grid", "Cuadrícula de portadas", Icons.Filled.GridView),
+        Triple("grid4", "Cuadrícula chica", Icons.Filled.GridView),
+        Triple("grid3", "Cuadrícula mediana", Icons.Filled.GridView),
+        Triple("grid2", "Cuadrícula grande", Icons.Filled.GridView),
     )
-    val current = options.firstOrNull { it.first == LibraryStore.songView } ?: options.first()
+    val cur = options.firstOrNull { it.first == current } ?: options.first()
     Box {
-        IconButton(onClick = { open = true }) { Icon(current.third, "Vista", tint = Retro.Orange) }
+        IconButton(onClick = { open = true }) { Icon(cur.third, "Vista", tint = Retro.Orange) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             options.forEach { (id, label, icon) ->
                 DropdownMenuItem(
-                    text = { Text(label, fontWeight = if (id == current.first) FontWeight.Bold else null) },
+                    text = { Text(label, fontWeight = if (id == cur.first) FontWeight.Bold else null) },
                     leadingIcon = { Icon(icon, null) },
-                    onClick = { LibraryStore.changeSongView(id); open = false }
+                    onClick = { onPick(id); open = false }
                 )
             }
+            Text("Tip: pellizca la lista para agrandar o achicar", fontSize = 11.sp, color = Color.Gray,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
         }
     }
 }
@@ -1222,8 +1292,8 @@ private fun CoversPage() {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Búsqueda automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Cada vez que abras la app revisa la música nueva sin carátula y te avisa si encuentra alguna.",
+                        Text("Carátulas normales · automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Busca en internet la portada de la música que no tiene. Cada vez que abras la app revisa lo nuevo y te avisa.",
                             color = Retro.SubText, fontSize = 13.sp)
                     }
                     androidx.compose.material3.Switch(
@@ -1250,6 +1320,37 @@ private fun CoversPage() {
                         modifier = Modifier.padding(top = 10.dp).clickable { CoverScanner.resetChecked(); CoverScanner.start() })
                 }
                 Text("Va despacio a propósito (unas 18 búsquedas por minuto) para que el servicio no lo bloquee. Puedes seguir usando la app mientras.",
+                    color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+        item {
+            // carátulas animadas: se buscan en el teléfono
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Carátulas animadas · automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Revisa Descargas, Películas, tus carpetas de música y cualquier carpeta «Carátulas animadas». " +
+                            "Si un video se llama como un álbum (ej. «Coldplay - Ghost Stories.mp4») se lo pone solo.",
+                            color = Retro.SubText, fontSize = 13.sp)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = AnimatedScanner.auto, onCheckedChange = { AnimatedScanner.changeAuto(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Retro.Orange, checkedThumbColor = Retro.OnAccent)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                if (AnimatedScanner.running) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
+                } else {
+                    RetroButton("Buscar animadas en mi teléfono", Icons.Filled.Animation, Modifier.fillMaxWidth()) { AnimatedScanner.start() }
+                }
+                if (AnimatedScanner.status.isNotBlank()) Text(AnimatedScanner.status, color = Retro.SubText, fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp))
+                AnimatedScanner.assigned.take(8).forEach { (album, video) ->
+                    Text("✨ $album  ←  $video", color = Retro.Text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp))
+                }
+                Text("Por internet no se pueden buscar solas: Apple sólo las da con su servicio de paga para desarrolladores.",
                     color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
             }
         }

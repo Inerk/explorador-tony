@@ -109,14 +109,14 @@ object CoverScanner {
         finally { runCatching { r.release() } }
     }
 
-    private fun norm(s: String): String =
+    fun norm(s: String): String =
         Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "")
             .replace(Regex("""\(.*?\)|\[.*?]"""), " ")
             .replace(Regex("feat\\.?|ft\\.?|official|video|audio|lyrics?|letra|hd"), " ")
             .replace(Regex("[^a-z0-9]+"), " ").trim()
 
-    private fun similar(a: String, b: String): Boolean {
+    fun similar(a: String, b: String): Boolean {
         val x = norm(a); val y = norm(b)
         if (x.isBlank() || y.isBlank()) return false
         if (x.contains(y) || y.contains(x)) return true

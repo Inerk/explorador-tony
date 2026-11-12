@@ -80,7 +80,7 @@ object AnimatedCovers {
         MessageDigest.getInstance("MD5").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }.take(20)
 
     private fun songFile(path: String) = File(dir, "s_${key(path)}.mp4")
-    private fun albumFile(album: String) = File(dir, "a_${key(album.lowercase(Locale.ROOT))}.mp4")
+    fun albumFile(album: String) = File(dir, "a_${key(album.lowercase(Locale.ROOT))}.mp4")
 
     fun find(path: String, album: String?): File? {
         if (!::dir.isInitialized) return null
@@ -136,6 +136,8 @@ object AnimatedCovers {
         withContext(Dispatchers.Main) { version++ }
         r
     }
+
+    fun bump() { version++ }
 
     fun remove(file: File) {
         if (isOwn(file)) file.delete()
@@ -249,6 +251,89 @@ fun AnimatedCoverDialog(path: String, album: String?, onDismiss: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Text("Tip: también funciona si pones «Canción.mp4» junto a la canción, o «cover.mp4» en la carpeta del álbum.",
                 fontSize = 11.sp)
+        }
+    }
+}
+
+/**
+ * Búsqueda automática de carátulas animadas EN TU TELÉFONO: revisa Descargas, Películas, tus carpetas de música
+ * y cualquier carpeta llamada «Carátulas animadas», y si un video se llama como un álbum
+ * (por ejemplo «Coldplay - Ghost Stories.mp4», como los guardan las páginas que las descargan) se lo pone.
+ */
+object AnimatedScanner {
+    private lateinit var app: Context
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
+    var auto by mutableStateOf(false)
+        private set
+    var running by mutableStateOf(false)
+        private set
+    var status by mutableStateOf("")
+        private set
+    /** álbum → video que se le puso (lo último encontrado) */
+    val assigned = androidx.compose.runtime.mutableStateListOf<Pair<String, String>>()
+    private val prefs get() = File(app.filesDir, "animadas.json")
+
+    fun init(context: Context) {
+        app = context.applicationContext
+        runCatching { auto = org.json.JSONObject(prefs.readText()).optBoolean("auto", false) }
+    }
+
+    fun changeAuto(on: Boolean) {
+        auto = on
+        runCatching { prefs.writeText(org.json.JSONObject().put("auto", on).toString()) }
+        if (on) start()
+    }
+
+    private fun roots(): List<File> {
+        val base = android.os.Environment.getExternalStorageDirectory()
+        val list = mutableListOf(
+            File(base, android.os.Environment.DIRECTORY_DOWNLOADS),
+            File(base, android.os.Environment.DIRECTORY_MOVIES),
+            File(base, "Carátulas animadas"),
+            File(base, "${android.os.Environment.DIRECTORY_MUSIC}/Carátulas animadas"),
+        )
+        LibraryStore.musicFolders.forEach { list.add(File(it)) }
+        return list.filter { it.isDirectory }.distinctBy { it.absolutePath }
+    }
+
+    fun start() {
+        if (running) return
+        scope.launch {
+            running = true
+            status = "Buscando videos en tu teléfono…"
+            val videos = roots().flatMap { r ->
+                r.walkTopDown().maxDepth(4)
+                    .filter { it.isFile && it.kind() == FileKind.VIDEO && it.length() in 50_000L..80_000_000L }
+                    .take(3000).toList()
+            }.distinctBy { it.absolutePath }
+            val songs = withContext(Dispatchers.Main) { LibraryStore.songs.toList() }
+            val albums = songs.filter { it.album != UNKNOWN_ALBUM }
+                .groupBy { it.album }
+                .mapValues { (_, l) -> l.first().artist }
+            var n = 0
+            albums.forEach { (album, artist) ->
+                if (AnimatedCovers.albumFile(album).isFile) return@forEach
+                val name = CoverScanner.norm(album)
+                if (name.length < 2) return@forEach
+                val match = videos.firstOrNull { v ->
+                    val vn = CoverScanner.norm(v.nameWithoutExtension)
+                    // el nombre del video debe traer el álbum completo y, si se sabe, el artista
+                    (" $vn ").contains(" $name ") &&
+                        (artist == UNKNOWN_ARTIST || CoverScanner.norm(artist).split(' ').filter { it.length > 2 }
+                            .let { parts -> parts.isEmpty() || parts.any { vn.contains(it) } })
+                } ?: return@forEach
+                val ok = runCatching { match.copyTo(AnimatedCovers.albumFile(album), overwrite = true); true }.getOrDefault(false)
+                if (ok) {
+                    n++
+                    withContext(Dispatchers.Main) { assigned.add(0, album to match.name) }
+                }
+            }
+            withContext(Dispatchers.Main) {
+                AnimatedCovers.bump()
+                running = false
+                status = if (n > 0) "Listo: puse $n carátulas animadas" else "Listo: no encontré videos nuevos que coincidan (${videos.size} revisados)"
+                if (n > 0) Toast.makeText(app, "Puse $n carátulas animadas ✨", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

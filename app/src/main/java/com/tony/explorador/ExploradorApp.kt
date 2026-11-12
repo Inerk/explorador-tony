@@ -11,6 +11,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         LibraryStore.init(this)
         AnimatedCovers.init(this)
         CoverScanner.init(this)
+        AnimatedScanner.init(this)
     }
 
     override fun newImageLoader(): ImageLoader =
