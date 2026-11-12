@@ -80,6 +80,8 @@ suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO)
             ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST))?.takeIf { it.isNotBlank() }
         album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }
         cover = retriever.embeddedPicture?.let { decodeSampled(it, 1000) }
+            // un video no trae portada: se usa un cuadro del video
+            ?: if (file.kind() == FileKind.VIDEO) runCatching { retriever.getFrameAtTime(1_000_000) }.getOrNull() else null
         retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)?.let { t ->
             // viene como "3" o "3/12"
             trackNo = t.substringBefore('/').trim().toIntOrNull()
@@ -173,6 +175,9 @@ suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
     val bmp = try {
         r.setDataSource(path)
         r.embeddedPicture?.let { decodeSampled(it, 128) }
+            ?: if (File(path).kind() == FileKind.VIDEO) runCatching { r.getFrameAtTime(1_000_000) }.getOrNull()?.let {
+                Bitmap.createScaledBitmap(it, 160, (160 * it.height / it.width.coerceAtLeast(1)).coerceAtLeast(1), true)
+            } else null
     } catch (_: Exception) { null } finally { runCatching { r.release() } }
         ?: folderCover(File(path))?.let { Bitmap.createScaledBitmap(it, 128, (128 * it.height / it.width.coerceAtLeast(1)).coerceAtLeast(1), true) }
     if (bmp != null) thumbCache.put(path, bmp) else noThumb.add(path)

@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -198,4 +200,19 @@ fun QualityPill(text: String, accent: Color, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(6.dp))
         Text(text, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp, maxLines = 1)
     }
+}
+
+/** Color que distingue cada formato (para el puntito de las listas). */
+fun formatColor(ext: String): Color = when (ext.lowercase()) {
+    "mp3" -> Color(0xFF4D9BFF)                       // azul
+    "m4a", "aac" -> Color(0xFFFF9F43)                // naranja
+    "flac", "wav" -> Color(0xFFFFD84D)               // dorado: sin pérdida
+    "ogg", "oga", "opus" -> Color(0xFF2FD3B5)        // turquesa
+    "mp4", "m4v", "mkv", "webm", "mov", "avi", "3gp", "ts" -> Color(0xFFFF5FA8)  // rosa: video
+    else -> Color(0xFFB0B6C2)
+}
+
+/** Si en la portada se ve el video / la carátula animada, o sólo la imagen fija. */
+object MotionPref {
+    var on by androidx.compose.runtime.mutableStateOf(true)
 }

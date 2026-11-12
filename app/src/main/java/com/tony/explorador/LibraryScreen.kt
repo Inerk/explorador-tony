@@ -1169,7 +1169,7 @@ private fun Color.compositeOverWhite() = Color(
 
 private val LETTERS = listOf("#") + ('A'..'Z').map { it.toString() }
 
-private fun letterOf(text: String): String {
+fun letterOf(text: String): String {
     val c = java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "")
         .firstOrNull()?.uppercaseChar() ?: return "#"
@@ -1177,7 +1177,7 @@ private fun letterOf(text: String): String {
 }
 
 @Composable
-private fun AlphabetScroller(firstIndex: Map<String, Int>, onJump: (Int) -> Unit) {
+fun AlphabetScroller(firstIndex: Map<String, Int>, onJump: (Int) -> Unit) {
     var active by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     fun jump(y: Float, h: Int) {

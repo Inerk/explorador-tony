@@ -68,6 +68,8 @@ import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -738,8 +740,9 @@ private fun CoverArt(
         contentAlignment = Alignment.Center
     ) {
         // si es un video, se ve en la portada como a través de un cristal
-        if (video != null) VideoGlass(video, Modifier.fillMaxSize())
-        else if (animated != null) Box(Modifier.fillMaxSize()) {
+        val motion = MotionPref.on
+        if (video != null && motion) VideoGlass(video, Modifier.fillMaxSize())
+        else if (animated != null && motion) Box(Modifier.fillMaxSize()) {
             // carátula animada encima de la normal (así no se ve negro mientras arranca)
             cover?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
             AnimatedCoverView(animated, playing, Modifier.fillMaxSize())
@@ -753,6 +756,19 @@ private fun CoverArt(
                     Icon(Icons.Filled.MusicNote, null, modifier = Modifier.fillMaxSize(0.45f),
                         tint = Color.White.copy(alpha = 0.5f))
                 }
+            }
+        }
+        // botón para ver el video / la animación, o sólo la carátula fija
+        if ((video != null || animated != null) && collapse < 0.3f) {
+            Box(
+                Modifier.align(Alignment.BottomStart).padding(10.dp).size(38.dp)
+                    .graphicsLayer { alpha = 1f - collapse / 0.3f }
+                    .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                    .clickable { MotionPref.on = !MotionPref.on },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(if (motion) Icons.Filled.Image else Icons.Filled.Movie,
+                    if (motion) "Ver sólo la carátula" else "Ver el video", tint = Color.White)
             }
         }
         // estrella diamante: esta canción tiene carátula animada
@@ -896,7 +912,16 @@ private fun QueuePanel(player: Player, accent: Color, title: String, artist: Str
     val current = player.currentMediaItemIndex
     val count = player.mediaItemCount
     val state = rememberLazyListState()
+    val qScope = rememberCoroutineScope()
     LaunchedEffect(current) { if (current > 0) state.scrollToItem((current - 1).coerceAtLeast(0)) }
+    val letters = remember(count, player.currentMediaItem?.mediaId) {
+        val m = LinkedHashMap<String, Int>()
+        for (i in 0 until count) {
+            val it = player.getMediaItemAt(i)
+            m.putIfAbsent(letterOf(LibraryStore.songFor(it.mediaId)?.title ?: it.mediaMetadata.title?.toString() ?: ""), i)
+        }
+        m
+    }
     Column(Modifier.fillMaxSize()) {
         // encabezado: aquí "aterriza" la portada al encogerse
         Row(Modifier.fillMaxWidth().height(QueueThumb + QueueThumbY * 2), verticalAlignment = Alignment.CenterVertically) {
@@ -908,7 +933,8 @@ private fun QueuePanel(player: Player, accent: Color, title: String, artist: Str
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
-        LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+        Box(Modifier.fillMaxSize()) {
+        LazyColumn(state = state, modifier = Modifier.fillMaxSize().padding(end = if (count > 25) 14.dp else 0.dp), contentPadding = PaddingValues(vertical = 8.dp)) {
             itemsIndexed((0 until count).toList(), key = { _, i -> i }) { _, i ->
                 val item = player.getMediaItemAt(i)
                 val path = item.mediaId
@@ -927,7 +953,12 @@ private fun QueuePanel(player: Player, accent: Color, title: String, artist: Str
                         contentAlignment = Alignment.Center) {
                         val b = thumb
                         if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+                        else Icon(if (isVideoPath(path)) Icons.Filled.Movie else Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+                        // los videos llevan una cinta de cine en la esquina
+                        if (isVideoPath(path)) Box(
+                            Modifier.align(Alignment.BottomEnd).size(18.dp).clip(RoundedCornerShape(topStart = 6.dp)).background(Color.Black.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Filled.Movie, null, tint = Color.White, modifier = Modifier.size(13.dp)) }
                         if (isCurrent && player.isPlaying) {
                             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Filled.MusicNote, null, tint = accent, modifier = Modifier.size(20.dp))
@@ -942,13 +973,25 @@ private fun QueuePanel(player: Player, accent: Color, title: String, artist: Str
                             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
                             maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            listOfNotNull(song?.artist, song?.durationMs?.takeIf { it > 0 }?.let { formatTime(it) }).joinToString(" · "),
-                            color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // puntito de color y formato (MP3, MP4, FLAC…)
+                            val ext = path.substringAfterLast('.', "")
+                            if (ext.isNotBlank()) {
+                                Box(Modifier.size(8.dp).clip(CircleShape).background(formatColor(ext)))
+                                Spacer(Modifier.width(5.dp))
+                                Text(ext.uppercase(Locale.ROOT), color = formatColor(ext), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text(
+                                listOfNotNull(song?.artist, song?.durationMs?.takeIf { it > 0 }?.let { formatTime(it) }).joinToString(" · "),
+                                color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
+        }
+        if (count > 25) AlphabetScroller(letters) { t -> qScope.launch { state.scrollToItem(t) } }
         }
     }
 }
