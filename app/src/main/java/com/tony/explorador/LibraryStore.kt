@@ -114,6 +114,10 @@ object LibraryStore {
     var explorerView by mutableStateOf("list")
         private set
     fun changeExplorerView(v: String) { explorerView = v; save() }
+    /** Cómo se ven las listas de canciones: "compact", "cards" o "grid". */
+    var songView by mutableStateOf("compact")
+        private set
+    fun changeSongView(v: String) { songView = v; save() }
     /** "grid" o "list" */
     var galleryView by mutableStateOf("grid")
         private set
@@ -184,6 +188,11 @@ object LibraryStore {
     fun toggleFavorite(path: String) {
         if (favorites.containsKey(path)) favorites.remove(path) else favorites[path] = System.currentTimeMillis()
         save()
+    }
+
+    /** Borra cuántas veces y cuándo se escuchó una canción. */
+    fun resetStats(path: String) {
+        playCounts.remove(path); lastPlayed.remove(path); save()
     }
 
     fun recordPlay(path: String) {
@@ -400,6 +409,7 @@ object LibraryStore {
             put("windowSkin", windowSkin.name)
             put("wallpaper", wallpaper)
             put("explorerView", explorerView)
+            put("songView", songView)
             put("galleryView", galleryView)
             put("videoView", videoView)
             put("galleryFolders", JSONArray(galleryFolders.toList()))
@@ -431,6 +441,7 @@ object LibraryStore {
         o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
+        o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }
         o.optJSONArray("galleryFolders")?.let { a -> for (i in 0 until a.length()) galleryFolders.add(a.getString(i)) }

@@ -41,6 +41,13 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.ImageSearch
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.ViewHeadline
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Palette
@@ -73,6 +80,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -149,6 +160,7 @@ private sealed interface LibPage {
     data object Favorites : LibPage
     data object MostPlayed : LibPage
     data object Folders : LibPage
+    data object Covers : LibPage
 }
 
 @Composable
@@ -160,6 +172,7 @@ fun LibraryScreen(
     resetSignal: Int = 0,
     openRequest: Pair<String, String>? = null,
     onRequestHandled: () -> Unit = {},
+    onOpenFolder: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -193,7 +206,17 @@ fun LibraryScreen(
         if (resetSignal > 0) { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
     }
 
-    LaunchedEffect(Unit) { LibraryStore.scan() }
+    LaunchedEffect(Unit) {
+        LibraryStore.scan()
+        if (CoverScanner.auto) CoverScanner.start()
+    }
+    val libGoTo: (String, String) -> Unit = { kind, value ->
+        when (kind) {
+            "artist" -> stack.add(LibPage.Artist(value))
+            "album" -> stack.add(LibPage.Album(value))
+            else -> onOpenFolder(value)
+        }
+    }
 
     val songs = LibraryStore.songs
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
@@ -292,6 +315,7 @@ fun LibraryScreen(
                 },
                 label = "pages"
             ) { (_, shownPage) ->
+            androidx.compose.runtime.CompositionLocalProvider(LocalLibGoTo provides libGoTo) {
             when (val p = shownPage) {
                 LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) })
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
@@ -328,6 +352,8 @@ fun LibraryScreen(
                     }
                 }
                 LibPage.Folders -> FoldersPage()
+                LibPage.Covers -> CoversPage()
+            }
             }
             }
         }
@@ -393,6 +419,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.Favorites -> "Favoritas"
     LibPage.MostPlayed -> "Más escuchadas"
     LibPage.Folders -> "Carpetas de música"
+    LibPage.Covers -> "Carátulas en internet"
 }
 
 // ───────── Menú principal ─────────
@@ -410,6 +437,8 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
+        Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
+            Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -512,10 +541,30 @@ private fun SongList(
         songs.forEachIndexed { i, s -> m.putIfAbsent(letterOf(s.title), i + 2) } // +2: encabezado y botones
         m
     }
+    val view = LibraryStore.songView
+    val viewButton: @Composable () -> Unit = { SongViewButton() }
+    if (view == "grid") {
+        // cuadrícula de portadas
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(112.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 6.dp, end = 6.dp, bottom = 16.dp),
+        ) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { PlayBar(songs, onPlay, viewButton) }
+            items(songs.size, key = { songs[it].path }) { i ->
+                val song = songs[i]
+                SongRow(song, if (showCounts) i + 1 else null, if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
+                    onClick = { onPlay(songs, i, false) }, onAdd = { onAdd(listOf(song)) },
+                    onRemove = onRemove?.let { { it(song) } }, style = "tile")
+            }
+        }
+        return
+    }
     Box(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 26.dp else 0.dp), state = listState) {
         item { header() }
-        item { PlayBar(songs, onPlay) }
+        item { PlayBar(songs, onPlay, viewButton) }
         itemsIndexed(songs, key = { _, s -> s.path }) { i, song ->
             SongRow(
                 song = song,
@@ -523,7 +572,8 @@ private fun SongList(
                 count = if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
                 onClick = { onPlay(songs, i, false) },
                 onAdd = { onAdd(listOf(song)) },
-                onRemove = onRemove?.let { { it(song) } }
+                onRemove = onRemove?.let { { it(song) } },
+                style = view,
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -532,6 +582,10 @@ private fun SongList(
     }
 }
 
+/** Para abrir artista, álbum o carpeta desde la información de una canción. */
+private val LocalLibGoTo = androidx.compose.runtime.staticCompositionLocalOf<(String, String) -> Unit> { { _, _ -> } }
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun SongRow(
     song: Song,
@@ -540,66 +594,152 @@ private fun SongRow(
     onClick: () -> Unit,
     onAdd: () -> Unit,
     onRemove: (() -> Unit)?,
+    style: String = "compact",
 ) {
     val thumb by produceState<android.graphics.Bitmap?>(null, song.path, LibraryStore.tagsVersion) { value = loadThumb(song.path) }
     val fav = LibraryStore.isFavorite(song.path)
+    val playing = NowPlaying.path == song.path
+    val webCover = CoverScanner.found[song.path]
+    val goTo = LocalLibGoTo.current
     var menu by remember { mutableStateOf(false) }
     var showInfo by remember { mutableStateOf(false) }
-    if (showInfo) SongInfoWindow(song.path, Retro.Orange, onDismiss = { showInfo = false })
     var tagOnline by remember { mutableStateOf(false) }
     var lyricsOnline by remember { mutableStateOf(false) }
+    var coverOffer by remember { mutableStateOf(false) }
+    if (showInfo) SongInfoWindow(song.path, Retro.Orange, onDismiss = { showInfo = false }, onGoTo = { k, v -> showInfo = false; goTo(k, v) })
     if (tagOnline) TagSearchDialog(song.path, Retro.Orange, onDismiss = { tagOnline = false })
     if (lyricsOnline) LyricsSearchDialog(song.path, Retro.Orange, onDismiss = { lyricsOnline = false })
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (rank != null) {
-            Text(
-                "$rank", color = if (rank <= 3) Retro.Orange else Retro.SubText, fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold, fontSize = if (rank <= 3) 18.sp else 14.sp, modifier = Modifier.width(32.dp)
-            )
-        }
-        Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Retro.Panel),
-            contentAlignment = Alignment.Center
-        ) {
-            val b = thumb
-            if (b != null) {
-                Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Icon(Icons.Filled.MusicNote, null, tint = Retro.Orange.copy(alpha = 0.7f))
+    if (coverOffer && webCover != null) WebCoverDialog(song, webCover, onDismiss = { coverOffer = false })
+
+    @Composable
+    fun Menu() {
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            if (webCover != null) {
+                DropdownMenuItem(text = { Text("Poner carátula encontrada") }, leadingIcon = { Icon(Icons.Filled.CloudDownload, null) },
+                    onClick = { menu = false; coverOffer = true })
+            }
+            DropdownMenuItem(text = { Text("Agregar a lista") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null) },
+                onClick = { menu = false; onAdd() })
+            DropdownMenuItem(text = { Text(if (fav) "Quitar de favoritas" else "Favorita") },
+                leadingIcon = { Icon(if (fav) Icons.Filled.Star else Icons.Filled.StarBorder, null) },
+                onClick = { menu = false; LibraryStore.toggleFavorite(song.path) })
+            DropdownMenuItem(text = { Text("Información") }, leadingIcon = { Icon(Icons.Filled.Info, null) },
+                onClick = { menu = false; showInfo = true })
+            DropdownMenuItem(text = { Text("Etiquetar desde internet") }, leadingIcon = { Icon(Icons.Filled.TravelExplore, null) },
+                onClick = { menu = false; tagOnline = true })
+            DropdownMenuItem(text = { Text("Buscar letra") }, leadingIcon = { Icon(Icons.Filled.Search, null) },
+                onClick = { menu = false; lyricsOnline = true })
+            if (onRemove != null) {
+                DropdownMenuItem(text = { Text("Quitar de esta lista") }, leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, null) },
+                    onClick = { menu = false; onRemove() })
             }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(song.title, color = Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-            val sub = buildString {
-                append(song.artist)
-                if (song.durationMs > 0) append(" · ").append(formatTime(song.durationMs))
-                if (count != null) append(" · ").append("$count ${if (count == 1) "vez" else "veces"}")
-            }
-            Text(sub, color = Retro.SubText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = { LibraryStore.toggleFavorite(song.path) }) {
-            Icon(if (fav) Icons.Filled.Star else Icons.Filled.StarBorder, "Favorita",
-                tint = if (fav) Retro.Yellow else Retro.SubText)
-        }
-        Box {
-            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más", tint = Retro.SubText) }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Agregar a lista") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null) },
-                    onClick = { menu = false; onAdd() })
-                DropdownMenuItem(text = { Text("Información") }, leadingIcon = { Icon(Icons.Filled.Info, null) },
-                    onClick = { menu = false; showInfo = true })
-                DropdownMenuItem(text = { Text("Etiquetar desde internet") }, leadingIcon = { Icon(Icons.Filled.TravelExplore, null) },
-                    onClick = { menu = false; tagOnline = true })
-                DropdownMenuItem(text = { Text("Buscar letra") }, leadingIcon = { Icon(Icons.Filled.Search, null) },
-                    onClick = { menu = false; lyricsOnline = true })
-                if (onRemove != null) {
-                    DropdownMenuItem(text = { Text("Quitar de esta lista") }, leadingIcon = { Icon(Icons.Filled.RemoveCircleOutline, null) },
-                        onClick = { menu = false; onRemove() })
+    }
+
+    @Composable
+    fun Cover(size: androidx.compose.ui.unit.Dp, corner: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+        Box(modifier.size(size)) {
+            Box(
+                Modifier.fillMaxSize().clip(RoundedCornerShape(corner)).background(Retro.Panel),
+                contentAlignment = Alignment.Center
+            ) {
+                val b = thumb
+                if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Icon(Icons.Filled.MusicNote, null, tint = Retro.Orange.copy(alpha = 0.7f), modifier = Modifier.size(size * 0.45f))
+                if (playing) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.GraphicEq, null, tint = Retro.Orange, modifier = Modifier.size(size * 0.45f))
                 }
+            }
+            // hay carátula disponible en internet: iconito para ponerla
+            if (webCover != null) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset(x = 5.dp, y = (-5).dp).size(24.dp)
+                        .shadow(4.dp, CircleShape).clip(CircleShape).background(Retro.Orange)
+                        .clickable { coverOffer = true },
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Filled.CloudDownload, "Carátula disponible", tint = Retro.OnAccent, modifier = Modifier.size(15.dp)) }
+            }
+        }
+    }
+
+    when (style) {
+        // tarjetas grandes: portada redondeada, título, «artista - álbum» y duración | formato
+        "cards" -> Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp)
+                .clip(RoundedCornerShape(30.dp))
+                .background(if (playing) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (rank != null) {
+                Text("$rank", color = if (rank <= 3) Retro.Orange else Retro.SubText, fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.width(30.dp))
+            }
+            Cover(86.dp, 20.dp, Modifier.shadow(10.dp, RoundedCornerShape(20.dp)))
+            Spacer(Modifier.width(18.dp))
+            Column(Modifier.weight(1f)) {
+                Text(song.title, color = if (playing) Retro.Orange else Retro.Text, fontWeight = FontWeight.Bold, fontSize = 19.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${song.artist} - ${song.album}", color = Retro.Text.copy(alpha = 0.92f), fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(5.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = Retro.SubText, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    val ext = song.path.substringAfterLast('.', "").lowercase(Locale.ROOT)
+                    val extra = if (count != null) " | $count ${if (count == 1) "vez" else "veces"}" else ""
+                    Text(listOf(if (song.durationMs > 0) formatTime(song.durationMs) else "", ext).filter { it.isNotBlank() }.joinToString(" | ") + extra,
+                        color = Retro.SubText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    if (fav) { Spacer(Modifier.width(6.dp)); Icon(Icons.Filled.Star, null, tint = Retro.Yellow, modifier = Modifier.size(15.dp)) }
+                }
+            }
+            Box { Menu() }
+        }
+        // cuadrito para la vista en cuadrícula
+        "tile" -> Column(
+            Modifier.clip(RoundedCornerShape(16.dp))
+                .background(if (playing) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+                .padding(6.dp)
+        ) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) { Cover(maxWidth, 14.dp) }
+            Text(song.title, color = if (playing) Retro.Orange else Retro.Text, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+            Text(song.artist, color = Retro.SubText, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Box { Menu() }
+        }
+        else -> Row(
+            Modifier.fillMaxWidth()
+                .background(if (playing) Color.White.copy(alpha = 0.06f) else Color.Transparent)
+                .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+                .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (rank != null) {
+                Text(
+                    "$rank", color = if (rank <= 3) Retro.Orange else Retro.SubText, fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold, fontSize = if (rank <= 3) 18.sp else 14.sp, modifier = Modifier.width(32.dp)
+                )
+            }
+            Cover(48.dp, 6.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(song.title, color = if (playing) Retro.Orange else Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                val sub = buildString {
+                    append(song.artist)
+                    if (song.durationMs > 0) append(" · ").append(formatTime(song.durationMs))
+                    if (count != null) append(" · ").append("$count ${if (count == 1) "vez" else "veces"}")
+                }
+                Text(sub, color = Retro.SubText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(onClick = { LibraryStore.toggleFavorite(song.path) }) {
+                Icon(if (fav) Icons.Filled.Star else Icons.Filled.StarBorder, "Favorita",
+                    tint = if (fav) Retro.Yellow else Retro.SubText)
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Más", tint = Retro.SubText) }
+                Menu()
             }
         }
     }
@@ -1001,6 +1141,147 @@ private fun AlphabetScroller(listState: androidx.compose.foundation.lazy.LazyLis
                 contentAlignment = Alignment.Center
             ) {
                 Text(l, color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+            }
+        }
+    }
+}
+
+
+/** Botón para elegir cómo se ven las canciones. */
+@Composable
+private fun SongViewButton() {
+    var open by remember { mutableStateOf(false) }
+    val options = listOf(
+        Triple("compact", "Lista compacta", Icons.Filled.ViewHeadline),
+        Triple("cards", "Tarjetas con portada", Icons.Filled.ViewAgenda),
+        Triple("grid", "Cuadrícula de portadas", Icons.Filled.GridView),
+    )
+    val current = options.firstOrNull { it.first == LibraryStore.songView } ?: options.first()
+    Box {
+        IconButton(onClick = { open = true }) { Icon(current.third, "Vista", tint = Retro.Orange) }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { (id, label, icon) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontWeight = if (id == current.first) FontWeight.Bold else null) },
+                    leadingIcon = { Icon(icon, null) },
+                    onClick = { LibraryStore.changeSongView(id); open = false }
+                )
+            }
+        }
+    }
+}
+
+/** Muestra la carátula encontrada en internet y deja ponerla o descartarla. */
+@Composable
+private fun WebCoverDialog(song: Song, r: TagResult, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    ThemedDialog(
+        "Carátula disponible", onDismiss,
+        listOf(
+            DialogButton("No es esta") { CoverScanner.dismiss(song.path); onDismiss() },
+            DialogButton(if (busy) "Poniendo…" else "Ponerla", true) {
+                if (busy) return@DialogButton
+                busy = true
+                scope.launch {
+                    val ok = CoverScanner.apply(context, song.path)
+                    busy = false
+                    Toast.makeText(context, if (ok) "Carátula puesta ✔" else "No se pudo escribir en el archivo", Toast.LENGTH_SHORT).show()
+                    onDismiss()
+                }
+            }
+        )
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            coil.compose.AsyncImage(r.artworkUrl, null, contentScale = ContentScale.Crop,
+                modifier = Modifier.size(200.dp).clip(RoundedCornerShape(14.dp)))
+            Spacer(Modifier.height(10.dp))
+            Text(song.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Encontrada: ${r.artist} — ${r.album}", fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Sólo se agrega la imagen; el nombre y las etiquetas no cambian.", fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
+/** Página del buscador de carátulas: búsqueda automática, revisar todo y lo encontrado. */
+@Composable
+private fun CoversPage() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val foundList = CoverScanner.found.entries.toList()
+    val byPath = LibraryStore.songs.associateBy { it.path }
+    var applyingAll by remember { mutableStateOf(false) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Búsqueda automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Cada vez que abras la app revisa la música nueva sin carátula y te avisa si encuentra alguna.",
+                            color = Retro.SubText, fontSize = 13.sp)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = CoverScanner.auto, onCheckedChange = { CoverScanner.changeAuto(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Retro.Orange, checkedThumbColor = Retro.OnAccent)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                if (CoverScanner.running) {
+                    val t = CoverScanner.total
+                    LinearProgressIndicator(
+                        progress = { if (t > 0) CoverScanner.done.toFloat() / t else 0f },
+                        modifier = Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg
+                    )
+                    Text("${CoverScanner.done} de $t álbumes · ${CoverScanner.status}", color = Retro.SubText, fontSize = 12.sp,
+                        maxLines = 2, modifier = Modifier.padding(top = 6.dp))
+                    Spacer(Modifier.height(8.dp))
+                    RetroButton("Detener", Icons.Filled.Stop, Modifier.fillMaxWidth()) { CoverScanner.stop() }
+                } else {
+                    if (CoverScanner.status.isNotBlank()) Text(CoverScanner.status, color = Retro.SubText, fontSize = 12.sp,
+                        modifier = Modifier.padding(bottom = 8.dp))
+                    RetroButton("Revisar toda mi música", Icons.Filled.ImageSearch, Modifier.fillMaxWidth()) { CoverScanner.start() }
+                    Text("Volver a revisar desde cero", color = Retro.Orange, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 10.dp).clickable { CoverScanner.resetChecked(); CoverScanner.start() })
+                }
+                Text("Va despacio a propósito (unas 18 búsquedas por minuto) para que el servicio no lo bloquee. Puedes seguir usando la app mientras.",
+                    color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+        if (foundList.isNotEmpty()) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Encontradas (${foundList.size})", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.weight(1f))
+                    Text(if (applyingAll) "Poniendo…" else "Poner todas", color = Retro.OnAccent, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clip(CircleShape).background(Retro.Orange).clickable(enabled = !applyingAll) {
+                            applyingAll = true
+                            scope.launch {
+                                var n = 0
+                                foundList.map { it.key }.forEach { p -> if (CoverScanner.apply(context, p)) n++ }
+                                applyingAll = false
+                                Toast.makeText(context, "Listo: $n carátulas puestas", Toast.LENGTH_LONG).show()
+                            }
+                        }.padding(horizontal = 16.dp, vertical = 9.dp))
+                }
+            }
+            items(foundList, key = { it.key }) { (path, r) ->
+                val song = byPath[path] ?: Song(path, File(path).nameWithoutExtension, UNKNOWN_ARTIST, UNKNOWN_ALBUM, 0)
+                var offer by remember { mutableStateOf(false) }
+                if (offer) WebCoverDialog(song, r, onDismiss = { offer = false })
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Retro.Panel).clickable { offer = true }.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    coil.compose.AsyncImage(r.thumbUrl, null, contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(song.title, color = Retro.Text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${song.artist} · encontrada en «${r.album}»", color = Retro.SubText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(Icons.Filled.CloudDownload, null, tint = Retro.Orange)
+                }
             }
         }
     }

@@ -183,3 +183,123 @@ suspend fun writeTags(context: Context, path: String, r: TagResult, choice: TagC
     }
 }
 
+
+/** Todo lo que trae un archivo de música: datos técnicos y etiquetas. */
+data class FullTags(
+    val seconds: Int = 0,
+    val sampleRate: Int = 0,
+    val bits: Int = 0,
+    val channels: String = "",
+    val kbps: Long = 0,
+    val format: String = "",
+    val title: String = "",
+    val track: String = "",
+    val disc: String = "",
+    val year: String = "",
+    val genre: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val albumArtist: String = "",
+    val composer: String = "",
+    val comment: String = "",
+    val artWidth: Int = 0,
+    val artHeight: Int = 0,
+    val artMime: String = "",
+    val artBytes: Int = 0,
+    val canWrite: Boolean = true,
+)
+
+suspend fun readFullTags(path: String): FullTags = withContext(Dispatchers.IO) {
+    runCatching {
+        org.jaudiotagger.tag.TagOptionSingleton.getInstance().setAndroid(true)
+        java.util.logging.Logger.getLogger("org.jaudiotagger").level = java.util.logging.Level.OFF
+        val af = org.jaudiotagger.audio.AudioFileIO.read(File(path))
+        val h = af.audioHeader
+        val tag = af.tag
+        fun get(k: org.jaudiotagger.tag.FieldKey) = runCatching { tag?.getFirst(k).orEmpty() }.getOrDefault("").trim()
+        val art = runCatching { tag?.firstArtwork }.getOrNull()
+        val bytes = art?.binaryData
+        val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        if (bytes != null) android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        FullTags(
+            seconds = runCatching { h.trackLength }.getOrDefault(0),
+            sampleRate = runCatching { h.sampleRateAsNumber }.getOrDefault(0),
+            bits = runCatching { h.bitsPerSample }.getOrDefault(0),
+            channels = runCatching { h.channels.orEmpty() }.getOrDefault(""),
+            kbps = runCatching { h.bitRateAsNumber }.getOrDefault(0L),
+            format = runCatching { h.format.orEmpty() }.getOrDefault(""),
+            title = get(org.jaudiotagger.tag.FieldKey.TITLE),
+            track = get(org.jaudiotagger.tag.FieldKey.TRACK),
+            disc = get(org.jaudiotagger.tag.FieldKey.DISC_NO),
+            year = get(org.jaudiotagger.tag.FieldKey.YEAR),
+            genre = get(org.jaudiotagger.tag.FieldKey.GENRE),
+            artist = get(org.jaudiotagger.tag.FieldKey.ARTIST),
+            album = get(org.jaudiotagger.tag.FieldKey.ALBUM),
+            albumArtist = get(org.jaudiotagger.tag.FieldKey.ALBUM_ARTIST),
+            composer = get(org.jaudiotagger.tag.FieldKey.COMPOSER),
+            comment = get(org.jaudiotagger.tag.FieldKey.COMMENT),
+            artWidth = opts.outWidth.coerceAtLeast(0),
+            artHeight = opts.outHeight.coerceAtLeast(0),
+            artMime = art?.mimeType.orEmpty(),
+            artBytes = bytes?.size ?: 0,
+        )
+    }.getOrElse {
+        // si jaudiotagger no puede con el formato, lo básico con Android
+        val r = android.media.MediaMetadataRetriever()
+        try {
+            r.setDataSource(path)
+            fun m(k: Int) = r.extractMetadata(k).orEmpty()
+            val pic = r.embeddedPicture
+            val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            if (pic != null) android.graphics.BitmapFactory.decodeByteArray(pic, 0, pic.size, opts)
+            FullTags(
+                seconds = (m(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION).toLongOrNull() ?: 0L).div(1000).toInt(),
+                sampleRate = if (android.os.Build.VERSION.SDK_INT >= 31) m(android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE).toIntOrNull() ?: 0 else 0,
+                kbps = (m(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE).toLongOrNull() ?: 0L) / 1000,
+                title = m(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE),
+                track = m(android.media.MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER),
+                disc = m(android.media.MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER),
+                year = m(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR),
+                genre = m(android.media.MediaMetadataRetriever.METADATA_KEY_GENRE),
+                artist = m(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                album = m(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                albumArtist = m(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
+                composer = m(android.media.MediaMetadataRetriever.METADATA_KEY_COMPOSER),
+                artWidth = opts.outWidth.coerceAtLeast(0), artHeight = opts.outHeight.coerceAtLeast(0),
+                artMime = opts.outMimeType.orEmpty(), artBytes = pic?.size ?: 0,
+                canWrite = false,
+            )
+        } catch (_: Exception) {
+            FullTags(canWrite = false)
+        } finally {
+            runCatching { r.release() }
+        }
+    }
+}
+
+/** Guarda a mano las etiquetas que escribiste (vacío = se borra ese dato). */
+suspend fun writeManualTags(context: Context, path: String, t: FullTags): Result<Unit> = withContext(Dispatchers.IO) {
+    runCatching {
+        org.jaudiotagger.tag.TagOptionSingleton.getInstance().setAndroid(true)
+        val af = org.jaudiotagger.audio.AudioFileIO.read(File(path))
+        val tag = af.tagOrCreateAndSetDefault
+        fun put(k: org.jaudiotagger.tag.FieldKey, v: String) {
+            if (v.isBlank()) runCatching { tag.deleteField(k) } else tag.setField(k, v.trim())
+        }
+        put(org.jaudiotagger.tag.FieldKey.TITLE, t.title)
+        put(org.jaudiotagger.tag.FieldKey.ARTIST, t.artist)
+        put(org.jaudiotagger.tag.FieldKey.ALBUM, t.album)
+        put(org.jaudiotagger.tag.FieldKey.ALBUM_ARTIST, t.albumArtist)
+        put(org.jaudiotagger.tag.FieldKey.YEAR, t.year)
+        put(org.jaudiotagger.tag.FieldKey.GENRE, t.genre)
+        put(org.jaudiotagger.tag.FieldKey.TRACK, t.track.substringBefore('/'))
+        put(org.jaudiotagger.tag.FieldKey.DISC_NO, t.disc.substringBefore('/'))
+        put(org.jaudiotagger.tag.FieldKey.COMPOSER, t.composer)
+        put(org.jaudiotagger.tag.FieldKey.COMMENT, t.comment)
+        af.commit()
+        invalidateTrack(path)
+        withContext(Dispatchers.Main) { LibraryStore.updateSongTags(path, t.title, t.artist, t.album) }
+        MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
+        Unit
+    }
+}

@@ -176,6 +176,8 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val colors = info?.colors ?: DefaultCoverColors
     val accent by animateColorAsState(colors.accent, tween(600), label = "miniAccent")
     androidx.compose.runtime.LaunchedEffect(info?.colors) { info?.colors?.let { NowPlaying.colors = it } }
+    val nowPath = player.currentMediaItem?.mediaId
+    androidx.compose.runtime.SideEffect { NowPlaying.path = nowPath }
     val title = info?.title ?: player.mediaMetadata.title?.toString() ?: ""
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
@@ -253,12 +255,20 @@ fun MusicPlayerScreen(
     onHome: () -> Unit = {},
     onMusicMenu: () -> Unit = {},
     onGoTo: (String, String) -> Unit = { _, _ -> },
+    onPeekMenu: () -> Unit = {},
+    onMenuCancel: () -> Unit = {},
+    onMenuDone: () -> Unit = {},
 ) {
     if (LibraryStore.musicSkin == MusicSkin.VINTAGE) {
         VintagePlayerScreen(player, onClose, onOpenCoverFlow, onHome, onGoTo)
         return
     }
-    val musicMenu by rememberUpdatedState(onMusicMenu)
+    val peekMenu by rememberUpdatedState(onPeekMenu)
+    val menuCancel by rememberUpdatedState(onMenuCancel)
+    val menuDone by rememberUpdatedState(onMenuDone)
+    // deslizar a la derecha: el reproductor se hace a un lado (como la portada) y deja ver la biblioteca
+    val aside = remember { Animatable(0f) }
+    val asideScope = rememberCoroutineScope()
     var lyricsMode by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -302,22 +312,45 @@ fun MusicPlayerScreen(
 
     Box(
         Modifier.fillMaxSize()
-            .background(Brush.verticalGradient(listOf(top, bottom)))
             .pointerInput(Unit) {
-                // deslizar rápido a la derecha en cualquier parte → menú de música
                 val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                var total = 0f
+                var peeked = false
                 detectHorizontalDragGestures(
-                    onDragStart = { tracker.resetTracking(); total = 0f },
+                    onDragStart = { tracker.resetTracking(); peeked = false },
                     onDragEnd = {
                         val v = tracker.calculateVelocity().x
-                        if (v > 1800f && total > 80f) musicMenu()
-                    }
+                        val w = size.width.toFloat()
+                        asideScope.launch {
+                            if (peeked && (v > 900f || aside.value > w * 0.33f)) {
+                                aside.animateTo(w * 1.15f, spring(dampingRatio = 0.9f, stiffness = 260f), initialVelocity = v)
+                                menuDone()
+                            } else {
+                                aside.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                if (peeked) menuCancel()
+                            }
+                        }
+                    },
+                    onDragCancel = { asideScope.launch { aside.animateTo(0f); if (peeked) menuCancel() } }
                 ) { change, drag ->
                     tracker.addPosition(change.uptimeMillis, change.position)
-                    total += drag
+                    val next = (aside.value + drag).coerceAtLeast(0f)
+                    if (next > 0f && !peeked) { peeked = true; peekMenu() }
+                    change.consume()
+                    asideScope.launch { aside.snapTo(next) }
                 }
             }
+            .graphicsLayer {
+                val frac = (aside.value / size.width).coerceIn(0f, 1.2f)
+                translationX = aside.value
+                rotationZ = frac * 6f
+                val sc = 1f - frac * 0.1f
+                scaleX = sc; scaleY = sc
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                shape = RoundedCornerShape((frac * 40f).dp)
+                clip = frac > 0f
+                shadowElevation = if (frac > 0f) 30f else 0f
+            }
+            .background(Brush.verticalGradient(listOf(top, bottom)))
     ) {
         // Fondo: la misma portada, muy difuminada
         val cover = info?.cover
@@ -589,7 +622,7 @@ fun MusicPlayerScreen(
     }
     if (infoOpen) {
         player.currentMediaItem?.mediaId?.let { path ->
-            SongInfoWindow(path, accent, onDismiss = { infoOpen = false })
+            SongInfoWindow(path, accent, onDismiss = { infoOpen = false }, onGoTo = { k, v -> infoOpen = false; onGoTo(k, v) })
         }
     }
 }
@@ -1017,135 +1050,7 @@ private suspend fun loadSongDetails(path: String): SongDetails = kotlinx.corouti
     SongDetails(rows)
 }
 
-/** Ventanita con la información de la canción. Se quita tocando afuera o deslizándola hacia abajo. */
-@Composable
-fun SongInfoWindow(path: String, accent: Color = Color(0xFF9FB4FF), onDismiss: () -> Unit) {
-    val details by androidx.compose.runtime.produceState<SongDetails?>(null, path) { value = loadSongDetails(path) }
-    val info by rememberTrackInfo(path)
-    val plays = LibraryStore.playCounts[path] ?: 0
-    val last = LibraryStore.lastPlayed[path]
-    val fav = LibraryStore.isFavorite(path)
-    val scope = rememberCoroutineScope()
-    val drag = remember { Animatable(0f) }
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)) }
-    val close: () -> Unit = {
-        scope.launch {
-            appear.animateTo(0f, tween(140))
-            onDismiss()
-        }
-    }
-
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = close,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            Modifier.fillMaxSize()
-                .clickable(
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                    indication = null,
-                    onClick = close
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                Modifier.fillMaxWidth(0.9f)
-                    .heightIn(max = 560.dp)
-                    .graphicsLayer {
-                        translationY = drag.value + (1f - appear.value) * 120f
-                        alpha = appear.value * (1f - (drag.value / 900f).coerceIn(0f, 0.6f))
-                        val sc = 0.92f + 0.08f * appear.value
-                        scaleX = sc; scaleY = sc
-                    }
-                    .shadow(24.dp, RoundedCornerShape(24.dp))
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF2A2C38), Color(0xFF17181F))))
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
-                    ) {} // tocar dentro no la cierra
-                    .pointerInput(Unit) {
-                        detectVerticalDragGestures(
-                            onDragEnd = {
-                                scope.launch {
-                                    if (drag.value > 160f) {
-                                        drag.animateTo(1400f, tween(180)); onDismiss()
-                                    } else drag.animateTo(0f, spring(dampingRatio = 0.6f))
-                                }
-                            }
-                        ) { change, d ->
-                            change.consume()
-                            scope.launch { drag.snapTo((drag.value + d).coerceAtLeast(0f)) }
-                        }
-                    }
-            ) {
-                // asa para deslizar
-                Box(Modifier.fillMaxWidth().padding(top = 10.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(40.dp, 5.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f)))
-                }
-                // encabezado con portada
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)),
-                        contentAlignment = Alignment.Center) {
-                        val cover = info?.cover
-                        if (cover != null) Image(remember(cover) { cover.asImageBitmap() }, null,
-                            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.5f))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(info?.title ?: File(path).nameWithoutExtension, color = Color.White, fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(listOfNotNull(info?.artist, info?.album).joinToString(" · "), color = Color.White.copy(alpha = 0.65f),
-                            fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (fav) Icon(Icons.Filled.Star, "Favorita", tint = Color(0xFFFFC83D))
-                }
-                // tarjetas: reproducciones y última vez
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    InfoStat(Modifier.weight(1f), "$plays", if (plays == 1) "reproducción" else "reproducciones", accent)
-                    InfoStat(Modifier.weight(1f), last?.let { relativeTime(it) } ?: "Nunca", "última vez", accent)
-                }
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
-                    val d = details
-                    if (d == null) {
-                        item { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 12.dp), color = accent) }
-                    } else {
-                        items(d.rows.size) { i ->
-                            val (k, v) = d.rows[i]
-                            Row(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
-                                Text(k, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, modifier = Modifier.width(96.dp))
-                                Text(v, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            }
-                            if (i < d.rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.07f)))
-                        }
-                        last?.let {
-                            item {
-                                Text("Escuchada por última vez el ${formatDate(it)}", color = Color.White.copy(alpha = 0.45f),
-                                    fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoStat(modifier: Modifier, big: String, small: String, accent: Color) {
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.10f)).padding(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(big, color = accent, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(small, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
-    }
-}
-
-private fun relativeTime(millis: Long): String {
+fun relativeTime(millis: Long): String {
     val diff = System.currentTimeMillis() - millis
     val min = diff / 60_000
     return when {

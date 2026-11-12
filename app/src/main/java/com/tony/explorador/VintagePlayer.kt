@@ -284,7 +284,7 @@ fun VintagePlayerScreen(
             },
         )
     }
-    if (infoOpen && path != null) SongInfoWindow(path, Vintage.Brass, onDismiss = { infoOpen = false })
+    if (infoOpen && path != null) SongInfoWindow(path, Vintage.Brass, onDismiss = { infoOpen = false }, onGoTo = { k, v -> infoOpen = false; onGoTo(k, v) })
 }
 
 // ───────────────────────── La mesa de madera ─────────────────────────

@@ -173,6 +173,25 @@ fun AppRoot() {
             if (Overlay.Library !in overlays) open(Overlay.Library)
         }
     }
+    /** Al empezar a deslizar el reproductor: la biblioteca se pone debajo para que se vea. */
+    var peekedLibrary by remember { mutableStateOf(false) }
+    fun peekMusicMenu() {
+        if (Overlay.Library !in overlays) {
+            val i = overlays.indexOf(Overlay.Music).coerceAtLeast(0)
+            overlays.add(i, Overlay.Library)
+            overlayStates[Overlay.Library] = androidx.compose.animation.core.MutableTransitionState(true)
+            peekedLibrary = true
+        }
+    }
+    fun cancelMusicMenu() {
+        if (peekedLibrary) { overlays.remove(Overlay.Library); overlayStates.remove(Overlay.Library) }
+        peekedLibrary = false
+    }
+    /** El reproductor ya salió de la pantalla deslizándose: se quita sin otra animación. */
+    fun finishMusicMenu() {
+        peekedLibrary = false
+        listOf(Overlay.Music, Overlay.CoverFlow).forEach { overlays.remove(it); overlayStates.remove(it) }
+    }
     fun musicMenu() {
         overlays.filter { it == Overlay.Music || it == Overlay.CoverFlow }.forEach { close(it) }
         libraryReset++
@@ -211,6 +230,11 @@ fun AppRoot() {
     }
 
     LaunchedEffect(Unit) { checkUpdates(manual = false) }
+    // búsqueda automática de carátulas (si está activada), un ratito después de abrir
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(20_000)
+        if (CoverScanner.auto && LibraryStore.songs.isNotEmpty()) CoverScanner.start()
+    }
 
     Box(Modifier.fillMaxSize()) {
         BrowserScreen(
@@ -273,6 +297,9 @@ fun AppRoot() {
                             onOpenCoverFlow = { open(Overlay.CoverFlow) },
                             onHome = { goHome() },
                             onMusicMenu = { musicMenu() },
+                            onPeekMenu = { peekMusicMenu() },
+                            onMenuCancel = { cancelMusicMenu() },
+                            onMenuDone = { finishMusicMenu() },
                             onGoTo = { k, v -> goTo(k, v) })
                     }
                     Overlay.CoverFlow -> CoverFlowScreen(
@@ -321,6 +348,7 @@ fun AppRoot() {
                         resetSignal = libraryReset,
                         openRequest = libraryRequest,
                         onRequestHandled = { libraryRequest = null },
+                        onOpenFolder = { goTo("folder", it) },
                     )
                 }
                 }

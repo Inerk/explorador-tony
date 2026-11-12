@@ -35,6 +35,8 @@ val DefaultCoverColors = CoverColors(
 /** Colores de la canción que suena ahora (el tema Original pinta la biblioteca con ellos). */
 object NowPlaying {
     var colors by androidx.compose.runtime.mutableStateOf(DefaultCoverColors)
+    /** Ruta de la canción que suena (para marcarla en las listas). */
+    var path by androidx.compose.runtime.mutableStateOf<String?>(null)
 }
 
 data class TrackInfo(
@@ -121,13 +123,17 @@ private fun decodeFileSampled(file: File, maxSize: Int): Bitmap? {
 }
 
 /** Si la canción no trae portada, busca cover.jpg / folder.jpg / front.jpg en la carpeta. */
-private fun folderCover(audio: File): Bitmap? {
+fun folderCoverFile(audio: File): File? {
     val dir = audio.parentFile ?: return null
     val names = listOf("cover", "folder", "front", "albumart", "album", audio.nameWithoutExtension.lowercase(Locale.ROOT))
-    val candidate = dir.listFiles()?.firstOrNull { f ->
+    return dir.listFiles()?.firstOrNull { f ->
         f.isFile && f.extension.lowercase(Locale.ROOT) in setOf("jpg", "jpeg", "png", "webp") &&
             f.nameWithoutExtension.lowercase(Locale.ROOT).let { n -> names.any { n == it || n.startsWith("albumart") } }
-    } ?: return null
+    }
+}
+
+private fun folderCover(audio: File): Bitmap? {
+    val candidate = folderCoverFile(audio) ?: return null
     return runCatching { decodeFileSampled(candidate, 1000) }.getOrNull()
 }
 
