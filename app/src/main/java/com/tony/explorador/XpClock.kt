@@ -96,12 +96,12 @@ fun XpClockWindow(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
 
     Column(
-        modifier.width(300.dp).shadow(14.dp, shape).clip(shape)
+        modifier.width(236.dp).shadow(14.dp, shape).clip(shape)
             .background(XpColors.TitleBottom).padding(start = 3.dp, end = 3.dp, bottom = 3.dp)
             .clickable(enabled = false) {}
     ) {
         Row(
-            Modifier.fillMaxWidth().height(30.dp).background(XpColors.titleBrush).padding(start = 6.dp, end = 2.dp),
+            Modifier.fillMaxWidth().height(26.dp).background(XpColors.titleBrush).padding(start = 6.dp, end = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(Icons.Filled.Schedule, null, tint = Color.White, modifier = Modifier.size(16.dp))
@@ -115,18 +115,18 @@ fun XpClockWindow(onClose: () -> Unit, modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center
             ) { Text("✕", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
         }
-        Column(Modifier.fillMaxWidth().background(XpColors.Window).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            AnalogClock(now, Modifier.size(150.dp))
+        Column(Modifier.fillMaxWidth().background(XpColors.Window).padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            AnalogClock(now, Modifier.size(96.dp))
             Spacer(Modifier.height(6.dp))
             Text(
                 SimpleDateFormat("h:mm:ss a", esMX).format(Date(now)),
-                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color(0xFF0A246A)
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0A246A)
             )
             Text(
                 SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy", esMX).format(Date(now)).replaceFirstChar { it.uppercase() },
-                fontSize = 12.sp, color = Color(0xFF333333)
+                fontSize = 10.sp, color = Color(0xFF333333)
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             MonthCalendar(today, monthShift, onShift = { monthShift += it })
         }
     }
@@ -151,9 +151,9 @@ private fun AnalogClock(now: Long, modifier: Modifier) {
                 val long = i % 5 == 0
                 drawLine(
                     if (long) Color(0xFF0A246A) else Color(0xFF7F9DB9),
-                    Offset(c.x, c.y - r + 6.dp.toPx()),
-                    Offset(c.x, c.y - r + (if (long) 16 else 10).dp.toPx()),
-                    strokeWidth = (if (long) 3 else 1).dp.toPx(),
+                    Offset(c.x, c.y - r * 0.92f),
+                    Offset(c.x, c.y - r * (if (long) 0.75f else 0.84f)),
+                    strokeWidth = (if (long) 2 else 1).dp.toPx(),
                     cap = StrokeCap.Round
                 )
             }
@@ -190,14 +190,14 @@ private fun MonthCalendar(today: Calendar, shift: Int, onShift: (Int) -> Unit) {
         Modifier.fillMaxWidth().background(Color.White).border(1.dp, Color(0xFF7F9DB9)).padding(6.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("‹", fontSize = 22.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(-1) }.padding(horizontal = 10.dp))
-            Text(title, fontWeight = FontWeight.Bold, color = Color(0xFF0A246A), textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
+            Text("‹", fontSize = 18.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(-1) }.padding(horizontal = 10.dp))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0A246A), textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
                 .clickable { if (shift != 0) onShift(-shift) })
-            Text("›", fontSize = 22.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(1) }.padding(horizontal = 10.dp))
+            Text("›", fontSize = 18.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(1) }.padding(horizontal = 10.dp))
         }
         Row(Modifier.fillMaxWidth().background(XpColors.SidePanel)) {
             listOf("L", "M", "M", "J", "V", "S", "D").forEach {
-                Text(it, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A246A),
+                Text(it, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A246A),
                     textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(vertical = 3.dp))
             }
         }
@@ -209,13 +209,13 @@ private fun MonthCalendar(today: Calendar, shift: Int, onShift: (Int) -> Unit) {
                     val day = r * 7 + col - firstWeekday + 1
                     val isToday = isThisMonth && day == todayNum
                     Box(
-                        Modifier.weight(1f).aspectRatio(1.4f).padding(1.dp)
+                        Modifier.weight(1f).aspectRatio(1.7f).padding(1.dp)
                             .then(if (isToday) Modifier.background(XpColors.SelectBlue, RoundedCornerShape(3.dp)) else Modifier),
                         contentAlignment = Alignment.Center
                     ) {
                         if (day in 1..days) {
                             Text(
-                                "$day", fontSize = 12.sp,
+                                "$day", fontSize = 10.sp,
                                 color = when {
                                     isToday -> Color.White
                                     col == 6 -> Color(0xFFC4401E)

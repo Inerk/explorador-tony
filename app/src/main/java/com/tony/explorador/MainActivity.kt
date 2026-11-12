@@ -112,6 +112,7 @@ sealed interface Overlay {
     data object Music : Overlay
     data object Library : Overlay
     data object CoverFlow : Overlay
+    data object MyPc : Overlay
 }
 
 @Composable
@@ -136,6 +137,7 @@ fun AppRoot() {
     var homeSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var libraryReset by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     fun goHome() { overlays.clear(); homeSignal++ }
+    var folderRequest by remember { mutableStateOf<File?>(null) }
     fun musicMenu() {
         overlays.removeAll { it == Overlay.Music || it == Overlay.CoverFlow }
         libraryReset++
@@ -191,6 +193,9 @@ fun AppRoot() {
             onOpenLibrary = { open(Overlay.Library) },
             onChooseTheme = { choosingTheme = true },
             homeSignal = homeSignal,
+            onOpenMyPc = { open(Overlay.MyPc) },
+            folderRequest = folderRequest,
+            onFolderHandled = { folderRequest = null },
             versionName = versionName,
             onCheckUpdates = { checkUpdates(manual = true) },
         )
@@ -216,6 +221,12 @@ fun AppRoot() {
                             overlays.remove(o)
                             open(Overlay.Music)
                         },
+                        onClose = { overlays.remove(o) },
+                        onHome = { goHome() }
+                    )
+                    Overlay.MyPc -> MyComputerScreen(
+                        onOpenFolder = { f -> overlays.remove(o); folderRequest = f },
+                        onOpenMusic = { overlays.remove(o); open(Overlay.Library) },
                         onClose = { overlays.remove(o) },
                         onHome = { goHome() }
                     )

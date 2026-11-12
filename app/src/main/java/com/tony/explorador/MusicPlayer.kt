@@ -310,7 +310,7 @@ fun MusicPlayerScreen(
 
                 // Panel central: portada / letra / lista
                 Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
-                    Crossfade(targetState = mode, animationSpec = tween(350), label = "panel") { m ->
+                    Crossfade(targetState = mode, animationSpec = tween(160), label = "panel") { m ->
                         when (m) {
                             PanelMode.COVER -> CoverArt(
                                 cover = info?.cover,
@@ -335,6 +335,21 @@ fun MusicPlayerScreen(
                     }
                 }
 
+                if (mode == PanelMode.QUEUE) {
+                    // Reproductor "en cinta" abajo mientras ves la lista; tócalo para volver a la portada
+                    TapeBar(
+                        cover = info?.cover,
+                        title = title,
+                        artist = artist,
+                        progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                        playing = player.isPlaying,
+                        accent = accent,
+                        onAccent = onAccent,
+                        onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                        onNext = { player.seekToNextMediaItem() },
+                        onOpen = { mode = PanelMode.COVER },
+                    )
+                } else {
                 // Título y artista
                 Spacer(Modifier.height(12.dp))
                 val path = player.currentMediaItem?.mediaId
@@ -433,6 +448,7 @@ fun MusicPlayerScreen(
                         )
                     }
                 }
+                }
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -475,14 +491,13 @@ private fun CoverArt(
                 .pointerInput(Unit) {
                     val w = size.width.toFloat()
                     var axis = 0 // 0 = sin decidir, 1 = horizontal, 2 = vertical
+                    var fired = false
                     detectDragGestures(
-                        onDragStart = { axis = 0 },
+                        onDragStart = { axis = 0; fired = false },
                         onDragEnd = {
                             scope.launch {
                                 if (axis == 2) {
-                                    val down = offsetY.value
                                     offsetY.animateTo(0f, spring(dampingRatio = 0.6f))
-                                    if (down > w * 0.15f) swipeDown()
                                     return@launch
                                 }
                                 val v = offsetX.value
@@ -515,6 +530,11 @@ private fun CoverArt(
                             // hacia abajo abre la lista; hacia arriba casi no se mueve
                             val k = if (drag.y > 0) 0.5f else 0.15f
                             scope.launch { offsetY.snapTo((offsetY.value + drag.y * k).coerceIn(-w * 0.05f, w * 0.4f)) }
+                            // en cuanto baja un poquito, se abre la lista (sin esperar a soltar)
+                            if (!fired && offsetY.value > w * 0.05f) {
+                                fired = true
+                                swipeDown()
+                            }
                         }
                     }
                 }
@@ -704,6 +724,53 @@ private fun QueuePanel(player: Player, accent: Color) {
                     Icon(Icons.Filled.MusicNote, null, tint = accent, modifier = Modifier.size(18.dp))
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TapeBar(
+    cover: Bitmap?,
+    title: String,
+    artist: String,
+    progress: Float,
+    playing: Boolean,
+    accent: Color,
+    onAccent: Color,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp)
+            .shadow(10.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.12f))
+            .clickable(onClick = onOpen)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(50.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center) {
+                if (cover != null) Image(remember(cover) { cover.asImageBitmap() }, null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.6f))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (artist.isNotEmpty()) Text(artist, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(accent).clickable(onClick = onPlayPause),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Reproducir/pausar", tint = onAccent)
+            }
+            IconButton(onClick = onNext) { Icon(Icons.Filled.SkipNext, "Siguiente", tint = Color.White) }
+        }
+        Box(Modifier.fillMaxWidth().height(3.dp).background(Color.White.copy(alpha = 0.15f))) {
+            Box(Modifier.fillMaxWidth(progress).height(3.dp).background(accent))
         }
     }
 }

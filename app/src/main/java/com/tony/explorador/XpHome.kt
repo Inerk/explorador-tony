@@ -75,13 +75,20 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private data class DesktopItem(val label: String, val icon: ImageVector, val tint: Color, val action: () -> Unit)
+private data class DesktopItem(val label: String, val icon: XpIconKind, val action: () -> Unit)
+
+/** Lo que el escritorio recuerda aunque entres a otras pantallas (posición de la ventana, etc.). */
+object DesktopState {
+    var playerOffset by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
+    var playerMinimized by mutableStateOf(false)
+}
 
 @Composable
 fun XpDesktop(
     roots: List<StorageRoot>,
     onOpenFolder: (File) -> Unit,
     onOpenMusic: () -> Unit,
+    onOpenMyPc: () -> Unit,
     onCheckUpdates: () -> Unit,
     onChooseTheme: () -> Unit,
     versionName: String,
@@ -89,7 +96,6 @@ fun XpDesktop(
     onOpenPlayer: () -> Unit,
 ) {
     var startOpen by remember { mutableStateOf(false) }
-    var playerMinimized by remember { mutableStateOf(false) }
     var clockOpen by remember { mutableStateOf(false) }
     val tick = observePlayer(player)
     val hasMusic = player != null && player.mediaItemCount > 0 && tick >= 0
@@ -98,14 +104,14 @@ fun XpDesktop(
     val internal = roots.first().file
     fun dir(name: String) = File(internal, name)
     val items = buildList {
-        add(DesktopItem("Mi PC", Icons.Filled.Computer, Color(0xFFDDE7F7)) { onOpenFolder(internal) })
-        roots.drop(1).forEach { r -> add(DesktopItem(r.name, Icons.Filled.SdStorage, Color(0xFFE6E6E6)) { onOpenFolder(r.file) }) }
-        add(DesktopItem("Mis documentos", Icons.Filled.Description, Color(0xFFFFE08A)) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
-        add(DesktopItem("Mi música", Icons.Filled.LibraryMusic, Color(0xFFFF9C4A)) { onOpenMusic() })
-        add(DesktopItem("Mis imágenes", Icons.Filled.PhotoLibrary, Color(0xFF8FD16A)) { onOpenFolder(dir(Environment.DIRECTORY_PICTURES)) })
-        add(DesktopItem("Cámara", Icons.Filled.PhotoCamera, Color(0xFFB9C7D9)) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
-        add(DesktopItem("Mis videos", Icons.Filled.Movie, Color(0xFFC79BEA)) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
-        add(DesktopItem("Descargas", Icons.Filled.Download, Color(0xFF7FC4F5)) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
+        add(DesktopItem("Mi PC", XpIconKind.COMPUTER) { onOpenMyPc() })
+        roots.drop(1).forEach { r -> add(DesktopItem(r.name, XpIconKind.SD_CARD) { onOpenFolder(r.file) }) }
+        add(DesktopItem("Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
+        add(DesktopItem("Mi música", XpIconKind.MUSIC) { onOpenMusic() })
+        add(DesktopItem("Mis imágenes", XpIconKind.PICTURES) { onOpenFolder(dir(Environment.DIRECTORY_PICTURES)) })
+        add(DesktopItem("Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
+        add(DesktopItem("Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
+        add(DesktopItem("Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -124,17 +130,17 @@ fun XpDesktop(
                 onStart = { startOpen = !startOpen },
                 startOpen = startOpen,
                 musicTitle = if (hasMusic) player?.mediaMetadata?.title?.toString() ?: "Música" else null,
-                musicWindowOpen = !playerMinimized,
-                onMusicTask = { playerMinimized = !playerMinimized },
+                musicWindowOpen = !DesktopState.playerMinimized,
+                onMusicTask = { DesktopState.playerMinimized = !DesktopState.playerMinimized },
                 onClock = { clockOpen = !clockOpen },
             )
         }
 
-        if (hasMusic && !playerMinimized && player != null) {
+        if (hasMusic && !DesktopState.playerMinimized && player != null) {
             XpMediaWindow(
                 player = player,
                 onOpen = onOpenPlayer,
-                onMinimize = { playerMinimized = true },
+                onMinimize = { DesktopState.playerMinimized = true },
                 onClose = { player.stop(); player.clearMediaItems() },
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 50.dp)
             )
@@ -164,7 +170,7 @@ fun XpDesktop(
                     Triple("Videos", Icons.Filled.Movie) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) },
                 ),
                 places = listOf(
-                    Triple("Mi PC", Icons.Filled.Computer) { onOpenFolder(internal) },
+                    Triple("Mi PC", Icons.Filled.Computer) { onOpenMyPc() },
                     Triple("Mis documentos", Icons.Filled.Description) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) },
                     Triple("Descargas", Icons.Filled.Download) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) },
                     Triple("Tema", Icons.Filled.Palette) { onChooseTheme() },
@@ -216,17 +222,8 @@ private fun DesktopIcon(item: DesktopItem) {
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = item.action).padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            Modifier.size(52.dp)
-                .shadow(4.dp, RoundedCornerShape(10.dp))
-                .clip(RoundedCornerShape(10.dp))
-                .background(Brush.verticalGradient(listOf(Color.White, item.tint)))
-                .border(1.dp, Color.White.copy(alpha = 0.8f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(item.icon, null, tint = item.tint.darker(), modifier = Modifier.size(34.dp))
-        }
-        Spacer(Modifier.height(4.dp))
+        XpIcon(item.icon, 54.dp)
+        Spacer(Modifier.height(2.dp))
         Text(
             item.label,
             style = TextStyle(

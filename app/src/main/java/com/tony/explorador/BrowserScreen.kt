@@ -121,6 +121,9 @@ fun BrowserScreen(
     onOpenLibrary: () -> Unit,
     onChooseTheme: () -> Unit,
     homeSignal: Int,
+    onOpenMyPc: () -> Unit,
+    folderRequest: File?,
+    onFolderHandled: () -> Unit,
     versionName: String,
     onCheckUpdates: () -> Unit,
 ) {
@@ -173,6 +176,7 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(homeSignal) { if (homeSignal > 0) goTo(null) }
+    LaunchedEffect(folderRequest) { folderRequest?.let { goTo(it); onFolderHandled() } }
 
     fun openFile(file: File, siblings: List<File>) {
         when (file.kind()) {
@@ -218,6 +222,7 @@ fun BrowserScreen(
             roots = roots,
             onOpenFolder = { goTo(it) },
             onOpenMusic = onOpenLibrary,
+            onOpenMyPc = onOpenMyPc,
             onCheckUpdates = onCheckUpdates,
             onChooseTheme = onChooseTheme,
             versionName = versionName,
