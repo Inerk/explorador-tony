@@ -130,13 +130,6 @@ fun MyComputerScreen(
     onHome: () -> Unit,
 ) {
     BackHandler(onBack = onClose)
-    val context = LocalContext.current
-    val roots = remember { storageRoots(context) }
-    val info = remember { systemInfo(context) }
-    val stats by produceState<PcStats?>(null) { value = loadPcStats(context) }
-    val internal = roots.first().file
-    fun dir(name: String) = File(internal, name)
-
     Column(Modifier.fillMaxSize().background(Color.White).pointerInput(Unit) {}) {
         // Barra de título XP
         Box(Modifier.fillMaxWidth().background(XpColors.titleBrush).statusBarsPadding()) {
@@ -149,6 +142,21 @@ fun MyComputerScreen(
             }
         }
 
+        MyComputerContent(onOpenFolder, onOpenMusic)
+    }
+}
+
+/** Contenido de Mi PC (sirve igual en ventana o en pantalla completa). */
+@Composable
+fun MyComputerContent(onOpenFolder: (File) -> Unit, onOpenMusic: () -> Unit) {
+    val context = LocalContext.current
+    val roots = remember { storageRoots(context) }
+    val info = remember { systemInfo(context) }
+    val stats by produceState<PcStats?>(null) { value = loadPcStats(context) }
+    val internal = roots.first().file
+    fun dir(name: String) = File(internal, name)
+
+    Box(Modifier.fillMaxSize().background(Color.White)) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             // Panel azul de la izquierda (aquí arriba): información del sistema
             item {

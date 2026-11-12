@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -79,7 +81,6 @@ private object Wmp {
 fun XpMediaWindow(
     player: Player,
     onOpen: () -> Unit,
-    onMinimize: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -91,50 +92,21 @@ fun XpMediaWindow(
     val duration = player.duration.coerceAtLeast(0L)
     val position = player.currentPosition + tick * 0L
     val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-    val windowShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 6.dp, bottomEnd = 6.dp)
-    val off = DesktopState.playerOffset
-
-    Column(
-        modifier
-            .offset { IntOffset(off.x.roundToInt(), off.y.roundToInt()) }
-            .width(310.dp)
-            .shadow(14.dp, windowShape)
-            .clip(windowShape)
-            .background(XpColors.TitleBottom)
-            .padding(start = 3.dp, end = 3.dp, bottom = 3.dp)
-    ) {
-        // Barra de título (de aquí se arrastra)
-        Row(
-            Modifier.fillMaxWidth().height(30.dp)
-                .background(XpColors.titleBrush)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, amount ->
-                        change.consume()
-                        DesktopState.playerOffset += amount
-                    }
-                }
-                .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onOpen() }) }
-                .padding(start = 6.dp, end = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    XpWindowFrame(
+        state = DesktopState.player,
+        title = "Reproductor multimedia",
+        icon = {
             Box(
                 Modifier.size(18.dp).clip(CircleShape)
                     .background(Brush.radialGradient(listOf(Color(0xFFFFB04A), Color(0xFFE86A0A)))),
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(13.dp)) }
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "Reproductor multimedia", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
-            )
-            CaptionButton("_", Brush.verticalGradient(listOf(Color(0xFF5C93F7), Color(0xFF2D63D9))), onMinimize)
-            Spacer(Modifier.width(2.dp))
-            CaptionButton("□", Brush.verticalGradient(listOf(Color(0xFF5C93F7), Color(0xFF2D63D9))), onOpen)
-            Spacer(Modifier.width(2.dp))
-            CaptionButton("✕", Brush.verticalGradient(listOf(Color(0xFFE88C6F), Color(0xFFC4401E))), onClose)
-        }
-
-        Column(Modifier.fillMaxWidth().background(Wmp.Body)) {
+        },
+        onClose = onClose,
+        onMaximize = onOpen,
+        modifier = modifier,
+    ) {
+        Column(Modifier.fillMaxSize().background(Wmp.Body)) {
             // Franja "Reproduciendo ahora" con el título corriendo
             Row(
                 Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.35f)).padding(horizontal = 10.dp, vertical = 5.dp),
@@ -151,12 +123,12 @@ fun XpMediaWindow(
 
             // Zona de visualización: portada + barras de ecualizador
             Row(
-                Modifier.fillMaxWidth().height(112.dp).padding(8.dp)
+                Modifier.fillMaxWidth().weight(1f).padding(8.dp)
                     .clip(RoundedCornerShape(4.dp)).background(Color.Black)
                     .border(1.dp, Color(0xFF2E4A78), RoundedCornerShape(4.dp))
                     .clickable(onClick = onOpen)
             ) {
-                Box(Modifier.size(96.dp).padding(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF14233F)),
+                Box(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).padding(6.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF14233F)),
                     contentAlignment = Alignment.Center) {
                     val cover = info?.cover
                     if (cover != null) Image(remember(cover) { cover.asImageBitmap() }, null,
@@ -329,16 +301,3 @@ private fun VolumeSlider(player: Player) {
     }
 }
 
-@Composable
-private fun CaptionButton(label: String, brush: Brush, onClick: () -> Unit) {
-    Box(
-        Modifier.size(22.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(brush)
-            .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(3.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-    }
-}

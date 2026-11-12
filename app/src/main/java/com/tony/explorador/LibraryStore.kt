@@ -57,6 +57,21 @@ object LibraryStore {
 
     var theme by mutableStateOf(AppTheme.XP)
         private set
+    var userName by mutableStateOf("Tony")
+        private set
+    /** Imagen de usuario: 0..n = prediseñada, -1 = foto propia. */
+    var avatar by mutableStateOf(0)
+        private set
+    var avatarVersion by mutableStateOf(0)
+        private set
+    var musicSkin by mutableStateOf(MusicSkin.WALKMAN)
+        private set
+
+    val avatarFile get() = File(appContext.filesDir, "avatar.jpg")
+
+    fun changeUserName(name: String) { userName = name; save() }
+    fun changeAvatar(index: Int) { avatar = index; avatarVersion++; save() }
+    fun changeMusicSkin(s: MusicSkin) { musicSkin = s; save() }
 
     private val dataFile get() = File(appContext.filesDir, "biblioteca.json")
     private val songsCache get() = File(appContext.filesDir, "canciones.json")
@@ -250,6 +265,9 @@ object LibraryStore {
             put("counts", JSONObject(playCounts.toMap()))
             put("last", JSONObject(lastPlayed.toMap()))
             put("theme", theme.name)
+            put("user", userName)
+            put("avatar", avatar)
+            put("musicSkin", musicSkin.name)
             put("playlists", JSONArray().apply {
                 playlists.forEach { p ->
                     put(JSONObject().put("id", p.id).put("name", p.name).put("paths", JSONArray(p.paths)))
@@ -267,6 +285,9 @@ object LibraryStore {
         o.optJSONObject("counts")?.let { m -> m.keys().forEach { k -> playCounts[k] = m.getInt(k) } }
         o.optJSONObject("last")?.let { m -> m.keys().forEach { k -> lastPlayed[k] = m.getLong(k) } }
         o.optString("theme").let { t -> AppTheme.entries.firstOrNull { it.name == t }?.let { theme = it } }
+        o.optString("user").takeIf { it.isNotBlank() }?.let { userName = it }
+        avatar = o.optInt("avatar", 0)
+        o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }
         o.optJSONArray("playlists")?.let { a ->
             for (i in 0 until a.length()) {
                 val p = a.getJSONObject(i)

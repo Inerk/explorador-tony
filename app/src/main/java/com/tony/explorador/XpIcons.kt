@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -33,6 +33,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.DRIVE -> drawDrive(Color(0xFFDADDE3), Color(0xFF8F96A3))
             XpIconKind.SD_CARD -> drawSdCard()
             XpIconKind.FOLDER -> drawFolder()
+            XpIconKind.SETTINGS -> drawControlPanel()
         }
     }
 }
@@ -214,4 +215,23 @@ private fun DrawScope.drawCamera() {
     drawCircle(Brush.radialGradient(listOf(Color(0xFF5FA8FF), Color(0xFF0A2A5E)), center = c, radius = w * 0.16f), w * 0.16f, c)
     drawCircle(Color.White.copy(alpha = 0.7f), w * 0.04f, Offset(c.x - w * 0.06f, c.y - w * 0.06f))
     drawCircle(Color(0xFFFFD84D), w * 0.035f, Offset(w * 0.80f, h * 0.38f))
+}
+
+private fun DrawScope.drawControlPanel() {
+    val w = size.width
+    val h = size.height
+    // ventanita con controles deslizantes de colores
+    drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFF4F6FB), Color(0xFFC9D3E6))),
+        Offset(w * 0.08f, h * 0.12f), Size(w * 0.84f, h * 0.76f), CornerRadius(w * 0.06f))
+    drawRoundRect(Color(0xFF5E7AA8), Offset(w * 0.08f, h * 0.12f), Size(w * 0.84f, h * 0.76f), CornerRadius(w * 0.06f), style = Stroke(w * 0.02f))
+    drawRect(Brush.horizontalGradient(listOf(Color(0xFF3D8BFF), Color(0xFF0042B8))), Offset(w * 0.08f, h * 0.12f), Size(w * 0.84f, h * 0.12f))
+    val colors = listOf(Color(0xFFE53935), Color(0xFF43A047), Color(0xFF1E88E5))
+    val knobs = listOf(0.62f, 0.38f, 0.72f)
+    colors.forEachIndexed { i, c ->
+        val y = h * (0.38f + i * 0.16f)
+        drawLine(Color(0xFF8A96AC), Offset(w * 0.18f, y), Offset(w * 0.82f, y), strokeWidth = w * 0.03f, cap = StrokeCap.Round)
+        drawLine(c, Offset(w * 0.18f, y), Offset(w * (0.18f + 0.64f * knobs[i]), y), strokeWidth = w * 0.03f, cap = StrokeCap.Round)
+        drawCircle(Color.White, w * 0.055f, Offset(w * (0.18f + 0.64f * knobs[i]), y))
+        drawCircle(c, w * 0.055f, Offset(w * (0.18f + 0.64f * knobs[i]), y), style = Stroke(w * 0.02f))
+    }
 }

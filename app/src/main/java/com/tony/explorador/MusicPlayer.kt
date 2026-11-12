@@ -419,14 +419,24 @@ fun MusicPlayerScreen(
                         modifier = Modifier.size(76.dp)
                             .shadow(18.dp, CircleShape, ambientColor = accent, spotColor = accent)
                             .clip(CircleShape)
-                            .background(accent)
+                            .background(
+                                if (LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER)
+                                    Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), accent, Color(0xFF0B2E6E)))
+                                else Brush.linearGradient(listOf(accent, accent))
+                            )
                             .clickable { if (player.isPlaying) player.pause() else player.play() },
                         contentAlignment = Alignment.Center
                     ) {
+                        if (LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER) {
+                            // reflejo de cristal
+                            Box(Modifier.align(Alignment.TopCenter).padding(top = 6.dp).size(46.dp, 20.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent))))
+                        }
                         Icon(
                             if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = "Reproducir/pausar",
-                            tint = onAccent,
+                            tint = if (LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER) Color.White else onAccent,
                             modifier = Modifier.size(42.dp)
                         )
                     }

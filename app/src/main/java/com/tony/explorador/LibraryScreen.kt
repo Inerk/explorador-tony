@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
@@ -88,27 +89,31 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 
-/** Colores retro tipo reproductor portátil de los 2000. */
+/** Colores de la sección de música; cambian con el tema elegido (Walkman o Media Player). */
 private object Retro {
-    val Bg = Color(0xFF111114)
-    val Panel = Color(0xFF1C1C22)
-    val Orange = Color(0xFFFF7A00)
-    val OrangeLight = Color(0xFFFFA347)
-    val Text = Color(0xFFF2F2F2)
-    val SubText = Color(0xFF9A9AA5)
-    val MetalTop = Color(0xFFE9EBEF)
-    val MetalMid = Color(0xFFB9BDC6)
-    val MetalBottom = Color(0xFF8C919C)
-    val metal = Brush.verticalGradient(listOf(MetalTop, MetalMid, MetalBottom))
-    // colores de cada sección, como los modelos de colores
-    val Red = Color(0xFFE53935)
-    val Blue = Color(0xFF1E88E5)
-    val Lime = Color(0xFF7CB342)
-    val Pink = Color(0xFFD81B60)
-    val Yellow = Color(0xFFFDD835)
-    val Teal = Color(0xFF00ACC1)
-    val Purple = Color(0xFF8E24AA)
-    val Gray = Color(0xFF78909C)
+    private val wmp get() = LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER
+    val isWmp get() = wmp
+    val Bg get() = if (wmp) Color(0xFF0B1630) else Color(0xFF111114)
+    val Panel get() = if (wmp) Color(0xFF14284F) else Color(0xFF1C1C22)
+    val Orange get() = if (wmp) Color(0xFF3FA9F5) else Color(0xFFFF7A00)
+    val OrangeLight get() = if (wmp) Color(0xFF9CDBFF) else Color(0xFFFFA347)
+    val OnAccent get() = if (wmp) Color.White else Color.Black
+    val Text get() = Color(0xFFF2F2F2)
+    val SubText get() = if (wmp) Color(0xFF8FA6CC) else Color(0xFF9A9AA5)
+    val HeaderText get() = if (wmp) Color.White else Color(0xFF1E1E24)
+    val HeaderIcon get() = if (wmp) Color(0xFFCFE3FF) else Color(0xFF2B2B33)
+    val metal: Brush get() = if (wmp)
+        Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
+    else Brush.verticalGradient(listOf(Color(0xFFE9EBEF), Color(0xFFB9BDC6), Color(0xFF8C919C)))
+    // colores de cada sección
+    val Red get() = if (wmp) Color(0xFF5B8DEF) else Color(0xFFE53935)
+    val Blue get() = if (wmp) Color(0xFF2D7DD2) else Color(0xFF1E88E5)
+    val Lime get() = if (wmp) Color(0xFF2FBF9A) else Color(0xFF7CB342)
+    val Pink get() = if (wmp) Color(0xFF8E6CEF) else Color(0xFFD81B60)
+    val Yellow get() = if (wmp) Color(0xFFF2C94C) else Color(0xFFFDD835)
+    val Teal get() = if (wmp) Color(0xFF2EC4E6) else Color(0xFF00ACC1)
+    val Purple get() = if (wmp) Color(0xFF7B61FF) else Color(0xFF8E24AA)
+    val Gray get() = if (wmp) Color(0xFF6F86A8) else Color(0xFF78909C)
 }
 
 private sealed interface LibPage {
@@ -175,11 +180,11 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { pop() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = Color(0xFF2B2B33))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = Retro.HeaderIcon)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        pageTitle(page), color = Color(0xFF1E1E24), fontWeight = FontWeight.Black,
+                        pageTitle(page), color = Retro.HeaderText, fontWeight = FontWeight.Black,
                         fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     Text(
@@ -187,9 +192,9 @@ fun LibraryScreen(
                         fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
                     )
                 }
-                HomeButton(onHome, dark = false)
+                HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
-                    Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Color(0xFF2B2B33))
+                    Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.HeaderIcon)
                 }
             }
         }
@@ -276,6 +281,8 @@ private fun pageTitle(p: LibPage): String = when (p) {
 
 @Composable
 private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
+    var skinDialog by remember { mutableStateOf(false) }
+    if (skinDialog) MusicSkinDialog(onDismiss = { skinDialog = false })
     data class Entry(val label: String, val sub: String, val icon: ImageVector, val color: Color, val page: LibPage)
     val entries = listOf(
         Entry("Canciones", "$songCount", Icons.Filled.MusicNote, Retro.Orange, LibPage.Songs),
@@ -285,6 +292,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
+        Entry("Tema del reproductor", if (Retro.isWmp) "Media Player" else "Walkman", Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(entries) { e ->
@@ -293,16 +301,32 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
                     .clip(RoundedCornerShape(12.dp))
                     .background(Retro.Panel)
                     .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-                    .clickable { onOpen(e.page) },
+                    .clickable { if (e.label == "Tema del reproductor") skinDialog = true else onOpen(e.page) },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // bloque de color a la izquierda
-                Box(
-                    Modifier.width(64.dp).fillMaxHeight()
-                        .background(Brush.verticalGradient(listOf(e.color.copy(alpha = 0.95f), e.color.copy(alpha = 0.65f)))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(e.icon, null, tint = if (e.color == Retro.Yellow) Color(0xFF3A2E00) else Color.White, modifier = Modifier.size(30.dp))
+                if (Retro.isWmp) {
+                    Box(Modifier.width(64.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier.size(44.dp).clip(CircleShape)
+                                .background(Brush.radialGradient(listOf(e.color.copy(alpha = 0.6f).compositeOverWhite(), e.color, e.color.copy(alpha = 0.9f).darken())))
+                                .border(1.5.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.9f), e.color.darken())), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            // brillo de cristal
+                            Box(Modifier.align(Alignment.TopCenter).padding(top = 3.dp).size(28.dp, 12.dp).clip(RoundedCornerShape(50))
+                                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.65f), Color.Transparent))))
+                            Icon(e.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
+                    }
+                } else {
+                    Box(
+                        Modifier.width(64.dp).fillMaxHeight()
+                            .background(Brush.verticalGradient(listOf(e.color.copy(alpha = 0.95f), e.color.copy(alpha = 0.65f)))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(e.icon, null, tint = if (e.color == Retro.Yellow) Color(0xFF3A2E00) else Color.White, modifier = Modifier.size(30.dp))
+                    }
                 }
                 Text(e.label, color = Retro.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
@@ -326,9 +350,9 @@ private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Uni
                 .padding(horizontal = 18.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.Black)
+            Icon(Icons.Filled.PlayArrow, null, tint = Retro.OnAccent)
             Spacer(Modifier.width(4.dp))
-            Text("Reproducir", color = Color.Black, fontWeight = FontWeight.Bold)
+            Text("Reproducir", color = Retro.OnAccent, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(10.dp))
         Row(
@@ -742,9 +766,9 @@ private fun RetroButton(label: String, icon: ImageVector, modifier: Modifier = M
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
-        Icon(icon, null, tint = Color.Black)
+        Icon(icon, null, tint = Retro.OnAccent)
         Spacer(Modifier.width(8.dp))
-        Text(label, color = Color.Black, fontWeight = FontWeight.Bold)
+        Text(label, color = Retro.OnAccent, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -759,3 +783,8 @@ fun NameInputDialog(title: String, initial: String, onDismiss: () -> Unit, onCon
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
     )
 }
+
+private fun Color.darken(f: Float = 0.55f) = Color(red * f, green * f, blue * f, alpha)
+private fun Color.compositeOverWhite() = Color(
+    red * alpha + (1 - alpha), green * alpha + (1 - alpha), blue * alpha + (1 - alpha), 1f
+)

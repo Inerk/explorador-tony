@@ -42,6 +42,9 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -79,8 +82,9 @@ private data class DesktopItem(val label: String, val icon: XpIconKind, val acti
 
 /** Lo que el escritorio recuerda aunque entres a otras pantallas (posición de la ventana, etc.). */
 object DesktopState {
-    var playerOffset by mutableStateOf(androidx.compose.ui.geometry.Offset.Zero)
-    var playerMinimized by mutableStateOf(false)
+    val player = WinState(310.dp, 340.dp, minWidth = 250.dp, minHeight = 270.dp)
+    val myPc = WinState(330.dp, 440.dp, minWidth = 240.dp, minHeight = 220.dp)
+    val settings = WinState(320.dp, 420.dp, minWidth = 240.dp, minHeight = 220.dp)
 }
 
 @Composable
@@ -88,7 +92,7 @@ fun XpDesktop(
     roots: List<StorageRoot>,
     onOpenFolder: (File) -> Unit,
     onOpenMusic: () -> Unit,
-    onOpenMyPc: () -> Unit,
+    onOpenGallery: () -> Unit,
     onCheckUpdates: () -> Unit,
     onChooseTheme: () -> Unit,
     versionName: String,
@@ -97,21 +101,39 @@ fun XpDesktop(
 ) {
     var startOpen by remember { mutableStateOf(false) }
     var clockOpen by remember { mutableStateOf(false) }
+    var accountOpen by remember { mutableStateOf(false) }
     val tick = observePlayer(player)
     val hasMusic = player != null && player.mediaItemCount > 0 && tick >= 0
     BackHandler(enabled = startOpen) { startOpen = false }
+    val myPc = DesktopState.myPc
+    val settings = DesktopState.settings
+    BackHandler(enabled = !startOpen && (myPc.open && !myPc.minimized || settings.open && !settings.minimized)) {
+        if (settings.open && !settings.minimized) settings.open = false else myPc.open = false
+    }
+
+    fun showWindow(w: WinState) { w.open = true; w.minimized = false }
 
     val internal = roots.first().file
     fun dir(name: String) = File(internal, name)
     val items = buildList {
-        add(DesktopItem("Mi PC", XpIconKind.COMPUTER) { onOpenMyPc() })
+        add(DesktopItem("Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) })
         roots.drop(1).forEach { r -> add(DesktopItem(r.name, XpIconKind.SD_CARD) { onOpenFolder(r.file) }) }
         add(DesktopItem("Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
         add(DesktopItem("Mi música", XpIconKind.MUSIC) { onOpenMusic() })
-        add(DesktopItem("Mis imágenes", XpIconKind.PICTURES) { onOpenFolder(dir(Environment.DIRECTORY_PICTURES)) })
+        add(DesktopItem("Mis imágenes", XpIconKind.PICTURES) { onOpenGallery() })
         add(DesktopItem("Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
         add(DesktopItem("Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
         add(DesktopItem("Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
+        add(DesktopItem("Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
+    }
+
+    // Botones de la barra de tareas (uno por ventana abierta)
+    val tasks = buildList {
+        if (myPc.open) add(TaskButton("Mi PC", XpIconKind.COMPUTER, !myPc.minimized) { myPc.minimized = !myPc.minimized })
+        if (settings.open) add(TaskButton("Panel de control", XpIconKind.SETTINGS, !settings.minimized) { settings.minimized = !settings.minimized })
+        if (hasMusic) add(TaskButton(player?.mediaMetadata?.title?.toString() ?: "Música", XpIconKind.MUSIC, !DesktopState.player.minimized) {
+            DesktopState.player.minimized = !DesktopState.player.minimized
+        })
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -129,21 +151,52 @@ fun XpDesktop(
             Taskbar(
                 onStart = { startOpen = !startOpen },
                 startOpen = startOpen,
-                musicTitle = if (hasMusic) player?.mediaMetadata?.title?.toString() ?: "Música" else null,
-                musicWindowOpen = !DesktopState.playerMinimized,
-                onMusicTask = { DesktopState.playerMinimized = !DesktopState.playerMinimized },
+                tasks = tasks,
                 onClock = { clockOpen = !clockOpen },
             )
         }
 
-        if (hasMusic && !DesktopState.playerMinimized && player != null) {
-            XpMediaWindow(
-                player = player,
-                onOpen = onOpenPlayer,
-                onMinimize = { DesktopState.playerMinimized = true },
-                onClose = { player.stop(); player.clearMediaItems() },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 50.dp)
-            )
+        // Capa de ventanas (arriba de la barra de tareas)
+        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = 42.dp)) {
+            if (myPc.open && !myPc.minimized) {
+                XpWindowFrame(
+                    state = myPc,
+                    title = "Mi PC",
+                    icon = { XpIcon(XpIconKind.COMPUTER, 18.dp) },
+                    onClose = { myPc.open = false; myPc.maximized = false },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = if (myPc.maximized) 0.dp else 40.dp),
+                ) {
+                    MyComputerContent(
+                        onOpenFolder = { f -> myPc.minimized = true; onOpenFolder(f) },
+                        onOpenMusic = { myPc.minimized = true; onOpenMusic() },
+                    )
+                }
+            }
+            if (settings.open && !settings.minimized) {
+                XpWindowFrame(
+                    state = settings,
+                    title = "Panel de control",
+                    icon = { XpIcon(XpIconKind.SETTINGS, 18.dp) },
+                    onClose = { settings.open = false; settings.maximized = false },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = if (settings.maximized) 0.dp else 60.dp),
+                ) {
+                    ControlPanelContent(
+                        versionName = versionName,
+                        onTheme = onChooseTheme,
+                        onAccount = { accountOpen = true },
+                        onMusicFolders = onOpenMusic,
+                        onUpdates = onCheckUpdates,
+                    )
+                }
+            }
+            if (hasMusic && !DesktopState.player.minimized && player != null) {
+                XpMediaWindow(
+                    player = player,
+                    onOpen = onOpenPlayer,
+                    onClose = { player.stop(); player.clearMediaItems() },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
+                )
+            }
         }
 
         if (clockOpen) {
@@ -163,24 +216,31 @@ fun XpDesktop(
             )
             StartMenu(
                 modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(bottom = 42.dp),
+                onUserClick = { startOpen = false; accountOpen = true },
                 entries = listOf(
                     Triple("Explorador de archivos", Icons.Filled.FolderOpen) { onOpenFolder(internal) },
                     Triple("Música", Icons.Filled.LibraryMusic) { onOpenMusic() },
-                    Triple("Imágenes", Icons.Filled.PhotoLibrary) { onOpenFolder(dir(Environment.DIRECTORY_PICTURES)) },
+                    Triple("Imágenes", Icons.Filled.PhotoLibrary) { onOpenGallery() },
                     Triple("Videos", Icons.Filled.Movie) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) },
                 ),
                 places = listOf(
-                    Triple("Mi PC", Icons.Filled.Computer) { onOpenMyPc() },
+                    Triple("Mi PC", Icons.Filled.Computer) { showWindow(myPc) },
                     Triple("Mis documentos", Icons.Filled.Description) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) },
-                    Triple("Descargas", Icons.Filled.Download) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) },
+                    Triple("Panel de control", Icons.Filled.Settings) { showWindow(settings) },
                     Triple("Tema", Icons.Filled.Palette) { onChooseTheme() },
                     Triple("Actualizar ($versionName)", Icons.Filled.SystemUpdate) { onCheckUpdates() },
                 ),
                 onPicked = { startOpen = false }
             )
         }
+
+        if (accountOpen) {
+            UserAccountDialog(onDismiss = { accountOpen = false })
+        }
     }
 }
+
+data class TaskButton(val title: String, val icon: XpIconKind, val active: Boolean, val onClick: () -> Unit)
 
 /** Fondo original: cielo azul, nubes suaves y una colina verde. */
 @Composable
@@ -244,9 +304,7 @@ private fun Color.darker(): Color = Color(red * 0.45f, green * 0.45f, blue * 0.4
 private fun Taskbar(
     onStart: () -> Unit,
     startOpen: Boolean,
-    musicTitle: String?,
-    musicWindowOpen: Boolean,
-    onMusicTask: () -> Unit,
+    tasks: List<TaskButton>,
     onClock: () -> Unit,
 ) {
     Row(
@@ -277,24 +335,28 @@ private fun Taskbar(
                 )
             )
         }
-        // Botón de la ventana de música en la barra de tareas
-        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 6.dp, vertical = 5.dp)) {
-            if (musicTitle != null) {
+        // Botones de las ventanas abiertas
+        Row(
+            Modifier.weight(1f).fillMaxHeight().padding(horizontal = 4.dp, vertical = 5.dp)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            tasks.forEach { t ->
                 Row(
-                    Modifier.widthIn(max = 180.dp).fillMaxHeight()
+                    Modifier.padding(end = 3.dp).widthIn(max = 150.dp).fillMaxHeight()
                         .clip(RoundedCornerShape(3.dp))
                         .background(
-                            if (musicWindowOpen) Brush.verticalGradient(listOf(Color(0xFF1E4FB8), Color(0xFF2A62D4)))
+                            if (t.active) Brush.verticalGradient(listOf(Color(0xFF1E4FB8), Color(0xFF2A62D4)))
                             else Brush.verticalGradient(listOf(Color(0xFF5A9CF8), Color(0xFF3C7FEA)))
                         )
                         .border(1.dp, Color(0xFF1A3F94), RoundedCornerShape(3.dp))
-                        .clickable(onClick = onMusicTask)
-                        .padding(horizontal = 8.dp),
+                        .clickable(onClick = t.onClick)
+                        .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.MusicNote, null, tint = Color(0xFFFFC94D), modifier = Modifier.size(16.dp))
+                    XpIcon(t.icon, 16.dp)
                     Spacer(Modifier.width(4.dp))
-                    Text(musicTitle, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(t.title, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -315,6 +377,7 @@ private fun StartMenu(
     entries: List<Triple<String, ImageVector, () -> Unit>>,
     places: List<Triple<String, ImageVector, () -> Unit>>,
     onPicked: () -> Unit,
+    onUserClick: () -> Unit,
 ) {
     Column(
         modifier
@@ -324,19 +387,14 @@ private fun StartMenu(
             .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
             .clickable(enabled = false) {}
     ) {
-        // Encabezado con usuario
+        // Encabezado con usuario (tócalo para cambiar foto y nombre)
         Row(
-            Modifier.fillMaxWidth().background(XpColors.titleBrush).padding(10.dp),
+            Modifier.fillMaxWidth().background(XpColors.titleBrush).clickable(onClick = onUserClick).padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFFFFD27A), Color(0xFFE88A1A))))
-                    .border(2.dp, Color.White, RoundedCornerShape(6.dp)),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Filled.Person, null, tint = Color.White, modifier = Modifier.size(32.dp)) }
+            UserAvatar(46.dp)
             Spacer(Modifier.width(10.dp))
-            Text("Tony", style = TextStyle(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+            Text(LibraryStore.userName, style = TextStyle(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                 shadow = Shadow(Color.Black.copy(alpha = 0.5f), Offset(1f, 1f), 2f)))
         }
         Box(Modifier.fillMaxWidth().height(2.dp).background(XpColors.StartMenuOrange))

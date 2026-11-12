@@ -113,6 +113,7 @@ sealed interface Overlay {
     data object Library : Overlay
     data object CoverFlow : Overlay
     data object MyPc : Overlay
+    data object Gallery : Overlay
 }
 
 @Composable
@@ -193,7 +194,7 @@ fun AppRoot() {
             onOpenLibrary = { open(Overlay.Library) },
             onChooseTheme = { choosingTheme = true },
             homeSignal = homeSignal,
-            onOpenMyPc = { open(Overlay.MyPc) },
+            onOpenGallery = { open(Overlay.Gallery) },
             folderRequest = folderRequest,
             onFolderHandled = { folderRequest = null },
             versionName = versionName,
@@ -221,6 +222,12 @@ fun AppRoot() {
                             overlays.remove(o)
                             open(Overlay.Music)
                         },
+                        onClose = { overlays.remove(o) },
+                        onHome = { goHome() }
+                    )
+                    Overlay.Gallery -> GalleryScreen(
+                        onOpenImages = { files, index -> open(Overlay.Images(files, index)) },
+                        onOpenVideo = { files, index -> controller?.pause(); open(Overlay.Video(files, index)) },
                         onClose = { overlays.remove(o) },
                         onHome = { goHome() }
                     )
