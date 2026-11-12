@@ -120,6 +120,7 @@ fun BrowserScreen(
     onOpenMusicPlayer: () -> Unit,
     onOpenLibrary: () -> Unit,
     onChooseTheme: () -> Unit,
+    homeSignal: Int,
     versionName: String,
     onCheckUpdates: () -> Unit,
 ) {
@@ -170,6 +171,8 @@ fun BrowserScreen(
         searchActive = false
         query = ""
     }
+
+    LaunchedEffect(homeSignal) { if (homeSignal > 0) goTo(null) }
 
     fun openFile(file: File, siblings: List<File>) {
         when (file.kind()) {
@@ -301,6 +304,9 @@ fun BrowserScreen(
                         )
                     },
                     actions = {
+                        if (currentDir != null) {
+                            IconButton(onClick = { goTo(null) }) { Icon(Icons.Filled.Home, "Inicio") }
+                        }
                         IconButton(onClick = { searchActive = true }) { Icon(Icons.Filled.Search, "Buscar") }
                         if (currentDir != null) {
                             var sortMenu by remember { mutableStateOf(false) }

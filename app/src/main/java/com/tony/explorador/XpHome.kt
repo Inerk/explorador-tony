@@ -90,6 +90,7 @@ fun XpDesktop(
 ) {
     var startOpen by remember { mutableStateOf(false) }
     var playerMinimized by remember { mutableStateOf(false) }
+    var clockOpen by remember { mutableStateOf(false) }
     val tick = observePlayer(player)
     val hasMusic = player != null && player.mediaItemCount > 0 && tick >= 0
     BackHandler(enabled = startOpen) { startOpen = false }
@@ -125,6 +126,7 @@ fun XpDesktop(
                 musicTitle = if (hasMusic) player?.mediaMetadata?.title?.toString() ?: "Música" else null,
                 musicWindowOpen = !playerMinimized,
                 onMusicTask = { playerMinimized = !playerMinimized },
+                onClock = { clockOpen = !clockOpen },
             )
         }
 
@@ -135,6 +137,13 @@ fun XpDesktop(
                 onMinimize = { playerMinimized = true },
                 onClose = { player.stop(); player.clearMediaItems() },
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 50.dp)
+            )
+        }
+
+        if (clockOpen) {
+            XpClockWindow(
+                onClose = { clockOpen = false },
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = 48.dp)
             )
         }
 
@@ -241,15 +250,8 @@ private fun Taskbar(
     musicTitle: String?,
     musicWindowOpen: Boolean,
     onMusicTask: () -> Unit,
+    onClock: () -> Unit,
 ) {
-    var time by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        val fmt = SimpleDateFormat("h:mm a", Locale("es", "MX"))
-        while (true) {
-            time = fmt.format(Date())
-            delay(15_000)
-        }
-    }
     Row(
         Modifier.fillMaxWidth().background(XpColors.taskbarBrush).navigationBarsPadding().height(42.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -299,14 +301,13 @@ private fun Taskbar(
                 }
             }
         }
-        // Bandeja con reloj
+        // Bandeja con reloj (toca para ver reloj y calendario)
         Box(
             Modifier.fillMaxHeight().background(XpColors.trayBrush)
-                .border(width = 1.dp, color = Color(0xFF0F5FBF))
-                .padding(horizontal = 14.dp),
+                .border(width = 1.dp, color = Color(0xFF0F5FBF)),
             contentAlignment = Alignment.Center
         ) {
-            Text(time, color = Color.White, fontSize = 13.sp)
+            TrayClock(onClick = onClock, modifier = Modifier.fillMaxHeight())
         }
     }
 }

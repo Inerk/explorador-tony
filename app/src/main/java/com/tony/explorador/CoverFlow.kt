@@ -78,6 +78,7 @@ fun CoverFlowScreen(
     startPath: String?,
     onPlay: (List<Song>, Int) -> Unit,
     onClose: () -> Unit,
+    onHome: () -> Unit = {},
 ) {
     BackHandler(onBack = onClose)
     androidx.compose.runtime.LaunchedEffect(Unit) { if (LibraryStore.songs.isEmpty()) LibraryStore.scan() }
@@ -158,9 +159,13 @@ fun CoverFlowScreen(
                 )
 
                 // Las portadas (de las lejanas a la del centro, para que la del centro quede encima)
+                androidx.compose.runtime.LaunchedEffect(current) {
+                    ((current - 8)..(current + 8)).filter { it in albums.indices }
+                        .forEach { loadCover(albums[it].songs.first().path) }
+                }
                 val visible = ((current - 6)..(current + 6)).filter { it in albums.indices }
                     .sortedByDescending { abs(it - pos.value) }
-                visible.forEach { i ->
+                visible.forEach { i -> androidx.compose.runtime.key(albums[i].name) {
                     val off = i - pos.value
                     val isFlipping = i == current && flip > 0f
                     Box(
@@ -189,7 +194,7 @@ fun CoverFlowScreen(
                             AlbumFront(album, itemSize)
                         }
                     }
-                }
+                } }
 
                 // Nombre del álbum
                 val shown = albums[current]
@@ -207,6 +212,7 @@ fun CoverFlowScreen(
             }
         }
 
+        HomeButton(onHome, Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp))
         IconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp)) {
             Icon(Icons.Filled.Close, "Cerrar", tint = Color.White.copy(alpha = 0.8f))
         }
@@ -215,7 +221,10 @@ fun CoverFlowScreen(
 
 @Composable
 private fun AlbumFront(album: AlbumEntry, size: Dp) {
-    val cover by produceState<Bitmap?>(null, album.name) { value = loadCover(album.songs.first().path) }
+    val path = album.songs.first().path
+    val cover by produceState(initialValue = peekCover(path), path) {
+        if (value == null) value = loadCover(path)
+    }
     Column {
         CoverSquare(cover, size)
         // reflejo

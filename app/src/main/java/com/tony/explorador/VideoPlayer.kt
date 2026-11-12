@@ -38,7 +38,7 @@ import androidx.media3.ui.PlayerView
 import java.io.File
 
 @Composable
-fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit) {
+fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, onHome: () -> Unit = {}) {
     val context = LocalContext.current
     val activity = context as? Activity
     val view = LocalView.current
@@ -96,6 +96,7 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit) {
                 IconButton(onClick = onClose) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar", tint = Color.White)
                 }
+                HomeButton(onHome)
             }
             IconButton(
                 onClick = {

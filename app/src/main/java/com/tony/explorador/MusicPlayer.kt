@@ -14,6 +14,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
@@ -213,8 +214,15 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
 private enum class PanelMode { COVER, LYRICS, QUEUE }
 
 @Composable
-fun MusicPlayerScreen(player: Player, onClose: () -> Unit, onOpenCoverFlow: () -> Unit = {}) {
+fun MusicPlayerScreen(
+    player: Player,
+    onClose: () -> Unit,
+    onOpenCoverFlow: () -> Unit = {},
+    onHome: () -> Unit = {},
+    onMusicMenu: () -> Unit = {},
+) {
     BackHandler(onBack = onClose)
+    val musicMenu by rememberUpdatedState(onMusicMenu)
     var mode by remember { mutableStateOf(PanelMode.COVER) }
     val tick = observePlayer(player, if (mode == PanelMode.COVER) 250L else 100L)
 
@@ -239,7 +247,21 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit, onOpenCoverFlow: () -
     Box(
         Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(top, bottom)))
-            .pointerInput(Unit) {} // que los toques no pasen al explorador
+            .pointerInput(Unit) {
+                // deslizar rápido a la derecha en cualquier parte → menú de música
+                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { tracker.resetTracking(); total = 0f },
+                    onDragEnd = {
+                        val v = tracker.calculateVelocity().x
+                        if (v > 1800f && total > 80f) musicMenu()
+                    }
+                ) { change, drag ->
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    total += drag
+                }
+            }
     ) {
         // Fondo: la misma portada, muy difuminada
         val cover = info?.cover
@@ -268,6 +290,7 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit, onOpenCoverFlow: () -
                     IconButton(onClick = onClose) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
                     }
+                    HomeButton(onHome)
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("REPRODUCIENDO", fontSize = 11.sp, letterSpacing = 2.sp, color = Color.White.copy(alpha = 0.7f))
                         if (album != null) {
@@ -299,6 +322,7 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit, onOpenCoverFlow: () -
                                 onNext = { player.seekToNextMediaItem() },
                                 onPrev = { player.seekToPreviousMediaItem() },
                                 onLongPress = onOpenCoverFlow,
+                                onSwipeDown = { mode = PanelMode.QUEUE },
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -427,6 +451,7 @@ private fun CoverArt(
     onNext: () -> Unit,
     onPrev: () -> Unit,
     onLongPress: () -> Unit,
+    onSwipeDown: () -> Unit,
 ) {
     val scale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
@@ -434,7 +459,9 @@ private fun CoverArt(
         label = "coverScale"
     )
     val offsetX = remember { Animatable(0f) }
+    val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
+    val swipeDown by rememberUpdatedState(onSwipeDown)
     val next by rememberUpdatedState(onNext)
     val prev by rememberUpdatedState(onPrev)
     val hasNext by rememberUpdatedState(canNext)
@@ -447,9 +474,17 @@ private fun CoverArt(
             modifier = Modifier.size(side)
                 .pointerInput(Unit) {
                     val w = size.width.toFloat()
-                    detectHorizontalDragGestures(
+                    var axis = 0 // 0 = sin decidir, 1 = horizontal, 2 = vertical
+                    detectDragGestures(
+                        onDragStart = { axis = 0 },
                         onDragEnd = {
                             scope.launch {
+                                if (axis == 2) {
+                                    val down = offsetY.value
+                                    offsetY.animateTo(0f, spring(dampingRatio = 0.6f))
+                                    if (down > w * 0.15f) swipeDown()
+                                    return@launch
+                                }
                                 val v = offsetX.value
                                 when {
                                     v < -w * 0.22f && hasNext -> {
@@ -468,17 +503,25 @@ private fun CoverArt(
                                 }
                             }
                         },
-                        onDragCancel = { scope.launch { offsetX.animateTo(0f) } }
+                        onDragCancel = { scope.launch { offsetX.animateTo(0f); offsetY.animateTo(0f) } }
                     ) { change, drag ->
                         change.consume()
-                        // si no hay a dónde ir, se siente como liga
-                        val resist = if ((drag < 0 && !hasNext) || (drag > 0 && !hasPrev)) 0.3f else 1f
-                        scope.launch { offsetX.snapTo(offsetX.value + drag * resist) }
+                        if (axis == 0) axis = if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y)) 1 else 2
+                        if (axis == 1) {
+                            // si no hay a dónde ir, se siente como liga
+                            val resist = if ((drag.x < 0 && !hasNext) || (drag.x > 0 && !hasPrev)) 0.3f else 1f
+                            scope.launch { offsetX.snapTo(offsetX.value + drag.x * resist) }
+                        } else {
+                            // hacia abajo abre la lista; hacia arriba casi no se mueve
+                            val k = if (drag.y > 0) 0.5f else 0.15f
+                            scope.launch { offsetY.snapTo((offsetY.value + drag.y * k).coerceIn(-w * 0.05f, w * 0.4f)) }
+                        }
                     }
                 }
                 .graphicsLayer {
                     val frac = (offsetX.value / size.width).coerceIn(-1.5f, 1.5f)
                     translationX = offsetX.value
+                    translationY = offsetY.value
                     rotationZ = frac * 8f
                     val s = scale * (1f - kotlin.math.abs(frac) * 0.12f)
                     scaleX = s

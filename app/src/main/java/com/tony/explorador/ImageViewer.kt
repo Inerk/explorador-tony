@@ -42,7 +42,7 @@ import coil.compose.AsyncImage
 import java.io.File
 
 @Composable
-fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit) {
+fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, onHome: () -> Unit = {}) {
     BackHandler(onBack = onClose)
     val pager = rememberPagerState(initialPage = startIndex) { files.size }
     var showBar by remember { mutableStateOf(true) }
@@ -70,6 +70,8 @@ fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                HomeButton(onHome, Modifier.padding(end = 10.dp))
             }
         }
     }

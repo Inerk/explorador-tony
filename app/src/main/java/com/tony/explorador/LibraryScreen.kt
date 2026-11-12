@@ -76,6 +76,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -129,6 +130,8 @@ fun LibraryScreen(
     onPlay: (List<Song>, Int, Boolean) -> Unit,
     onClose: () -> Unit,
     miniPlayer: @Composable () -> Unit,
+    onHome: () -> Unit = {},
+    resetSignal: Int = 0,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -137,13 +140,34 @@ fun LibraryScreen(
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
     BackHandler { pop() }
+    LaunchedEffect(resetSignal) {
+        if (resetSignal > 0) { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    }
 
     LaunchedEffect(Unit) { LibraryStore.scan() }
 
     val songs = LibraryStore.songs
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
 
-    Column(Modifier.fillMaxSize().background(Retro.Bg).pointerInput(Unit) {}) {
+    Column(
+        Modifier.fillMaxSize().background(Retro.Bg).pointerInput(Unit) {
+            // deslizar rápido a la derecha en cualquier parte → regresa al menú principal
+            val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+            var total = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { tracker.resetTracking(); total = 0f },
+                onDragEnd = {
+                    val v = tracker.calculateVelocity().x
+                    if (v > 1500f && total > 70f) {
+                        while (stack.size > 1) stack.removeAt(stack.lastIndex)
+                    }
+                }
+            ) { change, drag ->
+                tracker.addPosition(change.uptimeMillis, change.position)
+                total += drag
+            }
+        }
+    ) {
         // Encabezado metálico
         Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
             Row(
@@ -163,6 +187,7 @@ fun LibraryScreen(
                         fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
                     )
                 }
+                HomeButton(onHome, dark = false)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
                     Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Color(0xFF2B2B33))
                 }

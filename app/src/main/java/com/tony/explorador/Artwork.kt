@@ -171,3 +171,6 @@ suspend fun loadCover(path: String): Bitmap? = withContext(Dispatchers.IO) {
     if (bmp != null) bigCoverCache.put(path, bmp) else noBigCover.add(path)
     bmp
 }
+
+/** Portada ya cargada (sin esperar), para que no parpadee al moverse. */
+fun peekCover(path: String): Bitmap? = bigCoverCache.get(path)

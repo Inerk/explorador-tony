@@ -133,6 +133,14 @@ fun AppRoot() {
     fun open(o: Overlay) { overlays.remove(o); overlays.add(o) }
     fun closeTop() { if (overlays.isNotEmpty()) overlays.removeAt(overlays.lastIndex) }
     var choosingTheme by remember { mutableStateOf(false) }
+    var homeSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    var libraryReset by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    fun goHome() { overlays.clear(); homeSignal++ }
+    fun musicMenu() {
+        overlays.removeAll { it == Overlay.Music || it == Overlay.CoverFlow }
+        libraryReset++
+        open(Overlay.Library)
+    }
 
     // ── Actualizaciones desde GitHub ──
     val scope = rememberCoroutineScope()
@@ -182,6 +190,7 @@ fun AppRoot() {
             onOpenMusicPlayer = { open(Overlay.Music) },
             onOpenLibrary = { open(Overlay.Library) },
             onChooseTheme = { choosingTheme = true },
+            homeSignal = homeSignal,
             versionName = versionName,
             onCheckUpdates = { checkUpdates(manual = true) },
         )
@@ -189,11 +198,13 @@ fun AppRoot() {
         overlays.toList().forEach { o ->
             androidx.compose.runtime.key(o) {
                 when (o) {
-                    is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlays.remove(o) })
-                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlays.remove(o) })
+                    is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlays.remove(o) }, onHome = { goHome() })
+                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlays.remove(o) }, onHome = { goHome() })
                     Overlay.Music -> if (controller != null) {
                         MusicPlayerScreen(controller, onClose = { overlays.remove(o) },
-                            onOpenCoverFlow = { open(Overlay.CoverFlow) })
+                            onOpenCoverFlow = { open(Overlay.CoverFlow) },
+                            onHome = { goHome() },
+                            onMusicMenu = { musicMenu() })
                     }
                     Overlay.CoverFlow -> CoverFlowScreen(
                         startPath = controller?.currentMediaItem?.mediaId,
@@ -205,7 +216,8 @@ fun AppRoot() {
                             overlays.remove(o)
                             open(Overlay.Music)
                         },
-                        onClose = { overlays.remove(o) }
+                        onClose = { overlays.remove(o) },
+                        onHome = { goHome() }
                     )
                     Overlay.Library -> LibraryScreen(
                         onPlay = { songs, index, shuffle ->
@@ -216,7 +228,9 @@ fun AppRoot() {
                             open(Overlay.Music)
                         },
                         onClose = { overlays.remove(o) },
-                        miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) }
+                        miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) },
+                        onHome = { goHome() },
+                        resetSignal = libraryReset,
                     )
                 }
             }
