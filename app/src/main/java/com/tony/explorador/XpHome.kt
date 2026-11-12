@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.media3.common.Player
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -83,9 +85,13 @@ fun XpDesktop(
     onCheckUpdates: () -> Unit,
     onChooseTheme: () -> Unit,
     versionName: String,
-    miniPlayer: @Composable () -> Unit,
+    player: Player?,
+    onOpenPlayer: () -> Unit,
 ) {
     var startOpen by remember { mutableStateOf(false) }
+    var playerMinimized by remember { mutableStateOf(false) }
+    val tick = observePlayer(player)
+    val hasMusic = player != null && player.mediaItemCount > 0 && tick >= 0
     BackHandler(enabled = startOpen) { startOpen = false }
 
     val internal = roots.first().file
@@ -113,8 +119,23 @@ fun XpDesktop(
             ) {
                 items(items) { item -> DesktopIcon(item) }
             }
-            miniPlayer()
-            Taskbar(onStart = { startOpen = !startOpen }, startOpen = startOpen)
+            Taskbar(
+                onStart = { startOpen = !startOpen },
+                startOpen = startOpen,
+                musicTitle = if (hasMusic) player?.mediaMetadata?.title?.toString() ?: "Música" else null,
+                musicWindowOpen = !playerMinimized,
+                onMusicTask = { playerMinimized = !playerMinimized },
+            )
+        }
+
+        if (hasMusic && !playerMinimized && player != null) {
+            XpMediaWindow(
+                player = player,
+                onOpen = onOpenPlayer,
+                onMinimize = { playerMinimized = true },
+                onClose = { player.stop(); player.clearMediaItems() },
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 8.dp, bottom = 50.dp)
+            )
         }
 
         if (startOpen) {
@@ -214,7 +235,13 @@ private fun DesktopIcon(item: DesktopItem) {
 private fun Color.darker(): Color = Color(red * 0.45f, green * 0.45f, blue * 0.45f, alpha)
 
 @Composable
-private fun Taskbar(onStart: () -> Unit, startOpen: Boolean) {
+private fun Taskbar(
+    onStart: () -> Unit,
+    startOpen: Boolean,
+    musicTitle: String?,
+    musicWindowOpen: Boolean,
+    onMusicTask: () -> Unit,
+) {
     var time by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         val fmt = SimpleDateFormat("h:mm a", Locale("es", "MX"))
@@ -251,7 +278,27 @@ private fun Taskbar(onStart: () -> Unit, startOpen: Boolean) {
                 )
             )
         }
-        Spacer(Modifier.weight(1f))
+        // Botón de la ventana de música en la barra de tareas
+        Box(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 6.dp, vertical = 5.dp)) {
+            if (musicTitle != null) {
+                Row(
+                    Modifier.widthIn(max = 180.dp).fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (musicWindowOpen) Brush.verticalGradient(listOf(Color(0xFF1E4FB8), Color(0xFF2A62D4)))
+                            else Brush.verticalGradient(listOf(Color(0xFF5A9CF8), Color(0xFF3C7FEA)))
+                        )
+                        .border(1.dp, Color(0xFF1A3F94), RoundedCornerShape(3.dp))
+                        .clickable(onClick = onMusicTask)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Filled.MusicNote, null, tint = Color(0xFFFFC94D), modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(musicTitle, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
         // Bandeja con reloj
         Box(
             Modifier.fillMaxHeight().background(XpColors.trayBrush)
@@ -329,5 +376,3 @@ fun XpTitleBackground(content: @Composable () -> Unit) {
     Box(Modifier.background(XpColors.titleBrush)) { content() }
 }
 
-@Suppress("unused")
-private val unusedFolderIcon = Icons.Filled.Folder

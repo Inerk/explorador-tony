@@ -111,6 +111,7 @@ sealed interface Overlay {
     data class Video(val files: List<File>, val index: Int) : Overlay
     data object Music : Overlay
     data object Library : Overlay
+    data object CoverFlow : Overlay
 }
 
 @Composable
@@ -191,8 +192,21 @@ fun AppRoot() {
                     is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlays.remove(o) })
                     is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlays.remove(o) })
                     Overlay.Music -> if (controller != null) {
-                        MusicPlayerScreen(controller, onClose = { overlays.remove(o) })
+                        MusicPlayerScreen(controller, onClose = { overlays.remove(o) },
+                            onOpenCoverFlow = { open(Overlay.CoverFlow) })
                     }
+                    Overlay.CoverFlow -> CoverFlowScreen(
+                        startPath = controller?.currentMediaItem?.mediaId,
+                        onPlay = { songs, index ->
+                            controller?.let {
+                                it.shuffleModeEnabled = false
+                                playMusic(it, songs.map { s -> s.file }, index)
+                            }
+                            overlays.remove(o)
+                            open(Overlay.Music)
+                        },
+                        onClose = { overlays.remove(o) }
+                    )
                     Overlay.Library -> LibraryScreen(
                         onPlay = { songs, index, shuffle ->
                             controller?.let {

@@ -154,3 +154,20 @@ suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
     if (bmp != null) thumbCache.put(path, bmp) else noThumb.add(path)
     bmp
 }
+
+private val bigCoverCache = LruCache<String, Bitmap>(40)
+private val noBigCover = java.util.Collections.synchronizedSet(HashSet<String>())
+
+/** Portada mediana para la vista de álbumes (Cover Flow). */
+suspend fun loadCover(path: String): Bitmap? = withContext(Dispatchers.IO) {
+    bigCoverCache.get(path)?.let { return@withContext it }
+    if (path in noBigCover) return@withContext null
+    val r = MediaMetadataRetriever()
+    val bmp = try {
+        r.setDataSource(path)
+        r.embeddedPicture?.let { decodeSampled(it, 420) }
+    } catch (_: Exception) { null } finally { runCatching { r.release() } }
+        ?: folderCover(File(path))
+    if (bmp != null) bigCoverCache.put(path, bmp) else noBigCover.add(path)
+    bmp
+}

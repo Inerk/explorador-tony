@@ -218,7 +218,8 @@ fun BrowserScreen(
             onCheckUpdates = onCheckUpdates,
             onChooseTheme = onChooseTheme,
             versionName = versionName,
-            miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = onOpenMusicPlayer) }
+            player = controller,
+            onOpenPlayer = onOpenMusicPlayer,
         )
         return
     }

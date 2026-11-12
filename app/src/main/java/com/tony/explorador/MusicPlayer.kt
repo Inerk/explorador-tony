@@ -31,6 +31,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -212,7 +213,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
 private enum class PanelMode { COVER, LYRICS, QUEUE }
 
 @Composable
-fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
+fun MusicPlayerScreen(player: Player, onClose: () -> Unit, onOpenCoverFlow: () -> Unit = {}) {
     BackHandler(onBack = onClose)
     var mode by remember { mutableStateOf(PanelMode.COVER) }
     val tick = observePlayer(player, if (mode == PanelMode.COVER) 250L else 100L)
@@ -297,6 +298,7 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
                                 canPrev = player.hasPreviousMediaItem(),
                                 onNext = { player.seekToNextMediaItem() },
                                 onPrev = { player.seekToPreviousMediaItem() },
+                                onLongPress = onOpenCoverFlow,
                             )
                             PanelMode.LYRICS -> LyricsPanel(
                                 lines = lyrics,
@@ -413,6 +415,7 @@ fun MusicPlayerScreen(player: Player, onClose: () -> Unit) {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CoverArt(
     cover: Bitmap?,
@@ -423,6 +426,7 @@ private fun CoverArt(
     canPrev: Boolean,
     onNext: () -> Unit,
     onPrev: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     val scale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
@@ -484,7 +488,7 @@ private fun CoverArt(
                 .shadow(36.dp, shape, ambientColor = accent, spotColor = accent)
                 .clip(shape)
                 .background(Color.White.copy(alpha = 0.08f))
-                .clickable(onClick = onTap),
+                .combinedClickable(onClick = onTap, onLongClick = onLongPress),
             contentAlignment = Alignment.Center
         ) {
             Crossfade(targetState = cover, animationSpec = tween(400), label = "cover") { bmp ->
