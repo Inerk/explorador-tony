@@ -73,7 +73,13 @@ object LibraryStore {
 
     fun changeUserName(name: String) { userName = name; save() }
     fun changeAvatar(index: Int) { avatar = index; avatarVersion++; save() }
-    fun changeMusicSkin(s: MusicSkin) { musicSkin = s; save() }
+    fun changeMusicSkin(s: MusicSkin) {
+        musicSkin = s
+        // el tema Vintage también viste la ventanita del escritorio
+        if (s == MusicSkin.VINTAGE) windowSkin = WindowSkin.VINTAGE
+        else if (windowSkin == WindowSkin.VINTAGE) windowSkin = WindowSkin.MEDIA
+        save()
+    }
     var windowSkin by mutableStateOf(WindowSkin.MEDIA)
         private set
     fun changeWindowSkin(s: WindowSkin) { windowSkin = s; save() }

@@ -96,7 +96,7 @@ fun XpMediaWindow(
     val progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
     XpWindowFrame(
         state = DesktopState.player,
-        title = "Reproductor multimedia",
+        title = if (LibraryStore.windowSkin == WindowSkin.VINTAGE) "Tocadiscos" else "Reproductor multimedia",
         icon = {
             Box(
                 Modifier.size(18.dp).clip(CircleShape)
@@ -110,12 +110,15 @@ fun XpMediaWindow(
         extraCaption = {
             // cambiar el aspecto de la ventana
             XpCaptionButton("◐", XpBlueButton) {
-                LibraryStore.changeWindowSkin(
-                    if (LibraryStore.windowSkin == WindowSkin.MEDIA) WindowSkin.AMP else WindowSkin.MEDIA
-                )
+                val all = WindowSkin.entries
+                LibraryStore.changeWindowSkin(all[(all.indexOf(LibraryStore.windowSkin) + 1) % all.size])
             }
         },
     ) {
+        if (LibraryStore.windowSkin == WindowSkin.VINTAGE) {
+            VintageWindowContent(player, onOpen)
+            return@XpWindowFrame
+        }
         if (LibraryStore.windowSkin == WindowSkin.AMP) {
             AmpSkin(player, title, artist, position, duration, progress, onOpen)
             return@XpWindowFrame

@@ -179,7 +179,12 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
 
-    Surface(tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+    val vintage = LibraryStore.musicSkin == MusicSkin.VINTAGE
+    Surface(
+        tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth(),
+        color = if (vintage) Vintage.Bakelite else MaterialTheme.colorScheme.surface,
+        contentColor = if (vintage) Vintage.Cream else MaterialTheme.colorScheme.onSurface,
+    ) {
         Column {
             LinearProgressIndicator(
                 progress = { progress },
@@ -248,6 +253,10 @@ fun MusicPlayerScreen(
     onMusicMenu: () -> Unit = {},
     onGoTo: (String, String) -> Unit = { _, _ -> },
 ) {
+    if (LibraryStore.musicSkin == MusicSkin.VINTAGE) {
+        VintagePlayerScreen(player, onClose, onOpenCoverFlow, onHome, onGoTo)
+        return
+    }
     val musicMenu by rememberUpdatedState(onMusicMenu)
     var lyricsMode by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }

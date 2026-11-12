@@ -38,6 +38,8 @@ data class TrackInfo(
     val cover: Bitmap?,
     val colors: CoverColors,
     val lyrics: List<LyricLine>,
+    val trackNumber: Int? = null,   // número de pista en su álbum
+    val trackTotal: Int? = null,    // cuántas pistas tiene el álbum (si viene en la canción)
 )
 
 private val cache = LruCache<String, TrackInfo>(12)
@@ -59,6 +61,8 @@ suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO)
     var artist: String? = null
     var album: String? = null
     var cover: Bitmap? = null
+    var trackNo: Int? = null
+    var trackTot: Int? = null
     val retriever = MediaMetadataRetriever()
     try {
         retriever.setDataSource(path)
@@ -67,6 +71,11 @@ suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO)
             ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST))?.takeIf { it.isNotBlank() }
         album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)?.takeIf { it.isNotBlank() }
         cover = retriever.embeddedPicture?.let { decodeSampled(it, 1000) }
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)?.let { t ->
+            // viene como "3" o "3/12"
+            trackNo = t.substringBefore('/').trim().toIntOrNull()
+            trackTot = t.substringAfter('/', "").trim().toIntOrNull()
+        }
     } catch (_: Exception) {
     } finally {
         runCatching { retriever.release() }
@@ -83,6 +92,8 @@ suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO)
         cover = cover,
         colors = cover?.let { colorsFrom(it) } ?: DefaultCoverColors,
         lyrics = lyrics,
+        trackNumber = trackNo,
+        trackTotal = trackTot,
     )
 }
 

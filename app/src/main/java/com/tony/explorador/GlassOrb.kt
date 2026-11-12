@@ -76,3 +76,28 @@ fun GlassOrb(icon: ImageVector, color: Color, size: Dp = 46.dp, modifier: Modifi
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.5f).offset(0.dp, (-2).dp))
     }
 }
+
+/** Medallón de latón para el tema Vintage: aro dorado y centro esmaltado del color de la sección. */
+@Composable
+fun BrassMedallion(icon: ImageVector, color: Color, size: Dp = 46.dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(size + 6.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val r = size.toPx() / 2f
+            val c = Offset(this.size.width / 2f, this.size.height / 2f - 1.dp.toPx())
+            drawCircle(Color.Black.copy(alpha = 0.45f), r, c + Offset(2.dp.toPx(), 3.dp.toPx()))
+            drawCircle(
+                Brush.sweepGradient(listOf(Vintage.BrassDark, Vintage.BrassLight, Vintage.Brass, Vintage.BrassDark, Vintage.BrassLight, Vintage.BrassDark), center = c),
+                r, c
+            )
+            drawCircle(
+                Brush.radialGradient(listOf(lerp(color, Color.White, 0.25f), color, lerp(color, Color.Black, 0.5f)),
+                    center = c - Offset(r * 0.25f, r * 0.3f), radius = r),
+                r * 0.76f, c
+            )
+            drawCircle(Vintage.BrassDark, r * 0.76f, c, style = Stroke(1.5.dp.toPx()))
+            drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Transparent), startY = c.y - r * 0.7f, endY = c.y),
+                Offset(c.x - r * 0.45f, c.y - r * 0.7f), Size(r * 0.9f, r * 0.55f))
+        }
+        Icon(icon, null, tint = Vintage.Cream, modifier = Modifier.size(size * 0.48f))
+    }
+}

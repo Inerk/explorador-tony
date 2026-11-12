@@ -82,10 +82,27 @@ fun skinFor(theme: AppTheme): Skin = when (theme) {
 enum class MusicSkin(val label: String) {
     WALKMAN("Walkman (negro y naranja)"),
     MEDIA_PLAYER("Media Player (azul cristal)"),
+    VINTAGE("Vintage (tocadiscos y madera)"),
 }
 
 /** Aspecto de la ventanita del reproductor en el escritorio. */
 enum class WindowSkin(val label: String) {
     MEDIA("Media (azul cristal)"),
     AMP("Clásico (amplificador gris con pantalla verde)"),
+    VINTAGE("Vintage (tocadiscos de madera)"),
+}
+
+/** Colores del tema Vintage. */
+object Vintage {
+    val WalnutDark = androidx.compose.ui.graphics.Color(0xFF1C120B)
+    val Walnut = androidx.compose.ui.graphics.Color(0xFF3A2416)
+    val Teak = androidx.compose.ui.graphics.Color(0xFF8B5A2B)
+    val TeakDark = androidx.compose.ui.graphics.Color(0xFF5A3517)
+    val Brass = androidx.compose.ui.graphics.Color(0xFFC9A24A)
+    val BrassLight = androidx.compose.ui.graphics.Color(0xFFF0D98F)
+    val BrassDark = androidx.compose.ui.graphics.Color(0xFF7A5A1C)
+    val Cream = androidx.compose.ui.graphics.Color(0xFFF3E7D0)
+    val CreamDim = androidx.compose.ui.graphics.Color(0xFFB8A587)
+    val Bakelite = androidx.compose.ui.graphics.Color(0xFF3B2414)
+    val Burgundy = androidx.compose.ui.graphics.Color(0xFF8E2C2C)
 }

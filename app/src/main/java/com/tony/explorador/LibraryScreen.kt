@@ -96,28 +96,33 @@ import java.util.Locale
 /** Colores de la sección de música; cambian con el tema elegido (Walkman o Media Player). */
 private object Retro {
     private val wmp get() = LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER
+    private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     val isWmp get() = wmp
-    val Bg get() = if (wmp) Color(0xFF0B1630) else Color(0xFF111114)
-    val Panel get() = if (wmp) Color(0xFF14284F) else Color(0xFF1C1C22)
-    val Orange get() = if (wmp) Color(0xFF3FA9F5) else Color(0xFFFF7A00)
-    val OrangeLight get() = if (wmp) Color(0xFF9CDBFF) else Color(0xFFFFA347)
-    val OnAccent get() = if (wmp) Color.White else Color.Black
-    val Text get() = Color(0xFFF2F2F2)
-    val SubText get() = if (wmp) Color(0xFF8FA6CC) else Color(0xFF9A9AA5)
-    val HeaderText get() = if (wmp) Color.White else Color(0xFF1E1E24)
-    val HeaderIcon get() = if (wmp) Color(0xFFCFE3FF) else Color(0xFF2B2B33)
-    val metal: Brush get() = if (wmp)
-        Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
-    else Brush.verticalGradient(listOf(Color(0xFFE9EBEF), Color(0xFFB9BDC6), Color(0xFF8C919C)))
+    val isVintage get() = vin
+    private fun pick(walkman: Color, media: Color, vintage: Color) = if (vin) vintage else if (wmp) media else walkman
+    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D))
+    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A))
+    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass)
+    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight)
+    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E))
+    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream)
+    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim)
+    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream)
+    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight)
+    val metal: Brush get() = when {
+        vin -> Brush.verticalGradient(listOf(Color(0xFF8B5A2B), Color(0xFF5A3517), Color(0xFF3A2212)))
+        wmp -> Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
+        else -> Brush.verticalGradient(listOf(Color(0xFFE9EBEF), Color(0xFFB9BDC6), Color(0xFF8C919C)))
+    }
     // colores de cada sección
-    val Red get() = if (wmp) Color(0xFF5B8DEF) else Color(0xFFE53935)
-    val Blue get() = if (wmp) Color(0xFF2D7DD2) else Color(0xFF1E88E5)
-    val Lime get() = if (wmp) Color(0xFF2FBF9A) else Color(0xFF7CB342)
-    val Pink get() = if (wmp) Color(0xFF8E6CEF) else Color(0xFFD81B60)
-    val Yellow get() = if (wmp) Color(0xFFF2C94C) else Color(0xFFFDD835)
-    val Teal get() = if (wmp) Color(0xFF2EC4E6) else Color(0xFF00ACC1)
-    val Purple get() = if (wmp) Color(0xFF7B61FF) else Color(0xFF8E24AA)
-    val Gray get() = if (wmp) Color(0xFF6F86A8) else Color(0xFF78909C)
+    val Red get() = pick(Color(0xFFE53935), Color(0xFF5B8DEF), Color(0xFFB5562A))
+    val Blue get() = pick(Color(0xFF1E88E5), Color(0xFF2D7DD2), Color(0xFF2F6B66))
+    val Lime get() = pick(Color(0xFF7CB342), Color(0xFF2FBF9A), Color(0xFF6B7A2E))
+    val Pink get() = pick(Color(0xFFD81B60), Color(0xFF8E6CEF), Color(0xFF8E2C2C))
+    val Yellow get() = pick(Color(0xFFFDD835), Color(0xFFF2C94C), Color(0xFFC9A24A))
+    val Teal get() = pick(Color(0xFF00ACC1), Color(0xFF2EC4E6), Color(0xFF3E7A8A))
+    val Purple get() = pick(Color(0xFF8E24AA), Color(0xFF7B61FF), Color(0xFF6A3B5C))
+    val Gray get() = pick(Color(0xFF78909C), Color(0xFF6F86A8), Color(0xFF6E5A48))
 }
 
 private sealed interface LibPage {
@@ -198,6 +203,7 @@ fun LibraryScreen(
                 Column(Modifier.weight(1f)) {
                     Text(
                         pageTitle(page), color = Retro.HeaderText, fontWeight = FontWeight.Black,
+                        fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
                         fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     Text(
@@ -320,7 +326,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
         Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
-        Entry("Tema del reproductor", if (Retro.isWmp) "Media Player" else "Walkman", Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
+        Entry("Tema del reproductor", if (Retro.isVintage) "Vintage" else if (Retro.isWmp) "Media Player" else "Walkman", Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(entries) { e ->
@@ -333,7 +339,11 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // bloque de color a la izquierda
-                if (Retro.isWmp) {
+                if (Retro.isVintage) {
+                    Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        BrassMedallion(e.icon, e.color, 44.dp)
+                    }
+                } else if (Retro.isWmp) {
                     Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
                         GlassOrb(e.icon, e.color, 44.dp)
                     }
