@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -379,7 +380,7 @@ fun Turntable(
                     val sw = if (slide.value != 0f) 1.05f else 1f + 0.0035f * sin(a) * speed
                     scaleX = sw; scaleY = sw
                     rotationZ = 1.6f * sin(a) * speed
-                    translationY = 0.9f * density * sin(2f * a) * speed
+                    translationY = 0.9f * this.density * sin(2f * a) * speed
                 }
                 .combinedClickable(onClick = onTap, onLongClick = onLongPress)
         ) {
@@ -455,10 +456,10 @@ private fun DrawScope.drawArmImage(
     val pivot = Offset(size.width * Deck.PIVOT_X, size.height * Deck.PIVOT_Y)
     val len = size.width * Deck.ARM_LEN
     val vImg = Offset((Deck.IMG_TIP_X - Deck.IMG_PIVOT_X) * img.width, (Deck.IMG_TIP_Y - Deck.IMG_PIVOT_Y) * img.height)
-    val scale = len / vImg.getDistance()
+    val armScale = len / vImg.getDistance()
     fun tip(theta: Float): Offset {
         val t = theta * PI.toFloat() / 180f
-        val v = vImg * scale
+        val v = vImg * armScale
         return pivot + Offset(v.x * cos(t) - v.y * sin(t), v.x * sin(t) + v.y * cos(t))
     }
     fun thetaFor(radius: Float): Float {
@@ -480,21 +481,21 @@ private fun DrawScope.drawArmImage(
     fun iSize(w: Float, h: Float) = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt())
 
     // 1) base redonda con tornillos: NO gira
-    val f = scale * img.width / Deck.ORIG_W            // px de la foto original → px en pantalla
+    val f = armScale * img.width / Deck.ORIG_W            // px de la foto original → px en pantalla
     val plateSize = Deck.PLATE_SIZE * f
     val plateTL = pivot + Offset(Deck.PLATE_DX * f - plateSize / 2, Deck.PLATE_DY * f - plateSize / 2)
     drawImage(plate, dstOffset = iOff(plateTL + Offset(plateSize * 0.03f, plateSize * 0.05f)), dstSize = iSize(plateSize, plateSize), colorFilter = shadowTint)
     drawImage(plate, dstOffset = iOff(plateTL), dstSize = iSize(plateSize, plateSize), filterQuality = fq)
 
     // 2) brazo: gira sobre el eje; al levantarse se acerca un poco y su sombra se separa
-    val dstW = img.width * scale
-    val dstH = img.height * scale
+    val dstW = img.width * armScale
+    val dstH = img.height * armScale
     val topLeft = pivot - Offset(Deck.IMG_PIVOT_X * dstW, Deck.IMG_PIVOT_Y * dstH)
     rotate(theta, pivot) {
         val sh = dstW * (0.03f + 0.05f * lift)
         drawImage(img, dstOffset = iOff(topLeft + Offset(sh, sh * 1.6f)), dstSize = iSize(dstW, dstH), colorFilter = shadowTint)
         val k = 1f + 0.03f * lift
-        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot) {
+        withTransform({ scale(k, k, pivot) }) {
             drawImage(img, dstOffset = iOff(topLeft), dstSize = iSize(dstW, dstH), filterQuality = fq)
         }
     }
