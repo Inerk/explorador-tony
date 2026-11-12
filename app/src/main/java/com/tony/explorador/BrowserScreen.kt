@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -116,6 +117,8 @@ fun BrowserScreen(
     onOpenVideo: (List<File>, Int) -> Unit,
     onPlayMusic: (List<File>, Int) -> Unit,
     onOpenMusicPlayer: () -> Unit,
+    versionName: String,
+    onCheckUpdates: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -299,6 +302,11 @@ fun BrowserScreen(
                                 onClick = { more = false; showHidden = !showHidden })
                             DropdownMenuItem(text = { Text("Inicio") }, leadingIcon = { Icon(Icons.Filled.Home, null) },
                                 onClick = { more = false; goTo(null) })
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("Buscar actualizaciones\nVersión $versionName") },
+                                leadingIcon = { Icon(Icons.Filled.SystemUpdate, null) },
+                                onClick = { more = false; onCheckUpdates() })
                         }
                     }
                 )

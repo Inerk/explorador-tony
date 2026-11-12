@@ -40,6 +40,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,6 +117,39 @@ fun AppRoot() {
     val controller = rememberMediaController()
     var overlay by remember { mutableStateOf<Overlay?>(null) }
 
+    // ── Actualizaciones desde GitHub ──
+    val scope = rememberCoroutineScope()
+    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    val versionName = remember { currentVersionName(context) }
+
+    fun checkUpdates(manual: Boolean) {
+        scope.launch {
+            if (manual) updateState = UpdateState.Checking
+            try {
+                val info = fetchLatestRelease()
+                updateState = when {
+                    info.versionCode > currentVersionCode(context) -> UpdateState.Available(info)
+                    manual -> UpdateState.UpToDate
+                    else -> UpdateState.Idle
+                }
+            } catch (e: Exception) {
+                if (manual) updateState = UpdateState.Error("Revisa tu conexión a internet.\n(${e.message})")
+            }
+        }
+    }
+
+    fun installOrAsk(apk: java.io.File) {
+        if (canInstallApks(context)) {
+            updateState = UpdateState.Idle
+            installApk(context, apk)
+        } else {
+            updateState = UpdateState.NeedsPermission(apk)
+            openInstallPermissionSettings(context)
+        }
+    }
+
+    LaunchedEffect(Unit) { checkUpdates(manual = false) }
+
     Box(Modifier.fillMaxSize()) {
         BrowserScreen(
             controller = controller,
@@ -127,6 +163,8 @@ fun AppRoot() {
                 overlay = Overlay.Music
             },
             onOpenMusicPlayer = { overlay = Overlay.Music },
+            versionName = versionName,
+            onCheckUpdates = { checkUpdates(manual = true) },
         )
 
         when (val o = overlay) {
@@ -137,6 +175,28 @@ fun AppRoot() {
             }
             null -> {}
         }
+
+        UpdateDialog(
+            state = updateState,
+            currentName = versionName,
+            onDownload = { info ->
+                scope.launch {
+                    updateState = UpdateState.Downloading(info, 0f)
+                    try {
+                        var last = -1
+                        val apk = downloadApk(context, info) { p ->
+                            val pct = (p * 100).toInt()
+                            if (pct != last) { last = pct; updateState = UpdateState.Downloading(info, p) }
+                        }
+                        installOrAsk(apk)
+                    } catch (e: Exception) {
+                        updateState = UpdateState.Error("La descarga falló. Intenta de nuevo.\n(${e.message})")
+                    }
+                }
+            },
+            onInstall = { apk -> installOrAsk(apk) },
+            onDismiss = { updateState = UpdateState.Idle },
+        )
     }
 }
 
