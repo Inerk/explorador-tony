@@ -199,17 +199,16 @@ fun VintagePlayerScreen(
                         player = player, forward = false, label = "Ya sonaron", total = player.currentMediaItemIndex.coerceAtLeast(0),
                         modifier = Modifier.width(104.dp)
                     )
-                    Column(Modifier.weight(1f).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (trackLabel != null) Text(trackLabel.uppercase(), color = Vintage.Brass, fontFamily = FontFamily.Serif,
-                            fontSize = 11.sp, letterSpacing = 2.sp)
-                        Text(title, color = Vintage.Cream, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        if (artist.isNotEmpty()) Text(artist, color = Vintage.CreamDim, fontFamily = FontFamily.Serif,
-                            fontStyle = FontStyle.Italic, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        val fav = path != null && LibraryStore.isFavorite(path)
-                        Text(if (fav) "★" else "☆", color = if (fav) Vintage.Brass else Vintage.CreamDim, fontSize = 26.sp,
-                            modifier = Modifier.padding(top = 2.dp).clickable { path?.let { LibraryStore.toggleFavorite(it) } })
-                    }
+                    val fav = path != null && LibraryStore.isFavorite(path)
+                    JacketAndNote(
+                        cover = info?.cover,
+                        title = title,
+                        artist = artist,
+                        trackLabel = trackLabel,
+                        favorite = fav,
+                        onFavorite = { path?.let { LibraryStore.toggleFavorite(it) } },
+                        modifier = Modifier.weight(1f).fillMaxSize()
+                    )
                     RecordPile(
                         player = player, forward = true, label = "Siguen", total = remainingCount(player),
                         modifier = Modifier.width(104.dp)
@@ -340,13 +339,20 @@ fun Turntable(
 
     // pluma: -0.35 = descansando en su base; 0..1 = sobre el disco (orilla → centro)
     val armGoal = if (playing && !swapping) armTarget.coerceIn(0f, 1f) else -0.35f
-    val arm by animateFloatAsState(armGoal, tween(if (armGoal < 0f) 320 else 520, easing = FastOutSlowInEasing), label = "arm")
+    val arm by animateFloatAsState(armGoal, tween(if (armGoal < 0f) 380 else 560, easing = FastOutSlowInEasing), label = "arm")
+    // la pluma se levanta un poquito mientras viaja y se asienta al llegar
+    val lift by animateFloatAsState(if (abs(arm - armGoal) > 0.015f) 1f else 0f, tween(200), label = "lift")
+    val plateImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_arm_base)
 
     val plinthImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_plinth)
     val armImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_arm)
     val recordImg = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.vt_record)
 
-    BoxWithConstraints(modifier.aspectRatio(Deck.ASPECT)) {
+    BoxWithConstraints(
+        modifier.aspectRatio(Deck.ASPECT)
+            // un poco de perspectiva, como si lo vieras sobre la mesa
+            .graphicsLayer { rotationX = 9f; cameraDistance = 30f * density }
+    ) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
         val density = androidx.compose.ui.platform.LocalDensity.current
@@ -366,9 +372,21 @@ fun Turntable(
             Modifier
                 .offset { androidx.compose.ui.unit.IntOffset((center.x - recordBox / 2 + slide.value * w).toInt(), (center.y - recordBox / 2).toInt()) }
                 .size(recordDp)
-                .graphicsLayer { alpha = 1f - (abs(slide.value) - 0.9f).coerceIn(0f, 0.4f) / 0.4f }
+                .graphicsLayer {
+                    alpha = 1f - (abs(slide.value) - 0.9f).coerceIn(0f, 0.4f) / 0.4f
+                    // el vinilo nunca está perfectamente plano: se bambolea un poquito con cada vuelta
+                    val a = angle * PI.toFloat() / 180f
+                    val sw = if (slide.value != 0f) 1.05f else 1f + 0.0035f * sin(a) * speed
+                    scaleX = sw; scaleY = sw
+                    rotationZ = 1.6f * sin(a) * speed
+                    translationY = 0.9f * density * sin(2f * a) * speed
+                }
                 .combinedClickable(onClick = onTap, onLongClick = onLongPress)
         ) {
+            Canvas(Modifier.fillMaxSize()) {
+                drawCircle(Color.Black.copy(alpha = if (slide.value != 0f) 0.45f else 0.3f), size.minDimension / 2 * 0.985f,
+                    Offset(size.width / 2 + (if (slide.value != 0f) 10f else 3f), size.height / 2 + (if (slide.value != 0f) 16f else 5f)))
+            }
             Image(recordImg, null, modifier = Modifier.fillMaxSize(), filterQuality = androidx.compose.ui.graphics.FilterQuality.High)
             val c = shownCover
             if (c != null) {
@@ -395,7 +413,10 @@ fun Turntable(
         }
 
         // la pluma (foto), girando sobre su eje
-        Canvas(Modifier.fillMaxSize()) { drawArmImage(armImg, center, recordR, arm) }
+        Canvas(Modifier.fillMaxSize()) {
+            val jitter = if (playing && arm >= 0f) 0.25f * sin(angle * PI.toFloat() / 180f) * speed else 0f
+            drawArmImage(armImg, plateImg, center, recordR, arm, lift, jitter)
+        }
     }
 }
 
@@ -411,16 +432,28 @@ private object Deck {
     const val PIVOT_Y = 158f / 932f
     const val ARM_LEN = 640f / 1345f        // de eje a aguja (fracción del ancho)
     // en la foto de la pluma
-    const val IMG_PIVOT_X = 357f / 724f
-    const val IMG_PIVOT_Y = 400f / 2172f
+    const val IMG_PIVOT_X = 362f / 724f
+    const val IMG_PIVOT_Y = 380f / 2172f
     const val IMG_TIP_X = 310f / 724f
     const val IMG_TIP_Y = 2148f / 2172f
+    // base redonda fija (recorte de 476 px de la foto original, centro 7 px a la izq. y 90 px abajo del eje)
+    const val ORIG_W = 724f
+    const val PLATE_SIZE = 476f
+    const val PLATE_DX = -7f
+    const val PLATE_DY = 90f
 }
 
-private fun DrawScope.drawArmImage(img: androidx.compose.ui.graphics.ImageBitmap, center: Offset, recordR: Float, arm: Float) {
+private fun DrawScope.drawArmImage(
+    img: androidx.compose.ui.graphics.ImageBitmap,
+    plate: androidx.compose.ui.graphics.ImageBitmap,
+    center: Offset,
+    recordR: Float,
+    arm: Float,
+    lift: Float,
+    jitter: Float,
+) {
     val pivot = Offset(size.width * Deck.PIVOT_X, size.height * Deck.PIVOT_Y)
     val len = size.width * Deck.ARM_LEN
-    // escala de la foto para que de eje a aguja mida "len"
     val vImg = Offset((Deck.IMG_TIP_X - Deck.IMG_PIVOT_X) * img.width, (Deck.IMG_TIP_Y - Deck.IMG_PIVOT_Y) * img.height)
     val scale = len / vImg.getDistance()
     fun tip(theta: Float): Offset {
@@ -439,23 +472,31 @@ private fun DrawScope.drawArmImage(img: androidx.compose.ui.graphics.ImageBitmap
     val outer = thetaFor(recordR * 0.93f)
     val inner = thetaFor(recordR * 0.40f)
     val rest = -5f
-    val theta = if (arm < 0f) rest + (outer - rest) * (1f + arm / 0.35f).coerceIn(0f, 1f) else outer + (inner - outer) * arm
+    val theta = (if (arm < 0f) rest + (outer - rest) * (1f + arm / 0.35f).coerceIn(0f, 1f) else outer + (inner - outer) * arm) + jitter
 
+    val fq = androidx.compose.ui.graphics.FilterQuality.High
+    val shadowTint = androidx.compose.ui.graphics.ColorFilter.tint(Color.Black.copy(alpha = 0.35f - 0.1f * lift), androidx.compose.ui.graphics.BlendMode.SrcIn)
+    fun iOff(o: Offset) = androidx.compose.ui.unit.IntOffset(o.x.toInt(), o.y.toInt())
+    fun iSize(w: Float, h: Float) = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt())
+
+    // 1) base redonda con tornillos: NO gira
+    val f = scale * img.width / Deck.ORIG_W            // px de la foto original → px en pantalla
+    val plateSize = Deck.PLATE_SIZE * f
+    val plateTL = pivot + Offset(Deck.PLATE_DX * f - plateSize / 2, Deck.PLATE_DY * f - plateSize / 2)
+    drawImage(plate, dstOffset = iOff(plateTL + Offset(plateSize * 0.03f, plateSize * 0.05f)), dstSize = iSize(plateSize, plateSize), colorFilter = shadowTint)
+    drawImage(plate, dstOffset = iOff(plateTL), dstSize = iSize(plateSize, plateSize), filterQuality = fq)
+
+    // 2) brazo: gira sobre el eje; al levantarse se acerca un poco y su sombra se separa
     val dstW = img.width * scale
     val dstH = img.height * scale
     val topLeft = pivot - Offset(Deck.IMG_PIVOT_X * dstW, Deck.IMG_PIVOT_Y * dstH)
     rotate(theta, pivot) {
-        // sombra de la pluma sobre la base
-        drawImage(
-            img, dstOffset = androidx.compose.ui.unit.IntOffset((topLeft.x + dstW * 0.03f).toInt(), (topLeft.y + dstW * 0.05f).toInt()),
-            dstSize = androidx.compose.ui.unit.IntSize(dstW.toInt(), dstH.toInt()),
-            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.Black.copy(alpha = 0.35f), androidx.compose.ui.graphics.BlendMode.SrcIn)
-        )
-        drawImage(
-            img, dstOffset = androidx.compose.ui.unit.IntOffset(topLeft.x.toInt(), topLeft.y.toInt()),
-            dstSize = androidx.compose.ui.unit.IntSize(dstW.toInt(), dstH.toInt()),
-            filterQuality = androidx.compose.ui.graphics.FilterQuality.High
-        )
+        val sh = dstW * (0.03f + 0.05f * lift)
+        drawImage(img, dstOffset = iOff(topLeft + Offset(sh, sh * 1.6f)), dstSize = iSize(dstW, dstH), colorFilter = shadowTint)
+        val k = 1f + 0.03f * lift
+        androidx.compose.ui.graphics.drawscope.scale(k, k, pivot) {
+            drawImage(img, dstOffset = iOff(topLeft), dstSize = iSize(dstW, dstH), filterQuality = fq)
+        }
     }
 }
 
@@ -791,3 +832,95 @@ fun VintageWindowContent(player: Player, onOpen: () -> Unit) {
 
 @Suppress("unused")
 private val unusedSqrt = sqrt(1f)
+
+// ───────────────────────── Funda y sobre con la nota ─────────────────────────
+
+/**
+ * Al centro: la funda del disco con la portada impresa y, encima, un sobre de papel
+ * del que sale una notita con el nombre de la canción. Al cambiar de canción la nota
+ * se mete al sobre y vuelve a salir con el nuevo nombre.
+ */
+@Composable
+private fun JacketAndNote(
+    cover: Bitmap?,
+    title: String,
+    artist: String,
+    trackLabel: String?,
+    favorite: Boolean,
+    onFavorite: () -> Unit,
+    modifier: Modifier,
+) {
+    val noteOut = remember { Animatable(1f) }
+    var shownTitle by remember { mutableStateOf(title) }
+    var shownArtist by remember { mutableStateOf(artist) }
+    var shownTrack by remember { mutableStateOf(trackLabel) }
+    LaunchedEffect(title, artist) {
+        if (title != shownTitle || artist != shownArtist) {
+            noteOut.animateTo(0f, tween(260, easing = FastOutSlowInEasing))
+            shownTitle = title; shownArtist = artist; shownTrack = trackLabel
+            noteOut.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.62f, stiffness = 260f))
+        } else shownTrack = trackLabel
+    }
+    val ink = Color(0xFF2B2118)
+
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        // funda del disco (arriba, un poco girada)
+        val jacket = minOf(w * 0.74f, maxHeight * 0.55f)
+        Box(
+            Modifier.align(Alignment.TopCenter).offset(x = -w * 0.06f, y = 2.dp)
+                .size(jacket)
+                .rotate(-6f)
+                .shadow(10.dp, RoundedCornerShape(3.dp))
+        ) {
+            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null, modifier = Modifier.fillMaxSize())
+            if (cover != null) {
+                Image(remember(cover) { cover.asImageBitmap() }, null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().padding(jacket * 0.07f))
+                // la textura del cartón encima de la portada, para que se vea impresa y gastada
+                Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null,
+                    modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.28f })
+            }
+            Text(
+                if (favorite) "★" else "☆",
+                color = if (favorite) Vintage.Brass else Vintage.Cream,
+                fontSize = 22.sp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).clickable(onClick = onFavorite)
+            )
+        }
+
+        // sobre con la nota (abajo, girado hacia el otro lado)
+        val envW = w * 1.02f
+        val envH = envW * (589f / 700f)
+        val bodyTop = envH * (397f / 1233f)          // donde empieza el bolsillo del sobre
+        val noteW = envW * 0.84f
+        val noteH = noteW * (457f / 700f)
+        Box(
+            Modifier.align(Alignment.BottomCenter).offset(y = (-4).dp)
+                .size(envW, envH)
+                .rotate(4f)
+        ) {
+            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_env_back), null, modifier = Modifier.fillMaxSize())
+            // la nota: adentro del sobre (0) → asomándose (1)
+            Box(
+                Modifier.offset(
+                    x = (envW - noteW) / 2,
+                    y = bodyTop + 6.dp - noteH * 0.58f * noteOut.value
+                ).size(noteW, noteH)
+            ) {
+                Image(androidx.compose.ui.res.painterResource(R.drawable.vt_note), null, modifier = Modifier.fillMaxSize())
+                Column(Modifier.fillMaxSize().padding(start = noteW * 0.07f, end = noteW * 0.07f, top = noteH * 0.07f)) {
+                    Text(shownTitle, color = ink, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp, lineHeight = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (shownArtist.isNotEmpty()) Text(shownArtist, color = ink.copy(alpha = 0.85f), fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    shownTrack?.let {
+                        Text(it.lowercase(Locale.ROOT), color = Vintage.Burgundy, fontFamily = FontFamily.Monospace,
+                            fontSize = 9.sp, maxLines = 1)
+                    }
+                }
+            }
+            Image(androidx.compose.ui.res.painterResource(R.drawable.vt_env_front), null, modifier = Modifier.fillMaxSize())
+        }
+    }
+}
