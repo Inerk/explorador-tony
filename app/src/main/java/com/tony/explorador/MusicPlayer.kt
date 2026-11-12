@@ -5,6 +5,14 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -107,20 +115,21 @@ import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 
+fun mediaItemsFor(files: List<File>): List<MediaItem> = files.map { f ->
+    MediaItem.Builder()
+        .setMediaId(f.absolutePath)
+        .setUri(Uri.fromFile(f))
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(f.nameWithoutExtension)
+                .setArtist(f.parentFile?.name ?: "")
+                .build()
+        )
+        .build()
+}
+
 fun playMusic(player: Player, files: List<File>, index: Int) {
-    val items = files.map { f ->
-        MediaItem.Builder()
-            .setMediaId(f.absolutePath)
-            .setUri(Uri.fromFile(f))
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(f.nameWithoutExtension)
-                    .setArtist(f.parentFile?.name ?: "")
-                    .build()
-            )
-            .build()
-    }
-    player.setMediaItems(items, index, 0L)
+    player.setMediaItems(mediaItemsFor(files), index, 0L)
     player.prepare()
     player.play()
 }
@@ -313,7 +322,18 @@ fun MusicPlayerScreen(
 
                 // Panel central: portada / letra / lista
                 Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
-                    Crossfade(targetState = mode, animationSpec = tween(160), label = "panel") { m ->
+                    AnimatedContent(
+                        targetState = mode,
+                        transitionSpec = {
+                            if (targetState == PanelMode.COVER)
+                                (fadeIn(tween(240)) + scaleIn(tween(320), initialScale = 0.85f)) togetherWith
+                                    (fadeOut(tween(160)) + scaleOut(tween(220), targetScale = 1.08f))
+                            else
+                                (fadeIn(tween(240)) + scaleIn(tween(320), initialScale = 1.08f)) togetherWith
+                                    (fadeOut(tween(160)) + scaleOut(tween(220), targetScale = 0.85f))
+                        },
+                        label = "panel"
+                    ) { m ->
                         when (m) {
                             PanelMode.COVER -> CoverArt(
                                 cover = info?.cover,
@@ -339,7 +359,15 @@ fun MusicPlayerScreen(
                     }
                 }
 
-                if (mode == PanelMode.QUEUE) {
+                AnimatedContent(
+                    targetState = mode == PanelMode.QUEUE,
+                    transitionSpec = {
+                        (slideInVertically(tween(300)) { it / 2 } + fadeIn(tween(240))) togetherWith
+                            (slideOutVertically(tween(220)) { it / 2 } + fadeOut(tween(160)))
+                    },
+                    label = "bottom"
+                ) { tape ->
+                if (tape) {
                     // Reproductor "en cinta" abajo mientras ves la lista; tócalo para volver a la portada
                     TapeBar(
                         cover = info?.cover,
@@ -353,7 +381,7 @@ fun MusicPlayerScreen(
                         onNext = { player.seekToNextMediaItem() },
                         onOpen = { mode = PanelMode.COVER },
                     )
-                } else {
+                } else { Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Título y artista
                 Spacer(Modifier.height(12.dp))
                 val path = player.currentMediaItem?.mediaId
@@ -462,6 +490,7 @@ fun MusicPlayerScreen(
                         )
                     }
                 }
+                } }
                 }
                 Spacer(Modifier.height(8.dp))
             }

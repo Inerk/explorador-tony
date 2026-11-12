@@ -31,6 +31,8 @@ data class Song(
 
 data class Playlist(val id: String, val name: String, val paths: List<String>)
 
+data class SavedPlayback(val paths: List<String>, val index: Int, val position: Long, val shuffle: Boolean, val repeat: Int)
+
 const val UNKNOWN_ARTIST = "Artista desconocido"
 const val UNKNOWN_ALBUM = "Álbum desconocido"
 
@@ -72,6 +74,41 @@ object LibraryStore {
     fun changeUserName(name: String) { userName = name; save() }
     fun changeAvatar(index: Int) { avatar = index; avatarVersion++; save() }
     fun changeMusicSkin(s: MusicSkin) { musicSkin = s; save() }
+    var windowSkin by mutableStateOf(WindowSkin.MEDIA)
+        private set
+    fun changeWindowSkin(s: WindowSkin) { windowSkin = s; save() }
+
+    // ───── Escritorio ─────
+    val desktopIds = mutableStateListOf<String>()           // íconos visibles
+    val desktopPos = mutableStateMapOf<String, String>()    // id → "columna,fila"
+    val desktopShortcuts = mutableStateListOf<String>()     // los que se agregaron como acceso directo
+    private var desktopConfigured = false
+
+    fun ensureDesktopDefaults(defaults: List<String>) {
+        if (!desktopConfigured) {
+            desktopIds.clear(); desktopIds.addAll(defaults)
+            desktopConfigured = true
+            save()
+        }
+    }
+    fun setDesktopVisible(id: String, visible: Boolean) {
+        if (visible && id !in desktopIds) desktopIds.add(id)
+        if (!visible) { desktopIds.remove(id); desktopPos.remove(id); desktopShortcuts.remove(id) }
+        save()
+    }
+    fun addDesktopShortcut(id: String) {
+        if (id !in desktopIds) { desktopIds.add(id); if (id !in desktopShortcuts) desktopShortcuts.add(id) }
+        save()
+    }
+    fun moveDesktopIcon(id: String, col: Int, row: Int) {
+        val target = "$col,$row"
+        val other = desktopPos.entries.firstOrNull { it.value == target && it.key != id }?.key
+        val old = desktopPos[id]
+        if (other != null) { if (old != null) desktopPos[other] = old else desktopPos.remove(other) }
+        desktopPos[id] = target
+        save()
+    }
+    fun resetDesktopPositions() { desktopPos.clear(); save() }
 
     private val dataFile get() = File(appContext.filesDir, "biblioteca.json")
     private val songsCache get() = File(appContext.filesDir, "canciones.json")
@@ -255,6 +292,37 @@ object LibraryStore {
         out
     }
 
+    // ───── Lo último que sonaba ─────
+
+    private val playbackFile get() = File(appContext.filesDir, "reproduccion.json")
+
+    fun savePlayback(p: SavedPlayback) {
+        if (!loaded) return
+        val json = JSONObject()
+            .put("paths", JSONArray(p.paths))
+            .put("index", p.index)
+            .put("position", p.position)
+            .put("shuffle", p.shuffle)
+            .put("repeat", p.repeat)
+            .toString()
+        io.launch { runCatching { playbackFile.writeText(json) } }
+    }
+
+    fun clearPlayback() { if (loaded) io.launch { runCatching { playbackFile.delete() } } }
+
+    fun loadPlayback(): SavedPlayback? = runCatching {
+        if (!playbackFile.isFile) return@runCatching null
+        val o = JSONObject(playbackFile.readText())
+        val arr = o.getJSONArray("paths")
+        SavedPlayback(
+            paths = (0 until arr.length()).map { arr.getString(it) },
+            index = o.optInt("index"),
+            position = o.optLong("position"),
+            shuffle = o.optBoolean("shuffle"),
+            repeat = o.optInt("repeat"),
+        )
+    }.getOrNull()
+
     // ───── Guardar / cargar ─────
 
     private fun save() {
@@ -268,6 +336,11 @@ object LibraryStore {
             put("user", userName)
             put("avatar", avatar)
             put("musicSkin", musicSkin.name)
+            put("windowSkin", windowSkin.name)
+            put("desktopConfigured", desktopConfigured)
+            put("desktopIds", JSONArray(desktopIds.toList()))
+            put("desktopPos", JSONObject(desktopPos.toMap()))
+            put("desktopShortcuts", JSONArray(desktopShortcuts.toList()))
             put("playlists", JSONArray().apply {
                 playlists.forEach { p ->
                     put(JSONObject().put("id", p.id).put("name", p.name).put("paths", JSONArray(p.paths)))
@@ -288,6 +361,11 @@ object LibraryStore {
         o.optString("user").takeIf { it.isNotBlank() }?.let { userName = it }
         avatar = o.optInt("avatar", 0)
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }
+        o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
+        desktopConfigured = o.optBoolean("desktopConfigured", false)
+        o.optJSONArray("desktopIds")?.let { a -> for (i in 0 until a.length()) desktopIds.add(a.getString(i)) }
+        o.optJSONObject("desktopPos")?.let { m -> m.keys().forEach { k -> desktopPos[k] = m.getString(k) } }
+        o.optJSONArray("desktopShortcuts")?.let { a -> for (i in 0 until a.length()) desktopShortcuts.add(a.getString(i)) }
         o.optJSONArray("playlists")?.let { a ->
             for (i in 0 until a.length()) {
                 val p = a.getJSONObject(i)

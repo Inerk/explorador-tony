@@ -201,6 +201,7 @@ fun ControlPanelContent(
     var musicSkinOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
     var historyOpen by remember { mutableStateOf(false) }
+    var windowSkinOpen by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize().background(Color.White)) {
         item {
@@ -215,6 +216,7 @@ fun ControlPanelContent(
             PanelItem(null, "Cuentas de usuario", "Tu nombre y tu imagen", avatar = true) { onAccount() }
         }
         item { PanelItem(XpIconKind.MUSIC, "Tema del reproductor", LibraryStore.musicSkin.label) { musicSkinOpen = true } }
+        item { PanelItem(XpIconKind.COMPUTER, "Ventana del reproductor", LibraryStore.windowSkin.label) { windowSkinOpen = true } }
         item { PanelItem(XpIconKind.FOLDER, "Carpetas de música", "Dónde busca canciones la app") { onMusicFolders() } }
         item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName") { onUpdates() } }
         item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
@@ -223,6 +225,27 @@ fun ControlPanelContent(
 
     if (musicSkinOpen) MusicSkinDialog(onDismiss = { musicSkinOpen = false })
     if (historyOpen) VersionHistoryDialog(versionName, onDismiss = { historyOpen = false })
+    if (windowSkinOpen) {
+        AlertDialog(
+            onDismissRequest = { windowSkinOpen = false },
+            title = { Text("Ventana del reproductor") },
+            text = {
+                Column {
+                    WindowSkin.entries.forEach { skin ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { LibraryStore.changeWindowSkin(skin); windowSkinOpen = false }.padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = LibraryStore.windowSkin == skin, onClick = { LibraryStore.changeWindowSkin(skin); windowSkinOpen = false })
+                            Text(skin.label)
+                        }
+                    }
+                    Text("También puedes cambiarla con el botón ◐ de la ventana.", fontSize = 12.sp, color = Color.Gray)
+                }
+            },
+            confirmButton = { TextButton(onClick = { windowSkinOpen = false }) { Text("Cerrar") } }
+        )
+    }
     if (aboutOpen) {
         AlertDialog(
             onDismissRequest = { aboutOpen = false },

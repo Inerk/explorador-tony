@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,7 +100,6 @@ private fun FlyingPapers(modifier: Modifier) {
         0f, 1f, infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Restart), label = "spin"
     )
     Box(modifier) {
-        Canvas(Modifier.size(1.dp)) {} // espacio reservado
         Canvas(Modifier.matchParentSize()) {
             val h = size.height
             val globeC = Offset(h * 0.5f + 8f, h * 0.5f)
@@ -138,24 +138,62 @@ private fun DrawScope.drawPaper(c: Offset, s: Float, alpha: Float) {
 }
 
 private fun DrawScope.drawGlobe(c: Offset, r: Float, spin: Float) {
-    drawCircle(Brush.radialGradient(listOf(Color(0xFF9FD3FF), Color(0xFF1E6FD8), Color(0xFF0A3A8C)),
-        center = Offset(c.x - r * 0.3f, c.y - r * 0.3f), radius = r * 1.5f), r, c)
-    // "continentes" que giran
-    val shift = spin * r * 2f
-    for (k in -1..1) {
-        val bx = c.x - r + ((shift + k * r * 2f) % (r * 2f) + r * 2f) % (r * 2f) - r * 0.2f
-        val land = Path().apply {
-            moveTo(bx, c.y - r * 0.5f)
-            cubicTo(bx + r * 0.5f, c.y - r * 0.7f, bx + r * 0.6f, c.y - r * 0.1f, bx + r * 0.3f, c.y + r * 0.1f)
-            cubicTo(bx + r * 0.5f, c.y + r * 0.5f, bx + r * 0.1f, c.y + r * 0.6f, bx - r * 0.05f, c.y + r * 0.3f)
-            close()
+    // halo de atmósfera
+    drawCircle(
+        Brush.radialGradient(listOf(Color(0x5539A0FF), Color.Transparent), center = c, radius = r * 1.35f),
+        r * 1.35f, c
+    )
+    val circle = Path().apply { addOval(androidx.compose.ui.geometry.Rect(c, r)) }
+    clipPath(circle) {
+        // océano con luz desde arriba a la izquierda
+        drawCircle(
+            Brush.radialGradient(
+                listOf(Color(0xFF7CC4FF), Color(0xFF2A7BE0), Color(0xFF0B3C8E)),
+                center = Offset(c.x - r * 0.35f, c.y - r * 0.4f), radius = r * 1.6f
+            ), r, c
+        )
+        // continentes que van girando (se dibujan dos veces para que den la vuelta completa)
+        val period = r * 4f
+        val shift = spin * period
+        for (k in -1..1) {
+            val ox = c.x - r * 1.5f + shift + k * period
+            fun land(dx: Float, dy: Float, w: Float, h: Float) {
+                val p = Path().apply {
+                    moveTo(ox + dx, c.y + dy)
+                    cubicTo(ox + dx + w * 0.3f, c.y + dy - h * 0.6f, ox + dx + w * 0.9f, c.y + dy - h * 0.4f, ox + dx + w, c.y + dy + h * 0.1f)
+                    cubicTo(ox + dx + w * 0.8f, c.y + dy + h * 0.7f, ox + dx + w * 0.2f, c.y + dy + h * 0.6f, ox + dx, c.y + dy)
+                    close()
+                }
+                drawPath(p, Brush.verticalGradient(listOf(Color(0xFF7FD957), Color(0xFF2E9B2E)),
+                    startY = c.y + dy - h, endY = c.y + dy + h))
+            }
+            land(0f, -r * 0.35f, r * 0.9f, r * 0.55f)
+            land(r * 0.35f, r * 0.35f, r * 0.55f, r * 0.7f)
+            land(r * 1.6f, -r * 0.1f, r * 1.1f, r * 0.6f)
+            land(r * 2.2f, r * 0.5f, r * 0.5f, r * 0.35f)
         }
-        drawPath(land, Color(0xFF4FC24F).copy(alpha = 0.9f))
+        // líneas de latitud y longitud
+        for (i in 1..3) {
+            val yy = c.y - r + i * r * 0.5f
+            val half = kotlin.math.sqrt((r * r - (yy - c.y) * (yy - c.y)).coerceAtLeast(0f))
+            drawLine(Color.White.copy(alpha = 0.18f), Offset(c.x - half, yy), Offset(c.x + half, yy), strokeWidth = 1f)
+        }
+        for (i in -1..1) {
+            val ew = r * (0.35f + 0.3f * kotlin.math.abs(i))
+            drawOval(Color.White.copy(alpha = 0.15f), Offset(c.x - ew + i * r * 0.0f, c.y - r), Size(ew * 2, r * 2), style = Stroke(1f))
+        }
+        // sombra del lado derecho (da volumen)
+        drawCircle(
+            Brush.radialGradient(listOf(Color.Transparent, Color(0x99001030)),
+                center = Offset(c.x - r * 0.45f, c.y - r * 0.45f), radius = r * 2f), r, c
+        )
     }
-    // tapar lo que se sale del círculo con un anillo del color de la ventana
-    drawCircle(XpColors.Window, r * 1.6f, c, style = Stroke(r * 1.2f))
-    drawCircle(Color(0xFF0A3A8C), r, c, style = Stroke(2f))
-    drawOval(Color.White.copy(alpha = 0.35f), Offset(c.x - r * 0.55f, c.y - r * 0.85f), Size(r * 0.9f, r * 0.5f))
+    drawCircle(Color(0xFF0B3C8E), r, c, style = Stroke(1.5f))
+    // brillo
+    drawOval(
+        Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.6f), Color.Transparent), startY = c.y - r * 0.9f, endY = c.y - r * 0.2f),
+        Offset(c.x - r * 0.6f, c.y - r * 0.9f), Size(r * 1.0f, r * 0.6f)
+    )
 }
 
 private fun DrawScope.drawMiniComputer(o: Offset, s: Float) {

@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -206,7 +207,21 @@ fun LibraryScreen(
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (val p = page) {
+            androidx.compose.animation.AnimatedContent(
+                targetState = stack.size to page,
+                transitionSpec = {
+                    val forward = targetState.first >= initialState.first
+                    val dir = if (forward) 1 else -1
+                    (androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(300)) { dir * it / 3 } +
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260)) +
+                        androidx.compose.animation.scaleIn(androidx.compose.animation.core.tween(300), initialScale = if (forward) 0.96f else 1.04f)) togetherWith
+                        (androidx.compose.animation.slideOutHorizontally(androidx.compose.animation.core.tween(260)) { -dir * it / 4 } +
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(180)) +
+                            androidx.compose.animation.scaleOut(androidx.compose.animation.core.tween(260), targetScale = if (forward) 0.94f else 1.04f))
+                },
+                label = "pages"
+            ) { (_, shownPage) ->
+            when (val p = shownPage) {
                 LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) })
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it })
                 LibPage.Artists -> GroupList(
@@ -242,6 +257,7 @@ fun LibraryScreen(
                     }
                 }
                 LibPage.Folders -> FoldersPage()
+            }
             }
         }
         miniPlayer()

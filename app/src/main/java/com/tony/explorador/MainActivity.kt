@@ -132,15 +132,23 @@ fun AppRoot() {
 
     val controller = rememberMediaController()
     val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
-    fun open(o: Overlay) { overlays.remove(o); overlays.add(o) }
-    fun closeTop() { if (overlays.isNotEmpty()) overlays.removeAt(overlays.lastIndex) }
+    val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }
+    fun open(o: Overlay) {
+        close(o); overlays.add(o)
+        overlayStates[o] = androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
+    }
+    /** Cierra con animación; se quita de la lista cuando termina de salir. */
+    fun close(o: Overlay) {
+        val st = overlayStates[o]
+        if (st != null) st.targetState = false else close(o)
+    }
     var choosingTheme by remember { mutableStateOf(false) }
     var homeSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var libraryReset by remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    fun goHome() { overlays.clear(); homeSignal++ }
+    fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
     var folderRequest by remember { mutableStateOf<File?>(null) }
     fun musicMenu() {
-        overlays.removeAll { it == Overlay.Music || it == Overlay.CoverFlow }
+        overlays.filter { it == Overlay.Music || it == Overlay.CoverFlow }.forEach { close(it) }
         libraryReset++
         open(Overlay.Library)
     }
@@ -203,11 +211,22 @@ fun AppRoot() {
 
         overlays.toList().forEach { o ->
             androidx.compose.runtime.key(o) {
+                val st = overlayStates[o] ?: remember { androidx.compose.animation.core.MutableTransitionState(true) }
+                LaunchedEffect(st.currentState, st.isIdle) {
+                    if (st.isIdle && !st.currentState && !st.targetState) {
+                        overlays.remove(o); overlayStates.remove(o)
+                    }
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visibleState = st,
+                    enter = enterFor(o),
+                    exit = exitFor(o),
+                ) {
                 when (o) {
-                    is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlays.remove(o) }, onHome = { goHome() })
-                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlays.remove(o) }, onHome = { goHome() })
+                    is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { close(o) }, onHome = { goHome() })
+                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { close(o) }, onHome = { goHome() })
                     Overlay.Music -> if (controller != null) {
-                        MusicPlayerScreen(controller, onClose = { overlays.remove(o) },
+                        MusicPlayerScreen(controller, onClose = { close(o) },
                             onOpenCoverFlow = { open(Overlay.CoverFlow) },
                             onHome = { goHome() },
                             onMusicMenu = { musicMenu() })
@@ -219,22 +238,22 @@ fun AppRoot() {
                                 it.shuffleModeEnabled = false
                                 playMusic(it, songs.map { s -> s.file }, index)
                             }
-                            overlays.remove(o)
+                            close(o)
                             open(Overlay.Music)
                         },
-                        onClose = { overlays.remove(o) },
+                        onClose = { close(o) },
                         onHome = { goHome() }
                     )
                     Overlay.Gallery -> GalleryScreen(
                         onOpenImages = { files, index -> open(Overlay.Images(files, index)) },
                         onOpenVideo = { files, index -> controller?.pause(); open(Overlay.Video(files, index)) },
-                        onClose = { overlays.remove(o) },
+                        onClose = { close(o) },
                         onHome = { goHome() }
                     )
                     Overlay.MyPc -> MyComputerScreen(
-                        onOpenFolder = { f -> overlays.remove(o); folderRequest = f },
-                        onOpenMusic = { overlays.remove(o); open(Overlay.Library) },
-                        onClose = { overlays.remove(o) },
+                        onOpenFolder = { f -> close(o); folderRequest = f },
+                        onOpenMusic = { close(o); open(Overlay.Library) },
+                        onClose = { close(o) },
                         onHome = { goHome() }
                     )
                     Overlay.Library -> LibraryScreen(
@@ -245,11 +264,12 @@ fun AppRoot() {
                             }
                             open(Overlay.Music)
                         },
-                        onClose = { overlays.remove(o) },
+                        onClose = { close(o) },
                         miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) },
                         onHome = { goHome() },
                         resetSignal = libraryReset,
                     )
+                }
                 }
             }
         }
@@ -363,4 +383,40 @@ fun PermissionScreen(onGranted: () -> Unit) {
             }
         }) { Text("Dar permiso") }
     }
+}
+
+// ───── Animaciones al abrir y cerrar pantallas ─────
+
+private val smooth = androidx.compose.animation.core.spring<Float>(
+    dampingRatio = 0.9f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+)
+private val smoothOffset = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(
+    dampingRatio = 0.9f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+)
+
+private fun enterFor(o: Overlay): androidx.compose.animation.EnterTransition = when (o) {
+    // el reproductor "crece" desde el mini reproductor de abajo
+    Overlay.Music -> androidx.compose.animation.slideInVertically(smoothOffset) { it / 3 } +
+        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+        androidx.compose.animation.scaleIn(smooth, initialScale = 0.86f,
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
+    // secciones: entran deslizándose de lado
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery -> androidx.compose.animation.slideInHorizontally(smoothOffset) { it / 3 } +
+        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+        androidx.compose.animation.scaleIn(smooth, initialScale = 0.95f)
+    // fotos, videos, carrusel: zoom desde el centro
+    else -> androidx.compose.animation.scaleIn(smooth, initialScale = 0.82f) +
+        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220))
+}
+
+private fun exitFor(o: Overlay): androidx.compose.animation.ExitTransition = when (o) {
+    Overlay.Music -> androidx.compose.animation.slideOutVertically(smoothOffset) { it / 3 } +
+        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+        androidx.compose.animation.scaleOut(smooth, targetScale = 0.86f,
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery -> androidx.compose.animation.slideOutHorizontally(smoothOffset) { it / 3 } +
+        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
+        androidx.compose.animation.scaleOut(smooth, targetScale = 0.95f)
+    else -> androidx.compose.animation.scaleOut(smooth, targetScale = 0.82f) +
+        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
 }

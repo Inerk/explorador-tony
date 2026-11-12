@@ -20,6 +20,23 @@ import androidx.media3.session.MediaSessionService
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
+    private var restoring = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val saver = object : Runnable {
+        override fun run() {
+            if (session?.player?.isPlaying == true) savePlayback()
+            handler.postDelayed(this, 5000)
+        }
+    }
+
+    /** Guarda la lista, la canción y el segundo exacto, para seguir ahí aunque se cierre la app. */
+    private fun savePlayback() {
+        val p = session?.player ?: return
+        if (restoring) return
+        if (p.mediaItemCount == 0) { LibraryStore.clearPlayback(); return }
+        val paths = (0 until p.mediaItemCount).map { p.getMediaItemAt(it).mediaId }
+        LibraryStore.savePlayback(SavedPlayback(paths, p.currentMediaItemIndex, p.currentPosition, p.shuffleModeEnabled, p.repeatMode))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -44,14 +61,34 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .build()
 
-        // Llevar la cuenta de las más escuchadas
         LibraryStore.init(this)
+
+        // Recuperar lo que estaba sonando la última vez (sin darle play)
+        LibraryStore.loadPlayback()?.let { saved ->
+            val files = saved.paths.map { java.io.File(it) }.filter { it.isFile }
+            if (files.isNotEmpty()) {
+                val currentPath = saved.paths.getOrNull(saved.index)
+                val idx = files.indexOfFirst { it.absolutePath == currentPath }.coerceAtLeast(0)
+                restoring = true
+                player.setMediaItems(mediaItemsFor(files), idx, if (files[idx].absolutePath == currentPath) saved.position else 0L)
+                player.shuffleModeEnabled = saved.shuffle
+                player.repeatMode = saved.repeat
+                player.prepare()
+                restoring = false
+            }
+        }
+
         player.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val path = mediaItem?.mediaId ?: return
-                if (path.startsWith("/")) LibraryStore.recordPlay(path)
+                // Llevar la cuenta de las más escuchadas
+                val path = mediaItem?.mediaId
+                if (!restoring && path != null && path.startsWith("/")) LibraryStore.recordPlay(path)
+                savePlayback()
             }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { savePlayback() }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) { savePlayback() }
         })
+        handler.postDelayed(saver, 5000)
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -66,6 +103,7 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        savePlayback()
         val player = session?.player
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
             stopSelf()
@@ -73,6 +111,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(saver)
+        savePlayback()
         session?.run {
             player.release()
             release()

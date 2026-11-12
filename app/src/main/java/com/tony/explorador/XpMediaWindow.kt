@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
@@ -105,7 +107,19 @@ fun XpMediaWindow(
         onClose = onClose,
         onMaximize = onOpen,
         modifier = modifier,
+        extraCaption = {
+            // cambiar el aspecto de la ventana
+            XpCaptionButton("◐", XpBlueButton) {
+                LibraryStore.changeWindowSkin(
+                    if (LibraryStore.windowSkin == WindowSkin.MEDIA) WindowSkin.AMP else WindowSkin.MEDIA
+                )
+            }
+        },
     ) {
+        if (LibraryStore.windowSkin == WindowSkin.AMP) {
+            AmpSkin(player, title, artist, position, duration, progress, onOpen)
+            return@XpWindowFrame
+        }
         Column(Modifier.fillMaxSize().background(Wmp.Body)) {
             // Franja "Reproduciendo ahora" con el título corriendo
             Row(
@@ -197,7 +211,7 @@ fun XpMediaWindow(
 /** Ecualizador con las frecuencias reales de la canción (graves a la izquierda, agudos a la derecha). */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-private fun Spectrum(playing: Boolean, modifier: Modifier) {
+fun Spectrum(playing: Boolean, modifier: Modifier, amp: Boolean = false) {
     val bars = SpectrumAnalyzer.BANDS
     val levels = remember { mutableStateListOf<Float>().apply { repeat(bars) { add(0f) } } }
     val peaks = remember { mutableStateListOf<Float>().apply { repeat(bars) { add(0f) } } }
@@ -226,6 +240,22 @@ private fun Spectrum(playing: Boolean, modifier: Modifier) {
         val gap = 2.dp.toPx()
         val bw = (size.width - gap * (bars - 1)) / bars
         val seg = 3.dp.toPx()
+        if (amp) {
+            // barras sólidas verde → amarillo → naranja, con picos grises
+            val grad = Brush.verticalGradient(
+                listOf(Color(0xFFFF6A00), Color(0xFFFFD000), Color(0xFF7CFF00), Color(0xFF00B800)),
+                startY = 0f, endY = size.height
+            )
+            for (i in 0 until bars) {
+                val x = i * (bw + gap)
+                val h = size.height * levels[i]
+                if (h > 0.5f) drawRect(grad, Offset(x, size.height - h), Size(bw, h))
+                if (peaks[i] > 0.01f) {
+                    drawRect(Color(0xFFB0B0B0), Offset(x, size.height - size.height * peaks[i] - 2f), Size(bw, 2f))
+                }
+            }
+            return@Canvas
+        }
         for (i in 0 until bars) {
             val x = i * (bw + gap)
             val h = size.height * levels[i]
@@ -314,3 +344,199 @@ private fun VolumeSlider(player: Player) {
     }
 }
 
+
+// ───────────── Aspecto clásico: amplificador gris con pantalla verde ─────────────
+
+private object Amp {
+    val Body = Brush.verticalGradient(listOf(Color(0xFF4A4C5C), Color(0xFF2C2D38), Color(0xFF23242D)))
+    val Green = Color(0xFF00E83A)
+    val GreenDim = Color(0xFF0E7A2A)
+    val Lcd = Color(0xFF000000)
+}
+
+@Composable
+private fun Bevel(modifier: Modifier, pressed: Boolean = false, content: @Composable () -> Unit) {
+    val light = Color(0xFF8A8D9E)
+    val dark = Color(0xFF15161C)
+    Box(
+        modifier
+            .background(Brush.verticalGradient(
+                if (pressed) listOf(Color(0xFF2A2B33), Color(0xFF3C3E4B)) else listOf(Color(0xFF6B6E80), Color(0xFF3B3D4A))
+            ))
+            .drawBehindBevel(if (pressed) dark else light, if (pressed) light else dark),
+        contentAlignment = Alignment.Center
+    ) { content() }
+}
+
+private fun Modifier.drawBehindBevel(topLeft: Color, bottomRight: Color) = this.then(
+    Modifier.drawWithContent {
+        drawContent()
+        val w = size.width; val h = size.height; val t = 1.5.dp.toPx()
+        drawRect(topLeft, Offset.Zero, Size(w, t))
+        drawRect(topLeft, Offset.Zero, Size(t, h))
+        drawRect(bottomRight, Offset(0f, h - t), Size(w, t))
+        drawRect(bottomRight, Offset(w - t, 0f), Size(t, h))
+    }
+)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AmpSkin(
+    player: Player,
+    title: String,
+    artist: String,
+    position: Long,
+    duration: Long,
+    progress: Float,
+    onOpen: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().background(Amp.Body).padding(6.dp)) {
+        // Pantalla LCD
+        Row(
+            Modifier.fillMaxWidth().weight(1f)
+                .background(Amp.Lcd)
+                .drawBehindBevel(Color(0xFF0B0B0F), Color(0xFF6B6E80))
+                .clickable(onClick = onOpen)
+                .padding(8.dp)
+        ) {
+            Column(Modifier.width(110.dp)) {
+                Text(if (player.isPlaying) "▶" else "❚❚", color = Amp.Green, fontSize = 12.sp)
+                Text(
+                    formatTime(position),
+                    color = Amp.Green, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 30.sp,
+                    style = androidx.compose.ui.text.TextStyle(
+                        shadow = androidx.compose.ui.graphics.Shadow(Amp.Green.copy(alpha = 0.7f), Offset.Zero, 10f)
+                    )
+                )
+                Spacer(Modifier.weight(1f))
+                Spectrum(player.isPlaying, Modifier.fillMaxWidth().height(36.dp), amp = true)
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    (if (artist.isNotEmpty()) "$artist - $title" else title) + "   ***   ",
+                    color = Amp.Green, fontFamily = FontFamily.Monospace, fontSize = 12.sp, maxLines = 1,
+                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                )
+                Spacer(Modifier.height(6.dp))
+                Row {
+                    LcdTag("${formatTime(duration)}")
+                    Spacer(Modifier.width(6.dp))
+                    LcdTag("STEREO")
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Led(player.shuffleModeEnabled); Text(" ALEATORIO", color = Amp.GreenDim, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Led(player.repeatMode != Player.REPEAT_MODE_OFF); Text(" REPETIR", color = Amp.GreenDim, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        // Barra de posición
+        Canvas(
+            Modifier.fillMaxWidth().height(14.dp)
+                .pointerInput(duration) {
+                    detectTapGestures { o -> if (duration > 0) player.seekTo((o.x / size.width * duration).toLong()) }
+                }
+                .pointerInput(duration) {
+                    detectHorizontalDragGestures { change, _ ->
+                        change.consume()
+                        if (duration > 0) player.seekTo((change.position.x / size.width).coerceIn(0f, 1f).times(duration).toLong())
+                    }
+                }
+        ) {
+            val y = size.height / 2
+            drawRect(Color(0xFF15161C), Offset(0f, y - 3f), Size(size.width, 6f))
+            drawRect(Color(0xFF6B6E80), Offset(0f, y + 3f), Size(size.width, 1f))
+            val tw = 26.dp.toPx()
+            val x = (size.width - tw) * progress
+            drawRect(Brush.verticalGradient(listOf(Color(0xFFE8D27A), Color(0xFFB08A2A))), Offset(x, 1f), Size(tw, size.height - 2f))
+            drawRect(Color(0xFF5A4410), Offset(x, 1f), Size(tw, size.height - 2f), style = Stroke(1f))
+        }
+
+        Spacer(Modifier.height(6.dp))
+        // Botones
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AmpButton("⏮") { player.seekToPreviousMediaItem() }
+            AmpButton("▶") { player.play() }
+            AmpButton("❚❚") { player.pause() }
+            AmpButton("■") { player.pause(); player.seekTo(0) }
+            AmpButton("⏭") { player.seekToNextMediaItem() }
+            Spacer(Modifier.width(6.dp))
+            AmpToggle("ALE", player.shuffleModeEnabled) { player.shuffleModeEnabled = !player.shuffleModeEnabled }
+            AmpToggle("REP", player.repeatMode != Player.REPEAT_MODE_OFF) {
+                player.repeatMode = if (player.repeatMode == Player.REPEAT_MODE_OFF) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        AmpVolume(player)
+    }
+}
+
+@Composable
+private fun LcdTag(text: String) {
+    Text(text, color = Amp.Green, fontSize = 10.sp, fontFamily = FontFamily.Monospace,
+        modifier = Modifier.border(1.dp, Amp.GreenDim).padding(horizontal = 4.dp, vertical = 1.dp))
+}
+
+@Composable
+private fun Led(on: Boolean) {
+    Box(Modifier.size(7.dp).clip(CircleShape).background(if (on) Amp.Green else Color(0xFF14361E)))
+}
+
+@Composable
+private fun AmpButton(glyph: String, onClick: () -> Unit) {
+    var down by remember { androidx.compose.runtime.mutableStateOf(false) }
+    Bevel(
+        Modifier.padding(end = 3.dp).size(34.dp, 26.dp)
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = { down = true; tryAwaitRelease(); down = false }, onTap = { onClick() })
+            },
+        pressed = down
+    ) {
+        Text(glyph, color = Color(0xFFE6E6EE), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun AmpToggle(label: String, on: Boolean, onClick: () -> Unit) {
+    Bevel(Modifier.padding(end = 3.dp).height(20.dp).clickable(onClick = onClick), pressed = on) {
+        Row(Modifier.padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Led(on)
+            Text(" $label", color = Color(0xFFD0D0DA), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun AmpVolume(player: Player) {
+    var vol by remember { mutableFloatStateOf(player.volume) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("VOL", color = Color(0xFFD0D0DA), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(6.dp))
+        Canvas(
+            Modifier.weight(1f).height(14.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures { o -> vol = (o.x / size.width).coerceIn(0f, 1f); player.volume = vol }
+                }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { change, _ ->
+                        change.consume()
+                        vol = (change.position.x / size.width).coerceIn(0f, 1f)
+                        player.volume = vol
+                    }
+                }
+        ) {
+            // la barra cambia de verde a rojo según el volumen
+            val c = androidx.compose.ui.graphics.lerp(Color(0xFF00C030), Color(0xFFE02020), vol)
+            drawRect(Color(0xFF15161C), Offset(0f, size.height / 2 - 3f), Size(size.width, 6f))
+            drawRect(c, Offset(0f, size.height / 2 - 3f), Size(size.width * vol, 6f))
+            val tw = 14.dp.toPx()
+            val x = (size.width - tw) * vol
+            drawRect(Brush.verticalGradient(listOf(Color(0xFFCFD2E0), Color(0xFF7A7D90))), Offset(x, 0f), Size(tw, size.height))
+        }
+    }
+}

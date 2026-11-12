@@ -67,6 +67,7 @@ fun XpWindowFrame(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     onMaximize: (() -> Unit)? = { state.maximized = !state.maximized },
+    extraCaption: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -97,6 +98,7 @@ fun XpWindowFrame(
                 Spacer(Modifier.width(6.dp))
                 Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (extraCaption != null) { extraCaption(); Spacer(Modifier.width(2.dp)) }
                 XpCaptionButton("_", XpBlueButton) { state.minimized = true }
                 if (onMaximize != null) {
                     Spacer(Modifier.width(2.dp))

@@ -46,6 +46,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,7 +81,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private data class DesktopItem(val label: String, val icon: XpIconKind, val action: () -> Unit)
 
 /** Lo que el escritorio recuerda aunque entres a otras pantallas (posición de la ventana, etc.). */
 object DesktopState {
@@ -115,16 +117,25 @@ fun XpDesktop(
 
     val internal = roots.first().file
     fun dir(name: String) = File(internal, name)
-    val items = buildList {
-        add(DesktopItem("Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) })
-        roots.drop(1).forEach { r -> add(DesktopItem(r.name, XpIconKind.SD_CARD) { onOpenFolder(r.file) }) }
-        add(DesktopItem("Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
-        add(DesktopItem("Mi música", XpIconKind.MUSIC) { onOpenMusic() })
-        add(DesktopItem("Mis imágenes", XpIconKind.PICTURES) { onOpenGallery() })
-        add(DesktopItem("Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
-        add(DesktopItem("Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
-        add(DesktopItem("Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
-        add(DesktopItem("Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
+    // Todo lo que puede ir en el escritorio (tú eliges cuáles se ven)
+    val apps = linkedMapOf<String, DeskApp>().apply {
+        fun add(a: DeskApp) { put(a.id, a) }
+        add(DeskApp("mypc", "Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) })
+        roots.drop(1).firstOrNull()?.let { r -> add(DeskApp("sd", r.name, XpIconKind.SD_CARD) { onOpenFolder(r.file) }) }
+        add(DeskApp("docs", "Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) })
+        add(DeskApp("music", "Mi música", XpIconKind.MUSIC) { onOpenMusic() })
+        add(DeskApp("pictures", "Mis imágenes", XpIconKind.PICTURES) { onOpenGallery() })
+        add(DeskApp("camera", "Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
+        add(DeskApp("videos", "Mis videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) })
+        add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
+        add(DeskApp("panel", "Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
+        add(DeskApp("explorer", "Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) })
+        add(DeskApp("updates", "Actualizar", XpIconKind.DRIVE) { onCheckUpdates() })
+    }
+    LaunchedEffect(Unit) {
+        LibraryStore.ensureDesktopDefaults(
+            listOf("mypc", "sd", "docs", "music", "pictures", "camera", "videos", "downloads", "panel").filter { it in apps }
+        )
     }
 
     // Botones de la barra de tareas (uno por ventana abierta)
@@ -141,13 +152,7 @@ fun XpDesktop(
 
         Column(Modifier.fillMaxSize()) {
             // Íconos del escritorio
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(92.dp),
-                modifier = Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(items) { item -> DesktopIcon(item) }
-            }
+            DesktopIconsArea(apps, Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(8.dp))
             Taskbar(
                 onStart = { startOpen = !startOpen },
                 startOpen = startOpen,
@@ -217,20 +222,8 @@ fun XpDesktop(
             StartMenu(
                 modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(bottom = 42.dp),
                 onUserClick = { startOpen = false; accountOpen = true },
-                entries = listOf(
-                    Triple("Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) },
-                    Triple("Música", XpIconKind.MUSIC) { onOpenMusic() },
-                    Triple("Imágenes", XpIconKind.PICTURES) { onOpenGallery() },
-                    Triple("Videos", XpIconKind.VIDEOS) { onOpenFolder(dir(Environment.DIRECTORY_MOVIES)) },
-                    Triple("Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) },
-                ),
-                places = listOf(
-                    Triple("Mi PC", XpIconKind.COMPUTER) { showWindow(myPc) },
-                    Triple("Mis documentos", XpIconKind.DOCUMENTS) { onOpenFolder(dir(Environment.DIRECTORY_DOCUMENTS)) },
-                    Triple("Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) },
-                    Triple("Panel de control", XpIconKind.SETTINGS) { showWindow(settings) },
-                    Triple("Actualizar ($versionName)", XpIconKind.DRIVE) { onCheckUpdates() },
-                ),
+                entries = listOf("explorer", "music", "pictures", "videos", "camera").mapNotNull { apps[it] },
+                places = listOf("mypc", "docs", "downloads", "panel", "updates").mapNotNull { apps[it] },
                 onPicked = { startOpen = false }
             )
         }
@@ -274,28 +267,6 @@ private fun XpWallpaper(modifier: Modifier) {
             lineTo(w, h); lineTo(0f, h); close()
         }
         drawPath(front, Brush.verticalGradient(listOf(XpColors.HillLight, XpColors.HillDark), startY = h * 0.64f, endY = h))
-    }
-}
-
-@Composable
-private fun DesktopIcon(item: DesktopItem) {
-    Column(
-        modifier = Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = item.action).padding(6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        XpIcon(item.icon, 54.dp)
-        Spacer(Modifier.height(2.dp))
-        Text(
-            item.label,
-            style = TextStyle(
-                color = Color.White,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                shadow = Shadow(Color.Black.copy(alpha = 0.85f), Offset(1.5f, 1.5f), 2f)
-            ),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -373,8 +344,8 @@ private fun Taskbar(
 @Composable
 private fun StartMenu(
     modifier: Modifier,
-    entries: List<Triple<String, XpIconKind, () -> Unit>>,
-    places: List<Triple<String, XpIconKind, () -> Unit>>,
+    entries: List<DeskApp>,
+    places: List<DeskApp>,
     onPicked: () -> Unit,
     onUserClick: () -> Unit,
 ) {
@@ -399,13 +370,13 @@ private fun StartMenu(
         Box(Modifier.fillMaxWidth().height(2.dp).background(XpColors.StartMenuOrange))
         Row(Modifier.fillMaxWidth().height(300.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(vertical = 6.dp)) {
-                entries.forEach { (label, icon, action) ->
-                    StartEntry(label, icon, Color.Black, FontWeight.SemiBold, iconSize = 36) { onPicked(); action() }
+                entries.forEach { app ->
+                    StartEntry(app, Color.Black, FontWeight.SemiBold, iconSize = 36) { onPicked(); app.action() }
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight().background(XpColors.SidePanel).padding(vertical = 6.dp)) {
-                places.forEach { (label, icon, action) ->
-                    StartEntry(label, icon, Color(0xFF0A246A), FontWeight.Bold, iconSize = 28) { onPicked(); action() }
+                places.forEach { app ->
+                    StartEntry(app, Color(0xFF0A246A), FontWeight.Bold, iconSize = 28) { onPicked(); app.action() }
                 }
             }
         }
@@ -413,15 +384,40 @@ private fun StartMenu(
     }
 }
 
+/** Opción del menú Inicio. Déjala presionada para crear un acceso directo en el escritorio. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun StartEntry(label: String, icon: XpIconKind, color: Color, weight: FontWeight, iconSize: Int, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        XpIcon(icon, iconSize.dp)
-        Spacer(Modifier.width(8.dp))
-        Text(label, color = color, fontSize = 13.sp, fontWeight = weight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+private fun StartEntry(app: DeskApp, color: Color, weight: FontWeight, iconSize: Int, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Box {
+        Row(
+            Modifier.fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            XpIcon(app.kind, iconSize.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(app.label, color = color, fontSize = 13.sp, fontWeight = weight, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(
+                text = { Text("Abrir") },
+                onClick = { menu = false; onClick() })
+            DropdownMenuItem(
+                text = { Text("Crear acceso directo en el escritorio") },
+                onClick = {
+                    menu = false
+                    val already = app.id in LibraryStore.desktopIds
+                    LibraryStore.addDesktopShortcut(app.id)
+                    android.widget.Toast.makeText(
+                        context,
+                        if (already) "\"${app.label}\" ya está en el escritorio" else "Acceso directo creado en el escritorio",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                })
+        }
     }
 }
 
