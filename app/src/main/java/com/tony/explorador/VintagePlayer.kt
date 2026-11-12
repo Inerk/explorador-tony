@@ -416,7 +416,7 @@ private object Deck {
     const val REC_OUTER = 618f / 627f       // el disco ocupa casi toda su imagen
     const val LABEL = 0.354f                // etiqueta = 35 % del disco
     const val PIVOT_X = 1316f / 1536f       // eje de la pluma sobre la base
-    const val PIVOT_Y = 160f / 1024f
+    const val PIVOT_Y = 205f / 1024f
     const val ARM_LEN = 640f / 1536f        // de eje a aguja (fracción del ancho)
     // en la foto de la pluma
     const val IMG_PIVOT_X = 357f / 724f
@@ -446,7 +446,7 @@ private fun DrawScope.drawArmImage(img: androidx.compose.ui.graphics.ImageBitmap
     }
     val outer = thetaFor(recordR * 0.93f)
     val inner = thetaFor(recordR * 0.40f)
-    val rest = 0f
+    val rest = -5f
     val theta = if (arm < 0f) rest + (outer - rest) * (1f + arm / 0.35f).coerceIn(0f, 1f) else outer + (inner - outer) * arm
 
     val dstW = img.width * scale
