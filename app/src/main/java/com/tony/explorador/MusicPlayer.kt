@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -223,7 +224,20 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
 
 // ───────────────────────── Reproductor completo ─────────────────────────
 
-private enum class PanelMode { COVER, LYRICS, QUEUE }
+private val QueueThumb = 56.dp
+private val QueueThumbX = 6.dp
+private val QueueThumbY = 8.dp
+
+private fun lerpDp(a: androidx.compose.ui.unit.Dp, b: androidx.compose.ui.unit.Dp, t: Float) = a + (b - a) * t
+
+/** Bloquea los toques a una capa que está escondida (para no tocar cosas invisibles). */
+private fun Modifier.blockTouches(block: Boolean): Modifier = if (!block) this else this.pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.forEach { it.consume() }
+        }
+    }
+}
 
 @Composable
 fun MusicPlayerScreen(
@@ -234,19 +248,27 @@ fun MusicPlayerScreen(
     onMusicMenu: () -> Unit = {},
     onGoTo: (String, String) -> Unit = { _, _ -> },
 ) {
-    BackHandler(onBack = onClose)
     val musicMenu by rememberUpdatedState(onMusicMenu)
-    var mode by remember { mutableStateOf(PanelMode.COVER) }
+    var lyricsMode by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
-    val pull = remember { Animatable(0f) }
-    var instant by remember { mutableStateOf(false) }
-    LaunchedEffect(mode) { instant = false }
-    val pullScope = rememberCoroutineScope()
+    // 0 = portada grande, 1 = lista (la portada se hace chiquita en la esquina)
+    val q = remember { Animatable(0f) }
+    val qScope = rememberCoroutineScope()
+    val qSpring = spring<Float>(dampingRatio = 0.86f, stiffness = Spring.StiffnessMediumLow)
+    fun toQueue() { qScope.launch { q.animateTo(1f, qSpring) } }
+    fun toCover() { qScope.launch { q.animateTo(0f, qSpring) } }
     val screenH = with(androidx.compose.ui.platform.LocalDensity.current) {
         androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx()
     }
-    val tick = observePlayer(player, if (mode == PanelMode.COVER) 250L else 100L)
+    BackHandler {
+        when {
+            lyricsMode -> lyricsMode = false
+            q.value > 0.5f -> toCover()
+            else -> onClose()
+        }
+    }
+    val tick = observePlayer(player, if (lyricsMode) 100L else 250L)
 
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
     val colors = info?.colors ?: DefaultCoverColors
@@ -320,43 +342,24 @@ fun MusicPlayerScreen(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    IconButton(onClick = { mode = if (mode == PanelMode.LYRICS) PanelMode.COVER else PanelMode.LYRICS }) {
+                    IconButton(onClick = { lyricsMode = !lyricsMode }) {
                         Icon(Icons.Filled.Lyrics, contentDescription = "Letra",
-                            tint = if (mode == PanelMode.LYRICS) accent else Color.White)
+                            tint = if (lyricsMode) accent else Color.White)
                     }
-                    IconButton(onClick = { mode = if (mode == PanelMode.QUEUE) PanelMode.COVER else PanelMode.QUEUE }) {
+                    IconButton(onClick = {
+                        if (q.value > 0.5f && !lyricsMode) toCover() else { lyricsMode = false; toQueue() }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Lista",
-                            tint = if (mode == PanelMode.QUEUE) accent else Color.White)
+                            tint = if (q.value > 0.5f && !lyricsMode) accent else Color.White)
                     }
                 }
 
-                Box(Modifier.weight(1f).fillMaxWidth()) {
-                // La lista aparece detrás mientras jalas el reproductor hacia abajo
-                if (mode == PanelMode.COVER && pull.value > 0.001f) {
-                    Box(Modifier.fillMaxSize().graphicsLayer {
-                        alpha = pull.value
-                        val sc = 0.9f + 0.1f * pull.value
-                        scaleX = sc; scaleY = sc
-                    }) { QueuePanel(player, accent) }
-                }
-                Column(
-                    Modifier.fillMaxSize().graphicsLayer {
-                        val p = pull.value
-                        translationY = p * size.height * 0.6f
-                        val sc = 1f - 0.45f * p
-                        scaleX = sc; scaleY = sc
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
-                        alpha = 1f - 0.6f * p
-                    },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                // Panel central: portada / letra / lista
-                Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
+                // Centro: portada que se encoge hacia la lista, o la letra
+                Box(Modifier.weight(1f).fillMaxWidth().padding(top = 4.dp)) {
                     AnimatedContent(
-                        targetState = mode,
+                        targetState = lyricsMode,
                         transitionSpec = {
-                            if (instant) androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
-                            else if (targetState == PanelMode.COVER)
+                            if (!targetState)
                                 (fadeIn(tween(240)) + scaleIn(tween(320), initialScale = 0.85f)) togetherWith
                                     (fadeOut(tween(160)) + scaleOut(tween(220), targetScale = 1.08f))
                             else
@@ -364,70 +367,62 @@ fun MusicPlayerScreen(
                                     (fadeOut(tween(160)) + scaleOut(tween(220), targetScale = 0.85f))
                         },
                         label = "panel"
-                    ) { m ->
-                        when (m) {
-                            PanelMode.COVER -> CoverArt(
-                                cover = info?.cover,
-                                playing = player.isPlaying,
-                                accent = accent,
-                                onTap = { if (lyrics.isNotEmpty()) mode = PanelMode.LYRICS },
-                                canNext = player.hasNextMediaItem(),
-                                canPrev = player.hasPreviousMediaItem(),
-                                onNext = { player.seekToNextMediaItem() },
-                                onPrev = { player.seekToPreviousMediaItem() },
-                                onLongPress = onOpenCoverFlow,
-                                onPull = { dy ->
-                                    pullScope.launch { pull.snapTo((pull.value + dy / (screenH * 0.55f)).coerceIn(0f, 1f)) }
-                                },
-                                onPullEnd = { vy ->
-                                    pullScope.launch {
-                                        if (vy > 1100f || pull.value > 0.35f) {
-                                            pull.animateTo(1f, tween(170))
-                                            instant = true
-                                            mode = PanelMode.QUEUE
-                                            pull.snapTo(0f)
-                                        } else {
-                                            pull.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
-                                        }
-                                    }
-                                },
-                                onSwipeUp = { infoOpen = true },
-                                onMenu = { menuOpen = true },
-                            )
-                            PanelMode.LYRICS -> LyricsPanel(
-                                lines = lyrics,
-                                current = lyricIndex,
-                                accent = accent,
-                                onSeek = { player.seekTo(it); player.play() }
-                            )
-                            PanelMode.QUEUE -> QueuePanel(player, accent)
+                    ) { lyr ->
+                        if (lyr) {
+                            LyricsPanel(lines = lyrics, current = lyricIndex, accent = accent,
+                                onSeek = { player.seekTo(it); player.play() })
+                        } else {
+                            BoxWithConstraints(Modifier.fillMaxSize()) {
+                                val p = q.value
+                                // la lista vive detrás todo el tiempo (así no parpadea al empezar a jalar)
+                                Box(
+                                    Modifier.fillMaxSize()
+                                        .graphicsLayer { alpha = p; translationY = (1f - p) * 70.dp.toPx() }
+                                        .blockTouches(p < 0.5f)
+                                ) {
+                                    QueuePanel(player, accent, title, artist, thumbSpace = QueueThumb + QueueThumbX)
+                                }
+                                // la portada viaja de su lugar grande a la esquina de la lista
+                                val side = minOf(maxWidth, maxHeight)
+                                CoverArt(
+                                    cover = info?.cover,
+                                    playing = player.isPlaying,
+                                    accent = accent,
+                                    size = lerpDp(side, QueueThumb, p),
+                                    x = lerpDp((maxWidth - side) / 2, QueueThumbX, p),
+                                    y = lerpDp(0.dp, QueueThumbY, p),
+                                    collapse = p,
+                                    onTap = {
+                                        if (q.value > 0.5f) toCover() else if (lyrics.isNotEmpty()) lyricsMode = true
+                                    },
+                                    canNext = player.hasNextMediaItem(),
+                                    canPrev = player.hasPreviousMediaItem(),
+                                    onNext = { player.seekToNextMediaItem() },
+                                    onPrev = { player.seekToPreviousMediaItem() },
+                                    onLongPress = onOpenCoverFlow,
+                                    onPull = { dy ->
+                                        qScope.launch { q.snapTo((q.value + dy / (screenH * 0.5f)).coerceIn(0f, 1f)) }
+                                    },
+                                    onPullEnd = { vy ->
+                                        val goList = if (vy > 900f) true else if (vy < -900f) false else q.value > 0.35f
+                                        if (goList) toQueue() else toCover()
+                                    },
+                                    onMenu = { menuOpen = true },
+                                )
+                            }
                         }
                     }
                 }
 
-                AnimatedContent(
-                    targetState = mode == PanelMode.QUEUE,
-                    transitionSpec = {
-                        (slideInVertically(tween(300)) { it / 2 } + fadeIn(tween(240))) togetherWith
-                            (slideOutVertically(tween(220)) { it / 2 } + fadeOut(tween(160)))
-                    },
-                    label = "bottom"
-                ) { tape ->
-                if (tape) {
-                    // Reproductor "en cinta" abajo mientras ves la lista; tócalo para volver a la portada
-                    TapeBar(
-                        cover = info?.cover,
-                        title = title,
-                        artist = artist,
-                        progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                        playing = player.isPlaying,
-                        accent = accent,
-                        onAccent = onAccent,
-                        onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
-                        onNext = { player.seekToNextMediaItem() },
-                        onOpen = { mode = PanelMode.COVER },
-                    )
-                } else { Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Abajo: controles grandes ↔ reproductor en cinta (se cruzan con el mismo avance)
+                Box(Modifier.fillMaxWidth()) {
+                    val p = if (lyricsMode) 0f else q.value
+                    if (p < 0.99f) {
+                        Column(
+                            Modifier.graphicsLayer { alpha = 1f - p; translationY = p * 90.dp.toPx() }
+                                .blockTouches(p > 0.5f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                 // Título y artista
                 Spacer(Modifier.height(12.dp))
                 val path = player.currentMediaItem?.mediaId
@@ -453,12 +448,12 @@ fun MusicPlayerScreen(
                     }
                 }
                 // Vistazo de la letra bajo la portada
-                if (mode == PanelMode.COVER && lyrics.isNotEmpty()) {
+                if (!lyricsMode && lyrics.isNotEmpty()) {
                     val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
                     Text(
                         line, fontSize = 14.sp, color = accent, textAlign = TextAlign.Start,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { mode = PanelMode.LYRICS }
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { lyricsMode = true }
                     )
                 }
 
@@ -536,9 +531,25 @@ fun MusicPlayerScreen(
                         )
                     }
                 }
-                } }
-                }
-                }
+                        }
+                    }
+                    if (p > 0.01f) {
+                        TapeBar(
+                            cover = info?.cover,
+                            title = title,
+                            artist = artist,
+                            progress = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
+                            playing = player.isPlaying,
+                            accent = accent,
+                            onAccent = onAccent,
+                            onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                            onNext = { player.seekToNextMediaItem() },
+                            onOpen = { toCover() },
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                                .graphicsLayer { alpha = p; translationY = (1f - p) * 90.dp.toPx() }
+                                .blockTouches(p < 0.5f)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -551,7 +562,7 @@ fun MusicPlayerScreen(
                 accent = accent,
                 onDismiss = { menuOpen = false },
                 onInfo = { menuOpen = false; infoOpen = true },
-                onLyrics = { menuOpen = false; mode = PanelMode.LYRICS },
+                onLyrics = { menuOpen = false; lyricsMode = true },
                 onGoTo = { kind, value -> menuOpen = false; onGoTo(kind, value) },
                 onDeleted = {
                     menuOpen = false
@@ -574,6 +585,10 @@ private fun CoverArt(
     cover: Bitmap?,
     playing: Boolean,
     accent: Color,
+    size: androidx.compose.ui.unit.Dp,
+    x: androidx.compose.ui.unit.Dp,
+    y: androidx.compose.ui.unit.Dp,
+    collapse: Float,
     onTap: () -> Unit,
     canNext: Boolean,
     canPrev: Boolean,
@@ -582,115 +597,111 @@ private fun CoverArt(
     onLongPress: () -> Unit,
     onPull: (Float) -> Unit,
     onPullEnd: (Float) -> Unit,
-    onSwipeUp: () -> Unit,
     onMenu: () -> Unit,
 ) {
-    val scale by animateFloatAsState(
+    val pauseScale by animateFloatAsState(
         targetValue = if (playing) 1f else 0.86f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
         label = "coverScale"
     )
     val offsetX = remember { Animatable(0f) }
-    val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val pullBy by rememberUpdatedState(onPull)
     val pullEnd by rememberUpdatedState(onPullEnd)
-    val swipeUp by rememberUpdatedState(onSwipeUp)
     val next by rememberUpdatedState(onNext)
     val prev by rememberUpdatedState(onPrev)
     val hasNext by rememberUpdatedState(canNext)
     val hasPrev by rememberUpdatedState(canPrev)
+    val collapsed by rememberUpdatedState(collapse)
+    val corner = 22.dp + (10.dp - 22.dp) * collapse
+    val shape = RoundedCornerShape(corner)
 
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        val side = minOf(maxWidth, maxHeight)
-        val shape = RoundedCornerShape(22.dp)
-        Box(
-            modifier = Modifier.size(side)
-                .pointerInput(Unit) {
-                    val w = size.width.toFloat()
-                    var axis = 0 // 0 = sin decidir, 1 = horizontal, 2 = vertical
-                    var fired = false
-                    var dy = 0f
-                    val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-                    detectDragGestures(
-                        onDragStart = { axis = 0; fired = false; dy = 0f; tracker.resetTracking() },
-                        onDragEnd = {
-                            if (axis == 2) {
-                                // soltar: si lo aventaste o lo bajaste bastante, se va a la lista
-                                pullEnd(tracker.calculateVelocity().y)
-                                scope.launch { offsetY.animateTo(0f, spring(dampingRatio = 0.6f)) }
-                            }
-                            scope.launch {
-                                if (axis == 2) return@launch
-                                val v = offsetX.value
-                                when {
-                                    v < -w * 0.22f && hasNext -> {
-                                        offsetX.animateTo(-w * 1.2f, tween(170))
-                                        next()
-                                        offsetX.snapTo(w * 1.2f)
-                                        offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
-                                    }
-                                    v > w * 0.22f && hasPrev -> {
-                                        offsetX.animateTo(w * 1.2f, tween(170))
-                                        prev()
-                                        offsetX.snapTo(-w * 1.2f)
-                                        offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
-                                    }
-                                    else -> offsetX.animateTo(0f, spring(dampingRatio = 0.5f))
+    Box(
+        modifier = Modifier
+            .offset(x, y)
+            .size(size)
+            .pointerInput(Unit) {
+                var axis = 0 // 0 = sin decidir, 1 = horizontal (cambiar canción), 2 = vertical (lista)
+                val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+                detectDragGestures(
+                    onDragStart = { axis = 0; tracker.resetTracking() },
+                    onDragEnd = {
+                        if (axis == 2) {
+                            pullEnd(tracker.calculateVelocity().y)
+                            return@detectDragGestures
+                        }
+                        val w = this.size.width.toFloat()
+                        scope.launch {
+                            val v = offsetX.value
+                            when {
+                                v < -w * 0.22f && hasNext -> {
+                                    offsetX.animateTo(-w * 1.2f, tween(170))
+                                    next()
+                                    offsetX.snapTo(w * 1.2f)
+                                    offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
                                 }
-                            }
-                        },
-                        onDragCancel = { pullEnd(0f); scope.launch { offsetX.animateTo(0f); offsetY.animateTo(0f) } }
-                    ) { change, drag ->
-                        change.consume()
-                        tracker.addPosition(change.uptimeMillis, change.position)
-                        if (axis == 0) axis = if (kotlin.math.abs(drag.x) >= kotlin.math.abs(drag.y)) 1 else 2
-                        if (axis == 1) {
-                            // si no hay a dónde ir, se siente como liga
-                            val resist = if ((drag.x < 0 && !hasNext) || (drag.x > 0 && !hasPrev)) 0.3f else 1f
-                            scope.launch { offsetX.snapTo(offsetX.value + drag.x * resist) }
-                        } else {
-                            // hacia abajo: todo el reproductor sigue tu dedo; hacia arriba: información
-                            dy += drag.y
-                            if (dy > 0f || drag.y > 0f) {
-                                pullBy(drag.y)
-                            } else {
-                                scope.launch { offsetY.snapTo((offsetY.value + drag.y * 0.3f).coerceIn(-w * 0.12f, 0f)) }
-                                if (!fired && dy < -w * 0.08f) { fired = true; swipeUp() }
+                                v > w * 0.22f && hasPrev -> {
+                                    offsetX.animateTo(w * 1.2f, tween(170))
+                                    prev()
+                                    offsetX.snapTo(-w * 1.2f)
+                                    offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                }
+                                else -> offsetX.animateTo(0f, spring(dampingRatio = 0.5f))
                             }
                         }
+                    },
+                    onDragCancel = {
+                        if (axis == 2) pullEnd(0f)
+                        scope.launch { offsetX.animateTo(0f) }
                     }
-                }
-                .graphicsLayer {
-                    val frac = (offsetX.value / size.width).coerceIn(-1.5f, 1.5f)
-                    translationX = offsetX.value
-                    translationY = offsetY.value
-                    rotationZ = frac * 8f
-                    val s = scale * (1f - kotlin.math.abs(frac) * 0.12f)
-                    scaleX = s
-                    scaleY = s
-                    alpha = 1f - kotlin.math.abs(frac) * 0.5f
-                }
-                .shadow(36.dp, shape, ambientColor = accent, spotColor = accent)
-                .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
-                .combinedClickable(onClick = onTap, onLongClick = onLongPress),
-            contentAlignment = Alignment.Center
-        ) {
-            Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
-                if (bmp != null) {
-                    Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
-                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.MusicNote, null, modifier = Modifier.size(side * 0.45f),
-                            tint = Color.White.copy(alpha = 0.5f))
+                ) { change, drag ->
+                    change.consume()
+                    tracker.addPosition(change.uptimeMillis, change.position)
+                    if (axis == 0) {
+                        axis = if (collapsed > 0.01f || kotlin.math.abs(drag.y) > kotlin.math.abs(drag.x)) 2 else 1
+                    }
+                    if (axis == 1) {
+                        // si no hay a dónde ir, se siente como liga
+                        val resist = if ((drag.x < 0 && !hasNext) || (drag.x > 0 && !hasPrev)) 0.3f else 1f
+                        scope.launch { offsetX.snapTo(offsetX.value + drag.x * resist) }
+                    } else {
+                        // la portada sigue tu dedo y se va encogiendo hacia la lista
+                        pullBy(drag.y)
                     }
                 }
             }
-            // ⋮ abajo a la derecha de la portada
+            .graphicsLayer {
+                val frac = (offsetX.value / this.size.width).coerceIn(-1.5f, 1.5f)
+                translationX = offsetX.value
+                rotationZ = frac * 8f
+                val ps = pauseScale + (1f - pauseScale) * collapse
+                val s = ps * (1f - kotlin.math.abs(frac) * 0.12f)
+                scaleX = s
+                scaleY = s
+                alpha = 1f - kotlin.math.abs(frac) * 0.5f
+            }
+            .shadow(36.dp + (6.dp - 36.dp) * collapse, shape, ambientColor = accent, spotColor = accent)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.08f))
+            .combinedClickable(onClick = onTap, onLongClick = onLongPress),
+        contentAlignment = Alignment.Center
+    ) {
+        Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
+            if (bmp != null) {
+                Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.MusicNote, null, modifier = Modifier.fillMaxSize(0.45f),
+                        tint = Color.White.copy(alpha = 0.5f))
+                }
+            }
+        }
+        // ⋮ abajo a la derecha de la portada (se esconde al encogerse)
+        if (collapse < 0.3f) {
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(10.dp).size(38.dp)
+                    .graphicsLayer { alpha = 1f - collapse / 0.3f }
                     .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .clickable(onClick = onMenu),
                 contentAlignment = Alignment.Center
@@ -824,36 +835,61 @@ private fun LyricsPanel(lines: List<LyricLine>, current: Int, accent: Color, onS
 }
 
 @Composable
-private fun QueuePanel(player: Player, accent: Color) {
+private fun QueuePanel(player: Player, accent: Color, title: String, artist: String, thumbSpace: androidx.compose.ui.unit.Dp) {
     val current = player.currentMediaItemIndex
     val count = player.mediaItemCount
     val state = rememberLazyListState()
-    LaunchedEffect(Unit) { if (current > 0) state.scrollToItem((current - 1).coerceAtLeast(0)) }
-    LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
-        itemsIndexed((0 until count).toList()) { _, i ->
-            val item = player.getMediaItemAt(i)
-            val isCurrent = i == current
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (isCurrent) Color.White.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { player.seekTo(i, 0L); player.play() }
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "${i + 1}", fontSize = 13.sp, color = if (isCurrent) accent else Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.width(32.dp)
-                )
-                Text(
-                    item.mediaMetadata.title?.toString() ?: "",
-                    color = if (isCurrent) accent else Color.White,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (isCurrent && player.isPlaying) {
-                    Icon(Icons.Filled.MusicNote, null, tint = accent, modifier = Modifier.size(18.dp))
+    LaunchedEffect(current) { if (current > 0) state.scrollToItem((current - 1).coerceAtLeast(0)) }
+    Column(Modifier.fillMaxSize()) {
+        // encabezado: aquí "aterriza" la portada al encogerse
+        Row(Modifier.fillMaxWidth().height(QueueThumb + QueueThumbY * 2), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(thumbSpace + 12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("REPRODUCIENDO AHORA", fontSize = 10.sp, letterSpacing = 1.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (artist.isNotEmpty()) Text(artist, color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
+        LazyColumn(state = state, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
+            itemsIndexed((0 until count).toList(), key = { _, i -> i }) { _, i ->
+                val item = player.getMediaItemAt(i)
+                val path = item.mediaId
+                val song = remember(path) { LibraryStore.songFor(path) }
+                val isCurrent = i == current
+                val thumb by androidx.compose.runtime.produceState<Bitmap?>(null, path) { value = loadThumb(path) }
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isCurrent) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                        .clickable { player.seekTo(i, 0L); player.play() }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.08f)),
+                        contentAlignment = Alignment.Center) {
+                        val b = thumb
+                        if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+                        if (isCurrent && player.isPlaying) {
+                            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.MusicNote, null, tint = accent, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            song?.title ?: item.mediaMetadata.title?.toString() ?: "",
+                            color = if (isCurrent) accent else Color.White,
+                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            listOfNotNull(song?.artist, song?.durationMs?.takeIf { it > 0 }?.let { formatTime(it) }).joinToString(" · "),
+                            color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
@@ -872,9 +908,10 @@ private fun TapeBar(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp)
+        modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp)
             .shadow(10.dp, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.12f))
