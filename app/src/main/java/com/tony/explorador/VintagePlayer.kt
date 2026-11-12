@@ -349,12 +349,12 @@ fun Turntable(
     LaunchedEffect(albumKey) {
         if (albumKey != shownKey) {
             swapping = true
-            kotlinx.coroutines.delay(450)                 // la pluma se levanta primero
-            slide.animateTo(1.3f, tween(450, easing = FastOutSlowInEasing))
+            kotlinx.coroutines.delay(240)                 // la pluma se levanta primero
+            slide.animateTo(1.3f, tween(340, easing = FastOutSlowInEasing))
             shownKey = albumKey
             shownCover = cover
             slide.snapTo(-1.3f)
-            slide.animateTo(0f, tween(550, easing = FastOutSlowInEasing))
+            slide.animateTo(0f, tween(420, easing = FastOutSlowInEasing))
             swapping = false
         }
     }
@@ -362,7 +362,7 @@ fun Turntable(
 
     // pluma: -0.35 = descansando en su base; 0..1 = sobre el disco (orilla → centro)
     val armGoal = if (playing && !swapping) armTarget.coerceIn(0f, 1f) else -0.35f
-    val arm by animateFloatAsState(armGoal, tween(if (armGoal < 0f) 700 else 1100, easing = FastOutSlowInEasing), label = "arm")
+    val arm by animateFloatAsState(armGoal, tween(if (armGoal < 0f) 320 else 520, easing = FastOutSlowInEasing), label = "arm")
 
     BoxWithConstraints(modifier.aspectRatio(1.28f)) {
         val w = constraints.maxWidth.toFloat()
