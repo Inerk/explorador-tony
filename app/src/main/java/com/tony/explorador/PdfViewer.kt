@@ -130,7 +130,11 @@ fun PdfViewerScreen(file: File, onClose: () -> Unit, onHome: () -> Unit) {
     val doc by produceState<Result<PdfDoc>?>(null, file) {
         value = withContext(Dispatchers.IO) { runCatching { PdfDoc(file) } }
     }
-    DisposableEffect(doc) { onDispose { doc?.getOrNull()?.close() } }
+    // ojo: hay que cerrar el documento que existía en ese momento, no el que haya después
+    DisposableEffect(doc) {
+        val opened = doc?.getOrNull()
+        onDispose { opened?.close() }
+    }
 
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }

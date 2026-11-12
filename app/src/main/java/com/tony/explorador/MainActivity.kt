@@ -108,7 +108,7 @@ fun hasStorageAccess(context: Context): Boolean =
 /** Lo que se muestra encima del explorador. */
 sealed interface Overlay {
     data class Images(val files: List<File>, val index: Int) : Overlay
-    data class Video(val files: List<File>, val index: Int) : Overlay
+    data class Video(val files: List<File>, val index: Int, val resume: Boolean = false) : Overlay
     data object Music : Overlay
     data object Library : Overlay
     data object CoverFlow : Overlay
@@ -147,6 +147,19 @@ fun AppRoot() {
     var choosingTheme by remember { mutableStateOf(false) }
     var homeSignal by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var libraryReset by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    /** Manda videos al reproductor de música: se oyen como canción y el video se ve en la portada. */
+    fun playVideosAsMusic(files: List<File>, index: Int, position: Long) {
+        val c = controller ?: return
+        VideoSession.release()
+        c.shuffleModeEnabled = false
+        c.setMediaItems(mediaItemsFor(files), index, position)
+        c.prepare(); c.play()
+        open(Overlay.Music)
+    }
+    fun expandFloatingVideo() {
+        val p = VideoSession.player ?: return
+        open(Overlay.Video(VideoSession.files, p.currentMediaItemIndex.coerceAtLeast(0), resume = true))
+    }
     fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
     var folderRequest by remember { mutableStateOf<File?>(null) }
     var libraryRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -218,11 +231,24 @@ fun AppRoot() {
             onOpenGallery = { open(Overlay.Gallery) },
             onOpenVideos = { open(Overlay.Videos) },
             onOpenPdf = { open(Overlay.Pdf(it)) },
+            onPlayAsMusic = { files, index -> playVideosAsMusic(files, index, 0L) },
+            onExpandVideo = { expandFloatingVideo() },
             folderRequest = folderRequest,
             onFolderHandled = { folderRequest = null },
             versionName = versionName,
             onCheckUpdates = { checkUpdates(manual = true) },
         )
+
+        // ventanita del video al ir al inicio (en XP vive dentro del escritorio)
+        val floatingVideo = VideoSession.player
+        if (VideoSession.floating && floatingVideo != null && LibraryStore.theme != AppTheme.XP) {
+            FloatingVideoWindow(
+                floatingVideo,
+                onExpand = { expandFloatingVideo() },
+                onClose = { VideoSession.release() },
+                modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(bottom = 64.dp)
+            )
+        }
 
         overlays.toList().forEach { o ->
             androidx.compose.runtime.key(o) {
@@ -239,7 +265,9 @@ fun AppRoot() {
                 ) {
                 when (o) {
                     is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { close(o) }, onHome = { goHome() })
-                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { close(o) }, onHome = { goHome() })
+                    is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { close(o) }, onHome = { goHome() },
+                        resume = o.resume,
+                        onPlayAsMusic = { files, index, pos -> playVideosAsMusic(files, index, pos); close(o) })
                     Overlay.Music -> if (controller != null) {
                         MusicPlayerScreen(controller, onClose = { close(o) },
                             onOpenCoverFlow = { open(Overlay.CoverFlow) },
@@ -268,6 +296,7 @@ fun AppRoot() {
                     )
                     Overlay.Videos -> VideosScreen(
                         onOpenVideo = { files, index -> controller?.pause(); open(Overlay.Video(files, index)) },
+                        onPlayAsMusic = { files, index -> playVideosAsMusic(files, index, 0L) },
                         onClose = { close(o) },
                         onHome = { goHome() }
                     )

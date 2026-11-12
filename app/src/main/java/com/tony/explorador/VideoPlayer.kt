@@ -2,7 +2,6 @@ package com.tony.explorador
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,33 +31,26 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import java.io.File
 
 @Composable
-fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, onHome: () -> Unit = {}) {
+fun VideoPlayerScreen(
+    files: List<File>,
+    startIndex: Int,
+    onClose: () -> Unit,
+    onHome: () -> Unit = {},
+    resume: Boolean = false,
+    onPlayAsMusic: ((List<File>, Int, Long) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val activity = context as? Activity
     val view = LocalView.current
     var controlsVisible by remember { mutableStateOf(true) }
     var landscape by remember { mutableStateOf(false) }
 
-    val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            val items = files.map { f ->
-                MediaItem.Builder()
-                    .setUri(Uri.fromFile(f))
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(f.name).build())
-                    .build()
-            }
-            setMediaItems(items, startIndex, 0L)
-            prepare()
-            playWhenReady = true
-        }
-    }
+    // el reproductor vive aparte para que el video siga en la ventanita al ir al inicio
+    val player = remember { VideoSession.obtain(context, files, startIndex, resume).also { VideoSession.floating = false } }
 
     DisposableEffect(Unit) {
         val window = activity?.window
@@ -67,7 +60,8 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
         onDispose {
             insets?.show(WindowInsetsCompat.Type.systemBars())
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            player.release()
+            // si no se fue a la ventanita, se cierra el video
+            if (!VideoSession.floating) VideoSession.release()
         }
     }
 
@@ -77,6 +71,7 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
+                    setShowSubtitleButton(false)
                     this.player = player
                     keepScreenOn = true
                     setShowNextButton(files.size > 1)
@@ -86,6 +81,7 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
                     })
                 }
             },
+            onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize()
         )
         if (controlsVisible) {
@@ -96,7 +92,19 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
                 IconButton(onClick = onClose) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Cerrar", tint = Color.White)
                 }
-                HomeButton(onHome)
+                // ir al inicio deja el video en una ventanita
+                HomeButton({
+                    VideoSession.floating = true
+                    VideoSession.window.minimized = false
+                    onHome()
+                })
+            }
+            Row(Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(4.dp)) {
+            if (onPlayAsMusic != null) {
+                IconButton(onClick = {
+                    val i = player.currentMediaItemIndex.coerceAtLeast(0)
+                    onPlayAsMusic(VideoSession.files, i, player.currentPosition)
+                }) { Icon(Icons.Filled.LibraryMusic, contentDescription = "Reproducir como música", tint = Color.White) }
             }
             IconButton(
                 onClick = {
@@ -105,9 +113,9 @@ fun VideoPlayerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
                         if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                 },
-                modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(4.dp)
             ) {
                 Icon(Icons.Filled.ScreenRotation, contentDescription = "Girar", tint = Color.White)
+            }
             }
         }
     }

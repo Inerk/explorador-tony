@@ -96,6 +96,7 @@ fun XpDesktop(
     onOpenMusic: () -> Unit,
     onOpenGallery: () -> Unit,
     onOpenVideos: () -> Unit,
+    onExpandVideo: () -> Unit,
     onCheckUpdates: () -> Unit,
     onChooseTheme: () -> Unit,
     versionName: String,
@@ -146,6 +147,9 @@ fun XpDesktop(
         if (settings.open) add(TaskButton("Panel de control", XpIconKind.SETTINGS, !settings.minimized) { settings.minimized = !settings.minimized })
         if (hasMusic) add(TaskButton(player?.mediaMetadata?.title?.toString() ?: "Música", XpIconKind.PLAYER, !DesktopState.player.minimized) {
             DesktopState.player.minimized = !DesktopState.player.minimized
+        })
+        if (VideoSession.floating && VideoSession.player != null) add(TaskButton(VideoSession.currentTitle(), XpIconKind.VIDEO_PLAYER, !VideoSession.window.minimized) {
+            VideoSession.window.minimized = !VideoSession.window.minimized
         })
     }
 
@@ -205,6 +209,24 @@ fun XpDesktop(
                     onClose = { player.stop(); player.clearMediaItems() },
                     modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
                 )
+            }
+        }
+
+        // Ventanita del video que se estaba viendo
+        val video = VideoSession.player
+        if (VideoSession.floating && video != null && !VideoSession.window.minimized) {
+            Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = 42.dp)) {
+                val vw = VideoSession.window
+                XpWindowFrame(
+                    state = vw,
+                    title = VideoSession.currentTitle(),
+                    icon = { XpIcon(XpIconKind.VIDEO_PLAYER, 18.dp) },
+                    onClose = { VideoSession.release() },
+                    onMaximize = onExpandVideo,
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
+                ) {
+                    VideoMiniContent(video, onExpand = onExpandVideo)
+                }
             }
         }
 

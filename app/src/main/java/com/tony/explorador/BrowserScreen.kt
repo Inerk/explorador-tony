@@ -126,6 +126,8 @@ fun BrowserScreen(
     onOpenGallery: () -> Unit,
     onOpenVideos: () -> Unit,
     onOpenPdf: (File) -> Unit,
+    onPlayAsMusic: (List<File>, Int) -> Unit,
+    onExpandVideo: () -> Unit,
     folderRequest: File?,
     onFolderHandled: () -> Unit,
     versionName: String,
@@ -233,6 +235,7 @@ fun BrowserScreen(
             onOpenMusic = onOpenLibrary,
             onOpenGallery = onOpenGallery,
             onOpenVideos = onOpenVideos,
+            onExpandVideo = onExpandVideo,
             onCheckUpdates = onCheckUpdates,
             onChooseTheme = onChooseTheme,
             versionName = versionName,
@@ -266,6 +269,12 @@ fun BrowserScreen(
                             if (selection.size == 1) {
                                 DropdownMenuItem(text = { Text("Renombrar") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },
                                     onClick = { more = false; renameTarget = selection.first() })
+                            }
+                            val playable = selection.filter { it.kind() == FileKind.AUDIO || it.kind() == FileKind.VIDEO }
+                                .sortedBy { it.name.lowercase(Locale.ROOT) }
+                            if (playable.any { it.kind() == FileKind.VIDEO }) {
+                                DropdownMenuItem(text = { Text("Reproducir como música") }, leadingIcon = { Icon(Icons.Filled.LibraryMusic, null) },
+                                    onClick = { more = false; selection = emptySet(); onPlayAsMusic(playable, 0) })
                             }
                             DropdownMenuItem(text = { Text("Compartir") }, leadingIcon = { Icon(Icons.Filled.Share, null) },
                                 onClick = { more = false; shareFiles(context, selection.filter { it.isFile }) })

@@ -5,6 +5,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TableRows
@@ -164,9 +167,11 @@ fun GalleryScreen(
 @Composable
 fun VideosScreen(
     onOpenVideo: (List<File>, Int) -> Unit,
+    onPlayAsMusic: (List<File>, Int) -> Unit,
     onClose: () -> Unit,
     onHome: () -> Unit,
-) = MediaGalleryScreen(videos = true, onOpenImages = { _, _ -> }, onOpenVideo = onOpenVideo, onClose = onClose, onHome = onHome)
+) = MediaGalleryScreen(videos = true, onOpenImages = { _, _ -> }, onOpenVideo = onOpenVideo, onClose = onClose, onHome = onHome,
+    onPlayAsMusic = onPlayAsMusic)
 
 @Composable
 private fun MediaGalleryScreen(
@@ -175,8 +180,10 @@ private fun MediaGalleryScreen(
     onOpenVideo: (List<File>, Int) -> Unit,
     onClose: () -> Unit,
     onHome: () -> Unit,
+    onPlayAsMusic: ((List<File>, Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    var longPressed by remember { mutableStateOf<Pair<List<GalleryItem>, GalleryItem>?>(null) }
     val folders = (if (videos) LibraryStore.videoFolders else LibraryStore.galleryFolders).toList()
     val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(null, folders) {
         value = loadMedia(context, videos, folders)
@@ -242,12 +249,42 @@ private fun MediaGalleryScreen(
                 }
                 album != null -> {
                     val list = items.filter { it.album == album }
-                    MediaItems(list, videos, listView, onClick = { open(list, it) })
+                    MediaItems(list, videos, listView, onClick = { open(list, it) }, onLongClick = { longPressed = list to it })
                 }
-                tab == 0 -> MediaItems(items, videos, listView, onClick = { open(items, it) })
+                tab == 0 -> MediaItems(items, videos, listView, onClick = { open(items, it) }, onLongClick = { longPressed = items to it })
                 else -> AlbumGrid(items, listView, onOpen = { album = it })
             }
         }
+    }
+
+    longPressed?.let { (list, item) ->
+        AlertDialog(
+            onDismissRequest = { longPressed = null },
+            title = { Text(item.file.nameWithoutExtension, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column {
+                    if (videos && onPlayAsMusic != null) {
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                            longPressed = null
+                            onPlayAsMusic(list.map { it.file }, list.indexOf(item).coerceAtLeast(0))
+                        }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LibraryMusic, null); Spacer(Modifier.width(12.dp)); Text("Reproducir como música")
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                        longPressed = null; open(list, item)
+                    }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.PlayCircle, null); Spacer(Modifier.width(12.dp)); Text(if (videos) "Ver video" else "Ver foto")
+                    }
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+                        longPressed = null; shareFiles(context, listOf(item.file))
+                    }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Share, null); Spacer(Modifier.width(12.dp)); Text("Compartir")
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { longPressed = null }) { Text("Cerrar") } }
+        )
     }
 
     if (settingsOpen) {
@@ -259,8 +296,9 @@ private fun MediaGalleryScreen(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Boolean, onClick: (GalleryItem) -> Unit) {
+private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Boolean, onClick: (GalleryItem) -> Unit, onLongClick: (GalleryItem) -> Unit) {
     val groups = remember(items) {
         items.groupBy { monthFormat.format(Date(it.date)).replaceFirstChar { c -> c.uppercase() } }
     }
@@ -268,7 +306,7 @@ private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Bool
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             groups.forEach { (month, list) ->
                 item(key = "h-$month") { MonthHeader(month) }
-                items(list, key = { it.path }) { item -> MediaRow(item, Modifier.clickable { onClick(item) }) }
+                items(list, key = { it.path }) { item -> MediaRow(item, Modifier.combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) }
             }
         }
         return
@@ -284,12 +322,12 @@ private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Bool
             item(span = { GridItemSpan(maxLineSpan) }, key = "h-$month") { MonthHeader(month) }
             items(list, key = { it.path }) { item ->
                 if (videos) {
-                    Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { onClick(item) }) {
+                    Column(Modifier.clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) {
                         Thumb(item, Modifier.clip(RoundedCornerShape(10.dp)), ratio = 16f / 10f)
                         Text(item.file.nameWithoutExtension, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp))
                     }
-                } else Thumb(item, Modifier.clickable { onClick(item) })
+                } else Thumb(item, Modifier.combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }))
             }
         }
     }

@@ -219,7 +219,8 @@ fun VintagePlayerScreen(
                         trackLabel = trackLabel,
                         favorite = fav,
                         onFavorite = { path?.let { LibraryStore.toggleFavorite(it) } },
-                        modifier = Modifier.weight(1f).fillMaxSize()
+                        modifier = Modifier.weight(1f).fillMaxSize(),
+                        video = if (isVideoPath(path)) player else null,
                     )
                     RecordCrate(
                         player = player, total = remainingCount(player),
@@ -860,6 +861,7 @@ private fun JacketAndNote(
     favorite: Boolean,
     onFavorite: () -> Unit,
     modifier: Modifier,
+    video: androidx.media3.common.Player? = null,
 ) {
     val noteOut = remember { Animatable(1f) }
     var shownTitle by remember { mutableStateOf(title) }
@@ -884,7 +886,10 @@ private fun JacketAndNote(
                 .rotate(-6f)
                 .shadow(10.dp, RoundedCornerShape(3.dp))
         ) {
-            if (cover != null) {
+            if (video != null) {
+                // un video se ve en la funda como a través de un cristal
+                VideoGlass(video, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
+            } else if (cover != null) {
                 // el estuche ES la portada, con un poco de textura de cartón gastado encima
                 Image(remember(cover) { cover.asImageBitmap() }, null, contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))

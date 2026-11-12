@@ -395,6 +395,7 @@ fun MusicPlayerScreen(
                                 val side = minOf(maxWidth, maxHeight)
                                 CoverArt(
                                     cover = info?.cover,
+                                    video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
                                     playing = player.isPlaying,
                                     accent = accent,
                                     size = lerpDp(side, QueueThumb, p),
@@ -593,6 +594,7 @@ fun MusicPlayerScreen(
 @Composable
 private fun CoverArt(
     cover: Bitmap?,
+    video: Player?,
     playing: Boolean,
     accent: Color,
     size: androidx.compose.ui.unit.Dp,
@@ -696,7 +698,9 @@ private fun CoverArt(
             .combinedClickable(onClick = onTap, onLongClick = onLongPress),
         contentAlignment = Alignment.Center
     ) {
-        Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
+        // si es un video, se ve en la portada como a través de un cristal
+        if (video != null) VideoGlass(video, Modifier.fillMaxSize())
+        else Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
             if (bmp != null) {
                 Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
                     contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
