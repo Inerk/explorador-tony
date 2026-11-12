@@ -1,0 +1,203 @@
+package com.tony.explorador
+
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import java.io.File
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            ExploradorTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    AppRoot()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExploradorTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val scheme = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> darkColorScheme()
+        else -> lightColorScheme()
+    }
+    MaterialTheme(colorScheme = scheme, content = content)
+}
+
+fun hasStorageAccess(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
+/** Lo que se muestra encima del explorador. */
+sealed interface Overlay {
+    data class Images(val files: List<File>, val index: Int) : Overlay
+    data class Video(val files: List<File>, val index: Int) : Overlay
+    data object Music : Overlay
+}
+
+@Composable
+fun AppRoot() {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(hasStorageAccess(context)) }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        granted = hasStorageAccess(context)
+    }
+
+    if (!granted) {
+        PermissionScreen(onGranted = { granted = hasStorageAccess(context) })
+        return
+    }
+
+    val controller = rememberMediaController()
+    var overlay by remember { mutableStateOf<Overlay?>(null) }
+
+    Box(Modifier.fillMaxSize()) {
+        BrowserScreen(
+            controller = controller,
+            onOpenImages = { files, index -> overlay = Overlay.Images(files, index) },
+            onOpenVideo = { files, index ->
+                controller?.pause()
+                overlay = Overlay.Video(files, index)
+            },
+            onPlayMusic = { files, index ->
+                controller?.let { playMusic(it, files, index) }
+                overlay = Overlay.Music
+            },
+            onOpenMusicPlayer = { overlay = Overlay.Music },
+        )
+
+        when (val o = overlay) {
+            is Overlay.Images -> ImageViewerScreen(o.files, o.index, onClose = { overlay = null })
+            is Overlay.Video -> VideoPlayerScreen(o.files, o.index, onClose = { overlay = null })
+            Overlay.Music -> if (controller != null) {
+                MusicPlayerScreen(controller, onClose = { overlay = null })
+            }
+            null -> {}
+        }
+    }
+}
+
+@Composable
+fun rememberMediaController(): MediaController? {
+    val context = LocalContext.current
+    var controller by remember { mutableStateOf<MediaController?>(null) }
+    DisposableEffect(Unit) {
+        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val future = MediaController.Builder(context, token).buildAsync()
+        future.addListener(
+            { runCatching { controller = future.get() } },
+            ContextCompat.getMainExecutor(context)
+        )
+        onDispose {
+            controller = null
+            MediaController.releaseFuture(future)
+        }
+    }
+    return controller
+}
+
+@Composable
+fun PermissionScreen(onGranted: () -> Unit) {
+    val context = LocalContext.current
+    val legacyLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { onGranted() }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(72.dp),
+            tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.height(16.dp))
+        Text("Explorador Tony", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Para ver y administrar tus archivos, la app necesita el permiso de acceso a todos los archivos.",
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(24.dp))
+        Button(onClick = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:${context.packageName}")
+                )
+                runCatching { context.startActivity(intent) }.onFailure {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                }
+            } else {
+                legacyLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                )
+            }
+        }) { Text("Dar permiso") }
+    }
+}
