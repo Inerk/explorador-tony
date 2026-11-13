@@ -34,6 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
@@ -90,6 +92,9 @@ fun WebBrowserScreen(startUrl: String?, onClose: () -> Unit, onHome: () -> Unit)
     var progress by remember { mutableIntStateOf(0) }
     var canBack by remember { mutableStateOf(false) }
     var canForward by remember { mutableStateOf(false) }
+    var lastTouch by remember { mutableStateOf(0f to 0f) }
+    var pressed by remember { mutableStateOf<PressedItem?>(null) }
+    var downloadsOpen by remember { mutableStateOf(false) }
 
     val web = remember {
         WebView(context).apply {
@@ -120,24 +125,70 @@ fun WebBrowserScreen(startUrl: String?, onClose: () -> Unit, onHome: () -> Unit)
                 override fun onReceivedTitle(view: WebView, t: String?) { title = t.orEmpty() }
             }
             setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-                runCatching {
-                    val name = URLUtil.guessFileName(url, contentDisposition, mimeType)
-                    val req = DownloadManager.Request(Uri.parse(url))
-                        .setMimeType(mimeType)
-                        .addRequestHeader("User-Agent", userAgent)
-                        .addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url).orEmpty())
-                        .setTitle(name)
-                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-                    (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-                    Toast.makeText(context, "Descargando «$name» en Descargas", Toast.LENGTH_LONG).show()
-                }.onFailure { Toast.makeText(context, "No se pudo descargar", Toast.LENGTH_SHORT).show() }
+                startDownload(context, url, userAgent, URLUtil.guessFileName(url, contentDisposition, mimeType), mimeType, this.url)
+            }
+            // recordar dónde tocaste, para saber qué elemento dejaste presionado
+            setOnTouchListener { _, ev -> lastTouch = ev.x to ev.y; false }
+            // dejar presionado = «clic derecho»: guardar imagen, video o enlace
+            setOnLongClickListener {
+                val hit = hitTestResult
+                val extra = hit.extra
+                when (hit.type) {
+                    WebView.HitTestResult.IMAGE_TYPE, WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE ->
+                        if (extra != null) { pressed = PressedItem("image", extra); true } else false
+                    WebView.HitTestResult.SRC_ANCHOR_TYPE ->
+                        if (extra != null) { pressed = PressedItem("link", extra); true } else false
+                    else -> {
+                        // ¿hay un video debajo del dedo?
+                        val d = resources.displayMetrics.density
+                        val js = "(function(){var e=document.elementFromPoint(${lastTouch.first / d},${lastTouch.second / d});" +
+                            "while(e&&e.tagName!='VIDEO')e=e.parentElement;if(!e)return '';" +
+                            "var s=e.currentSrc||e.src||'';if(!s){var q=e.querySelector('source');if(q)s=q.src;}return s||'blob:';})()"
+                        evaluateJavascript(js) { r ->
+                            val u = r?.trim('"').orEmpty()
+                            if (u.isNotBlank() && u != "null") pressed = PressedItem("video", u)
+                        }
+                        false
+                    }
+                }
             }
             loadUrl(startUrl ?: WEB_HOME)
         }
     }
     DisposableEffect(Unit) { onDispose { web.stopLoading(); web.destroy() } }
     BackHandler { if (web.canGoBack()) web.goBack() else onClose() }
+
+    pressed?.let { p ->
+        val ua = web.settings.userAgentString
+        fun copy() {
+            (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                .setPrimaryClip(android.content.ClipData.newPlainText("Enlace", p.url))
+            Toast.makeText(context, "Enlace copiado", Toast.LENGTH_SHORT).show()
+        }
+        val opts = buildList<Pair<String, () -> Unit>> {
+            val direct = p.url.startsWith("http")
+            when (p.kind) {
+                "image" -> { if (direct) add("Guardar imagen" to { startDownload(context, p.url, ua, null, null, web.url) }); add("Abrir imagen" to { web.loadUrl(p.url) }) }
+                "video" -> if (direct) { add("Guardar video" to { startDownload(context, p.url, ua, null, null, web.url) }); add("Abrir video" to { web.loadUrl(p.url) }) }
+                else -> { add("Abrir enlace" to { web.loadUrl(p.url) }); add("Descargar lo que hay en el enlace" to { startDownload(context, p.url, ua, null, null, web.url) }) }
+            }
+            if (direct) add("Copiar enlace" to { copy() })
+        }
+        ThemedDialog(when (p.kind) { "image" -> "Imagen"; "video" -> "Video"; else -> "Enlace" }, { pressed = null },
+            listOf(DialogButton("Cerrar", true) { pressed = null })) {
+            Column {
+                Text(p.url.take(120), fontSize = 12.sp, maxLines = 2, color = XpColors.InkSoft)
+                if (opts.isEmpty()) Text(
+                    "Este ${if (p.kind == "video") "video" else "elemento"} se transmite por partes o está protegido por la página, así que no se puede guardar como archivo.",
+                    modifier = Modifier.padding(top = 10.dp))
+                opts.forEach { (label, action) ->
+                    Text(label, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        modifier = Modifier.fillMaxWidth().clickable { pressed = null; action() }.padding(vertical = 13.dp))
+                }
+            }
+        }
+    }
+    if (downloadsOpen) DownloadsDialog(web, onDismiss = { downloadsOpen = false })
 
     Surface(Modifier.fillMaxSize().pointerInput(Unit) {}, color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
@@ -185,6 +236,7 @@ fun WebBrowserScreen(startUrl: String?, onClose: () -> Unit, onHome: () -> Unit)
                     Btn(Icons.AutoMirrored.Filled.ArrowForward, "Adelante", canForward) { web.goForward() }
                     Btn(Icons.Filled.Home, "Página de inicio") { web.loadUrl(WEB_HOME) }
                     Btn(Icons.Filled.Refresh, "Recargar") { web.reload() }
+                    Btn(Icons.Filled.Download, "Descargas") { downloadsOpen = true }
                     Btn(Icons.Filled.Share, "Compartir") {
                         runCatching {
                             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
@@ -195,4 +247,169 @@ fun WebBrowserScreen(startUrl: String?, onClose: () -> Unit, onHome: () -> Unit)
             }
         }
     }
+}
+
+
+private data class PressedItem(val kind: String, val url: String)
+
+/** Pone una descarga en la cola (se guarda en la carpeta Descargas). */
+fun startDownload(context: Context, url: String, userAgent: String?, name: String?, mime: String?, referer: String?) {
+    if (!url.startsWith("http")) { Toast.makeText(context, "Este elemento no se puede descargar", Toast.LENGTH_SHORT).show(); return }
+    runCatching {
+        val file = name ?: URLUtil.guessFileName(url, null, mime)
+        val req = DownloadManager.Request(Uri.parse(url))
+            .setTitle(file)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file)
+        if (mime != null) req.setMimeType(mime)
+        if (userAgent != null) req.addRequestHeader("User-Agent", userAgent)
+        if (referer != null) req.addRequestHeader("Referer", referer)
+        CookieManager.getInstance().getCookie(url)?.let { req.addRequestHeader("Cookie", it) }
+        (context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
+        Toast.makeText(context, "Descargando «$file»", Toast.LENGTH_SHORT).show()
+    }.onFailure { Toast.makeText(context, "No se pudo descargar", Toast.LENGTH_SHORT).show() }
+}
+
+private data class DownloadRow(val id: Long, val title: String, val status: Int, val done: Long, val total: Long,
+                               val url: String, val reason: Int)
+
+private fun queryDownloads(dm: DownloadManager): List<DownloadRow> {
+    val out = mutableListOf<DownloadRow>()
+    runCatching {
+        dm.query(DownloadManager.Query())?.use { c ->
+            val iId = c.getColumnIndexOrThrow(DownloadManager.COLUMN_ID)
+            val iTitle = c.getColumnIndexOrThrow(DownloadManager.COLUMN_TITLE)
+            val iStatus = c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+            val iDone = c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+            val iTotal = c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+            val iUrl = c.getColumnIndexOrThrow(DownloadManager.COLUMN_URI)
+            val iReason = c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
+            while (c.moveToNext()) out.add(DownloadRow(c.getLong(iId), c.getString(iTitle).orEmpty(), c.getInt(iStatus),
+                c.getLong(iDone), c.getLong(iTotal), c.getString(iUrl).orEmpty(), c.getInt(iReason)))
+        }
+    }
+    return out.sortedByDescending { it.id }
+}
+
+/** Gestor de descargas del navegador: avance, cancelar, reintentar, abrir, compartir, quitar. */
+@Composable
+private fun DownloadsDialog(web: WebView, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val dm = remember { context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager }
+    var rows by remember { mutableStateOf(queryDownloads(dm)) }
+    var speeds by remember { mutableStateOf(mapOf<Long, Long>()) }
+    var pageVideos by remember { mutableStateOf<List<String>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(800)
+            val fresh = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { queryDownloads(dm) }
+            val old = rows.associate { it.id to it.done }
+            speeds = fresh.associate { it.id to (((it.done - (old[it.id] ?: it.done)) * 1000 / 800).coerceAtLeast(0)) }
+            rows = fresh
+        }
+    }
+    fun open(r: DownloadRow, share: Boolean) {
+        runCatching {
+            val uri = dm.getUriForDownloadedFile(r.id) ?: return
+            val mime = dm.getMimeTypeForDownloadedFile(r.id) ?: "*/*"
+            val i = if (share) Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
+                    else Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            context.startActivity(Intent.createChooser(i, if (share) "Compartir" else "Abrir con"))
+        }.onFailure { Toast.makeText(context, "No se pudo abrir", Toast.LENGTH_SHORT).show() }
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(0.95f).fillMaxSize(0.86f), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().background(XpColors.titleBrush).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Descargas", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Cerrar", tint = Color.White) }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TextButton(onClick = {
+                        // busca los videos que la página tiene como archivo directo
+                        web.evaluateJavascript("(function(){var o=[];document.querySelectorAll('video,video source').forEach(function(v){" +
+                            "var s=v.currentSrc||v.src;if(s&&s.indexOf('http')==0&&o.indexOf(s)<0)o.push(s);});return o.join('\\n');})()") { r ->
+                            pageVideos = r?.trim('"').orEmpty().split("\\n").filter { it.startsWith("http") }
+                        }
+                    }) { Text("Buscar videos en esta página") }
+                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    androidx.compose.material3.TextButton(onClick = {
+                        rows.filter { it.status == DownloadManager.STATUS_SUCCESSFUL || it.status == DownloadManager.STATUS_FAILED }
+                            .forEach { r -> if (r.status == DownloadManager.STATUS_FAILED) dm.remove(r.id) else hideFinished(context, r.id) }
+                        rows = queryDownloads(dm)
+                    }) { Text("Limpiar lista") }
+                }
+                pageVideos?.let { vids ->
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+                        if (vids.isEmpty()) Text("No encontré videos que se puedan guardar como archivo en esta página (los de transmisión o protegidos no se pueden).",
+                            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        vids.take(6).forEach { v ->
+                            Row(Modifier.fillMaxWidth().clickable { startDownload(context, v, web.settings.userAgentString, null, null, web.url) }.padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Download, null, tint = MaterialTheme.colorScheme.primary)
+                                Text(" " + v.substringAfterLast('/').substringBefore('?').ifBlank { v }.take(60), maxLines = 1, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+                val hidden = remember { hiddenDownloads(context) }
+                val shown = rows.filter { it.id !in hidden.value }
+                if (shown.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Aún no hay descargas", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
+                    items(shown.size, key = { shown[it].id }) { idx ->
+                        val r = shown[idx]
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                            Text(r.title.ifBlank { r.url.substringAfterLast('/') }, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, maxLines = 1)
+                            val state = when (r.status) {
+                                DownloadManager.STATUS_SUCCESSFUL -> "Completada · ${formatSize(r.total.coerceAtLeast(r.done))}"
+                                DownloadManager.STATUS_FAILED -> "Falló"
+                                DownloadManager.STATUS_PAUSED -> "En espera (sin conexión o esperando Wi‑Fi)"
+                                DownloadManager.STATUS_PENDING -> "En cola…"
+                                else -> "${formatSize(r.done)}" + (if (r.total > 0) " de ${formatSize(r.total)}" else "") +
+                                    " · ${formatSize(speeds[r.id] ?: 0)}/s"
+                            }
+                            Text(state, fontSize = 12.sp, color = if (r.status == DownloadManager.STATUS_FAILED) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (r.status == DownloadManager.STATUS_RUNNING || r.status == DownloadManager.STATUS_PENDING || r.status == DownloadManager.STATUS_PAUSED) {
+                                if (r.total > 0) LinearProgressIndicator(progress = { (r.done.toFloat() / r.total).coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp), color = Color(0xFFD64FC4))
+                                else LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp), color = Color(0xFFD64FC4))
+                            }
+                            Row {
+                                @Composable
+                                fun Act(label: String, onClick: () -> Unit) =
+                                    androidx.compose.material3.TextButton(onClick = onClick, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) { Text(label, fontSize = 13.sp) }
+                                when (r.status) {
+                                    DownloadManager.STATUS_SUCCESSFUL -> {
+                                        Act("Abrir") { open(r, false) }
+                                        Act("Compartir") { open(r, true) }
+                                        Act("Quitar de la lista") { hideFinished(context, r.id); hidden.value = hidden.value + r.id }
+                                        Act("Borrar archivo") { dm.remove(r.id); rows = queryDownloads(dm) }
+                                    }
+                                    DownloadManager.STATUS_FAILED -> {
+                                        Act("Reintentar") { dm.remove(r.id); startDownload(context, r.url, web.settings.userAgentString, r.title.ifBlank { null }, null, null); rows = queryDownloads(dm) }
+                                        Act("Quitar") { dm.remove(r.id); rows = queryDownloads(dm) }
+                                    }
+                                    else -> Act("Cancelar") { dm.remove(r.id); rows = queryDownloads(dm) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Descargas terminadas que se quitaron de la lista (el archivo se conserva). */
+private fun hiddenDownloads(context: Context): androidx.compose.runtime.MutableState<Set<Long>> =
+    mutableStateOf(context.getSharedPreferences("descargas", Context.MODE_PRIVATE).getStringSet("ocultas", emptySet())!!
+        .mapNotNull { it.toLongOrNull() }.toSet())
+
+private fun hideFinished(context: Context, id: Long) {
+    val p = context.getSharedPreferences("descargas", Context.MODE_PRIVATE)
+    p.edit().putStringSet("ocultas", (p.getStringSet("ocultas", emptySet())!! + id.toString())).apply()
 }
