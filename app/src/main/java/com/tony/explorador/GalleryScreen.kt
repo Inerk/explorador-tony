@@ -132,8 +132,11 @@ private suspend fun loadMediaStore(context: Context, videos: Boolean): List<Gall
             }
         }
     }
-    out.filter { it.file.isFile }
+    out
 }
+
+/** Lo último que se cargó, para que la galería abra al instante la siguiente vez. */
+private val mediaCache = HashMap<String, Pair<List<GalleryItem>, List<GalleryItem>>>()
 
 /** Lo que se va a mostrar: todo, o sólo lo de las carpetas elegidas (y sus subcarpetas). */
 private suspend fun loadMedia(context: Context, videos: Boolean, folders: List<String>): Pair<List<GalleryItem>, List<GalleryItem>> =
@@ -194,8 +197,17 @@ private fun MediaGalleryScreen(
     var pickFor by remember { mutableStateOf<String?>(null) }   // "copy" o "move"
     var confirmTrash by remember { mutableStateOf(false) }
     val folders = (if (videos) LibraryStore.videoFolders else LibraryStore.galleryFolders).toList()
-    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(null, folders, reload) {
-        value = loadMedia(context, videos, folders)
+    val cacheKey = "$videos|" + folders.joinToString("|")
+    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(mediaCache[cacheKey], folders, reload) {
+        // 1) lo que Android ya tiene registrado, de inmediato
+        val quick = loadMedia(context, videos, folders)
+        value = quick
+        // 2) en segundo plano se quitan los archivos que ya no existen (borrados o movidos)
+        val checked = withContext(Dispatchers.IO) {
+            quick.first.filter { it.file.isFile } to quick.second.filter { it.file.isFile }
+        }
+        if (checked.first.size != quick.first.size) value = checked
+        mediaCache[cacheKey] = checked
     }
     var tab by remember { mutableIntStateOf(0) }
     var album by remember { mutableStateOf<String?>(null) }
