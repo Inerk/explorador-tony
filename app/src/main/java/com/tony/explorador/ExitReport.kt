@@ -23,8 +23,9 @@ object ExitReport {
         val infos = am.getHistoricalProcessExitReasons(context.packageName, 0, 5)
         val newest = infos.maxOfOrNull { it.timestamp } ?: return
         prefs.edit().putLong("last", newest).apply()
-        if (seen == 0L) return // primera vez: no reportar cosas viejas
-        val bad = infos.filter { it.timestamp > seen && it.reason in BAD }.maxByOrNull { it.timestamp } ?: return
+        // primera vez: solo cuenta lo de las últimas 6 horas (así sale el cierre que acaba de pasar)
+        val since = if (seen == 0L) System.currentTimeMillis() - 6 * 3600_000L else seen
+        val bad = infos.filter { it.timestamp > since && it.reason in BAD }.maxByOrNull { it.timestamp } ?: return
         val errFile = File(context.filesDir, "ultimo_error.txt")
         // si el atrapador normal ya guardó un error de Java, ese es más útil
         if (bad.reason == ApplicationExitInfo.REASON_CRASH && errFile.isFile) return
