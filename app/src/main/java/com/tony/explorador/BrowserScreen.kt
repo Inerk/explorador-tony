@@ -94,6 +94,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -433,13 +434,13 @@ fun BrowserScreen(
                         }
                     }
                 }
-                if (controller != null) {
-                    MiniPlayer(controller, onOpen = onOpenMusicPlayer)
-                }
             }
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            // cuadrito flotante de música (en lugar de la barra de abajo)
+            if (controller != null) MiniCoverPlayer(controller, onOpen = onOpenMusicPlayer,
+                modifier = Modifier.align(Alignment.BottomEnd).zIndex(10f))
             when {
                 currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary, onOpenGallery = onOpenGallery, onOpenVideos = onOpenVideos)
                 else -> {

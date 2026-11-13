@@ -268,8 +268,8 @@ fun AppRoot() {
                 open(Overlay.Video(files, index))
             },
             onPlayMusic = { files, index ->
+                // sólo empieza a sonar: aparece el cuadrito de música, no se abre el reproductor
                 controller?.let { playMusic(it, files, index) }
-                open(Overlay.Music)
             },
             onOpenMusicPlayer = { open(Overlay.Music) },
             onOpenLibrary = { open(Overlay.Library) },
