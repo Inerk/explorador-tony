@@ -268,6 +268,22 @@ object LibraryStore {
     fun songFor(path: String): Song? = songs.firstOrNull { it.path == path }
 
     /** Quita una canción borrada de la biblioteca, favoritas y listas. */
+    /** Un archivo cambió de nombre: se actualiza en la biblioteca, favoritas, conteos y listas. */
+    fun renameSong(old: String, new: String) {
+        songs = songs.map { if (it.path == old) it.copy(path = new) else it }
+        favorites.remove(old)?.let { favorites[new] = it }
+        playCounts.remove(old)?.let { playCounts[new] = it }
+        lastPlayed.remove(old)?.let { lastPlayed[new] = it }
+        for (i in playlists.indices) {
+            val p = playlists[i]
+            if (old in p.paths) playlists[i] = p.copy(paths = p.paths.map { if (it == old) new else it })
+        }
+        val list = songs
+        io.launch { runCatching { saveSongsCache(list) } }
+        save()
+        tagsVersion++
+    }
+
     fun removeSong(path: String) {
         songs = songs.filter { it.path != path }
         favorites.remove(path)

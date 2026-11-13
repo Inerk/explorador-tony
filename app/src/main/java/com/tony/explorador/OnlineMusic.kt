@@ -197,11 +197,39 @@ suspend fun writeTags(context: Context, path: String, r: TagResult, choice: TagC
 
 private suspend fun savedInApp(context: Context, path: String, title: String?, artist: String?, album: String?) {
     invalidateTrack(path)
+    withContext(Dispatchers.Main) { LibraryStore.updateSongTags(path, title, artist, album) }
+    // a los videos además se les cambia el nombre a «Canción - Artista», para ubicarlos en cualquier explorador
+    val renamedTo = if (isVideoPath(path)) renameToTags(context, path) else null
     withContext(Dispatchers.Main) {
-        LibraryStore.updateSongTags(path, title, artist, album)
-        android.widget.Toast.makeText(context, "En este formato no se puede escribir dentro del archivo: lo guardé en la app.",
+        android.widget.Toast.makeText(context,
+            if (renamedTo != null) "Etiquetas guardadas. El video ahora se llama «${renamedTo.name}»"
+            else "En este formato no se puede escribir dentro del archivo: lo guardé en la app.",
             android.widget.Toast.LENGTH_LONG).show()
     }
+}
+
+/** Renombra el archivo a «Título - Artista.ext» según sus etiquetas. Regresa el archivo nuevo, o null si no cambió. */
+private suspend fun renameToTags(context: Context, path: String): File? {
+    val e = TagOverrides.get(path) ?: return null
+    if (e.title.isBlank()) return null
+    val old = File(path)
+    val clean = { s: String -> s.replace(Regex("""[\\/:*?"<>|\n\r\t]"""), " ").replace(Regex("\\s+"), " ").trim().trim('.') }
+    val base = clean(if (e.artist.isNotBlank()) "${e.title} - ${e.artist}" else e.title).take(120)
+    if (base.isBlank() || base == old.nameWithoutExtension) return null
+    val target = File(old.parentFile, "$base.${old.extension}")
+    if (target.exists()) return null
+    if (!old.renameTo(target)) return null
+    val new = target.absolutePath
+    // lo que acompaña al video se renombra con él
+    runCatching { File(old.parentFile, old.nameWithoutExtension + ".lrc").takeIf { it.isFile }?.renameTo(File(old.parentFile, "$base.lrc")) }
+    TagOverrides.renamed(path, new)
+    invalidateTrack(path); invalidateTrack(new)
+    MediaScannerConnection.scanFile(context, arrayOf(path, new), null, null)
+    withContext(Dispatchers.Main) {
+        LibraryStore.renameSong(path, new)
+        AppNav.renameInQueue(path, new)
+    }
+    return target
 }
 
 

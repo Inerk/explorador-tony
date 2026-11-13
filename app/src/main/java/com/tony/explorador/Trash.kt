@@ -69,6 +69,8 @@ object AppNav {
     var openWeb: () -> Unit = {}
     var openFile: (java.io.File) -> Unit = {}
     /** Sube cuando la app se abre desde el icono «Música Tony». */
+    /** Cuando un archivo cambia de nombre y está en la cola del reproductor. */
+    var renameInQueue: (String, String) -> Unit = { _, _ -> }
     var musicLaunch by androidx.compose.runtime.mutableIntStateOf(0)
 }
 

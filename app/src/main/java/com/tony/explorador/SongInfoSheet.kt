@@ -235,7 +235,7 @@ fun SongInfoWindow(
 
     if (searching) TagSearchDialog(path, accent, onDismiss = { searching = false; reload++ })
     val t = tags
-    if (editing && t != null) TagEditorDialog(path, t, accent, onDismiss = { editing = false }, onSaved = { reload++ })
+    if (editing && t != null) TagEditorDialog(path, t, accent, onDismiss = { editing = false }, onSaved = { reload++; if (!File(path).exists()) onDismiss() })
 }
 
 @Composable

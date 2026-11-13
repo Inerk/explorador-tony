@@ -97,6 +97,15 @@ object TagOverrides {
         }
     }
 
+    /** El archivo cambió de nombre: sus etiquetas, portada y archivo de al lado lo siguen. */
+    @Synchronized fun renamed(old: String, new: String) {
+        val e = map.remove(old) ?: return
+        map[new] = e
+        runCatching { coverFile(old).takeIf { it.isFile }?.renameTo(coverFile(new)) }
+        runCatching { sidecar(old).takeIf { it.isFile }?.renameTo(sidecar(new)) }
+        writeIndex()
+    }
+
     /** Aplica lo guardado a una canción de la biblioteca. */
     fun apply(s: Song): Song {
         val e = get(s.path) ?: return s

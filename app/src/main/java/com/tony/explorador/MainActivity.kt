@@ -189,6 +189,20 @@ fun AppRoot() {
     LaunchedEffect(AppNav.musicLaunch) {
         if (AppNav.musicLaunch > 0) { if (Overlay.Music !in overlays) open(Overlay.Library) }
     }
+    // si un archivo que está en la cola cambia de nombre, se actualiza ahí también
+    AppNav.renameInQueue = { old, new ->
+        controller?.let { c ->
+            for (i in 0 until c.mediaItemCount) {
+                if (c.getMediaItemAt(i).mediaId == old) {
+                    val current = i == c.currentMediaItemIndex
+                    val pos = c.currentPosition
+                    val playing = c.isPlaying
+                    c.replaceMediaItem(i, mediaItemsFor(listOf(File(new))).first())
+                    if (current) { c.seekTo(i, pos); if (playing) c.play() }
+                }
+            }
+        }
+    }
     AppNav.openTrash = { open(Overlay.Trash) }
     AppNav.openWeb = { open(Overlay.Web) }
     fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
