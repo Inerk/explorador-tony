@@ -502,7 +502,7 @@ fun MusicPlayerScreen(
                 if (!lyricsMode && lyrics.isNotEmpty()) {
                     val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
                     Text(
-                        line, fontSize = 14.sp, color = accent, textAlign = TextAlign.Start,
+                        line, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = accent, textAlign = TextAlign.Start,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { lyricsMode = true }
                     )
