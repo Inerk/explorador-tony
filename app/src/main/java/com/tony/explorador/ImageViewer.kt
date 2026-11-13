@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,10 +47,12 @@ fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
     BackHandler(onBack = onClose)
     val pager = rememberPagerState(initialPage = startIndex) { files.size }
     var showBar by remember { mutableStateOf(true) }
+    var infoOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = infoOpen) { infoOpen = false }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            ZoomableImage(files[page], onTap = { showBar = !showBar })
+            ZoomableImage(files[page], onTap = { showBar = !showBar }, onSwipeUp = { infoOpen = true })
         }
         if (showBar) {
             Row(
@@ -71,14 +74,19 @@ fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
                     )
                 }
                 androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                IconButton(onClick = { infoOpen = true }) {
+                    Icon(androidx.compose.material.icons.Icons.Filled.Info, contentDescription = "Información", tint = Color.White)
+                }
                 HomeButton(onHome, Modifier.padding(end = 10.dp))
             }
         }
+        // deslizar la foto hacia arriba (o el botón ⓘ) muestra su información
+        if (infoOpen) MediaInfoSheet(files[pager.currentPage], isVideo = false, onDismiss = { infoOpen = false })
     }
 }
 
 @Composable
-private fun ZoomableImage(file: File, onTap: () -> Unit) {
+private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit = {}) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
@@ -95,9 +103,12 @@ private fun ZoomableImage(file: File, onTap: () -> Unit) {
             .pointerInput(file) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
+                    var dx = 0f; var dy = 0f; var single = true
                     do {
                         val event = awaitPointerEvent()
                         val multiTouch = event.changes.count { it.pressed } > 1
+                        if (multiTouch || scale > 1f) single = false
+                        else event.changes.firstOrNull()?.let { c -> val p = c.position - c.previousPosition; dx += p.x; dy += p.y }
                         if (multiTouch || scale > 1f) {
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
@@ -113,6 +124,8 @@ private fun ZoomableImage(file: File, onTap: () -> Unit) {
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
+                    // un dedo, hacia arriba y casi vertical → información
+                    if (single && dy < -140f && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.5f) onSwipeUp()
                 }
             },
         contentAlignment = Alignment.Center

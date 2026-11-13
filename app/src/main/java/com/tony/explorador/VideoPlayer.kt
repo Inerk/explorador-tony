@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
@@ -48,6 +49,7 @@ fun VideoPlayerScreen(
     val view = LocalView.current
     var controlsVisible by remember { mutableStateOf(true) }
     var landscape by remember { mutableStateOf(false) }
+    var infoOpen by remember { mutableStateOf(false) }
 
     // el reproductor vive aparte para que el video siga en la ventanita al ir al inicio
     val player = remember { VideoSession.obtain(context, files, startIndex, resume).also { VideoSession.floating = false } }
@@ -106,6 +108,9 @@ fun VideoPlayerScreen(
                     onPlayAsMusic(VideoSession.files, i, player.currentPosition)
                 }) { Icon(Icons.Filled.LibraryMusic, contentDescription = "Reproducir como música", tint = Color.White) }
             }
+            IconButton(onClick = { infoOpen = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "Información", tint = Color.White)
+            }
             IconButton(
                 onClick = {
                     landscape = !landscape
@@ -117,6 +122,9 @@ fun VideoPlayerScreen(
                 Icon(Icons.Filled.ScreenRotation, contentDescription = "Girar", tint = Color.White)
             }
             }
+        }
+        if (infoOpen) VideoSession.files.getOrNull(player.currentMediaItemIndex.coerceAtLeast(0))?.let {
+            MediaInfoSheet(it, isVideo = true, onDismiss = { infoOpen = false })
         }
     }
 }
