@@ -53,6 +53,14 @@ android {
     }
 }
 
+android {
+    packaging {
+        resources {
+            excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/DEPENDENCIES")
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
@@ -74,6 +82,10 @@ dependencies {
     implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:translate:17.0.3")
+    // comprimidos: 7-Zip para abrir/extraer (zip, rar, rar5, 7z, tar, gz…) y Commons Compress para crear 7z y tar.gz
+    implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.02")
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.tukaani:xz:1.10")
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

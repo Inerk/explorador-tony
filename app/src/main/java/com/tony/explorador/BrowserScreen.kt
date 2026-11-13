@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -152,6 +153,8 @@ fun BrowserScreen(
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<File>?>(null) }
+    var archiveFile by remember { mutableStateOf<File?>(null) }
+    var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var searchProgress by remember { mutableStateOf(0f) }
     var searchWhere by remember { mutableStateOf("") }
@@ -219,7 +222,7 @@ fun BrowserScreen(
                 when (ext) {
                     "m3u8", "m3u" -> importCandidate = file
                     "pdf" -> onOpenPdf(file)
-                    else -> openExternally(context, file)
+                    else -> if (Archives.isArchive(file)) archiveFile = file else openExternally(context, file)
                 }
             }
         }
@@ -305,6 +308,8 @@ fun BrowserScreen(
                             }
                             DropdownMenuItem(text = { Text("Compartir") }, leadingIcon = { Icon(Icons.Filled.Share, null) },
                                 onClick = { more = false; shareFiles(context, selection.filter { it.isFile }) })
+                            DropdownMenuItem(text = { Text("Comprimir…") }, leadingIcon = { Icon(Icons.Filled.Archive, null) },
+                                onClick = { more = false; compressItems = selection.toList(); selection = emptySet() })
                             DropdownMenuItem(text = { Text("Eliminar") }, leadingIcon = { Icon(Icons.Filled.Delete, null) },
                                 onClick = { more = false; confirmDelete = true })
                         }
@@ -566,6 +571,18 @@ fun BrowserScreen(
         )
     }
 
+    // comprimidos
+    archiveFile?.let { af ->
+        ArchiveViewer(af, onClose = { archiveFile = null }, onOpen = { f -> openFile(f, listOf(f)) },
+            onExtracted = { refresh() })
+    }
+    if (compressItems.isNotEmpty()) {
+        val items = compressItems
+        CompressDialog(items, currentDir ?: items.first().parentFile ?: File("/sdcard"), onDismiss = { compressItems = emptyList() }) {
+            compressItems = emptyList(); refresh()
+        }
+    }
+
     // abrir archivos desde un acceso directo del escritorio
     AppNav.openFile = { f ->
         if (f.exists()) openFile(f, listOf(f))
@@ -601,6 +618,8 @@ fun BrowserScreen(
             "Mover a…" to { transferFiles = listOf(f); transferMove = true },
             "Renombrar" to { renameTarget = f },
             "Compartir" to { shareFiles(context, listOf(f)) },
+            *(if (f.isFile && Archives.isArchive(f)) arrayOf<Pair<String, () -> Unit>>("Ver contenido y extraer" to { archiveFile = f }) else emptyArray()),
+            "Comprimir…" to { compressItems = listOf(f) },
             "Acceso directo en el escritorio" to {
                 LibraryStore.addFileShortcut(f.absolutePath)
                 android.widget.Toast.makeText(context, "Acceso directo creado en el escritorio", android.widget.Toast.LENGTH_SHORT).show()
