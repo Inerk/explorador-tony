@@ -21,6 +21,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         TagOverrides.init(this)
         LibraryStore.init(this)
         Trash.init(this)
+        NasSync.init(this)
         PhotoText.init(this)
         AnimatedCovers.init(this)
         CoverScanner.init(this)

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Animation
@@ -168,6 +169,7 @@ private sealed interface LibPage {
     data object Folders : LibPage
     data object Covers : LibPage
     data object MusicVideos : LibPage
+    data object Nas : LibPage
     data object AnimatedCoversP : LibPage
 }
 
@@ -369,6 +371,7 @@ fun LibraryScreen(
                 }
                 LibPage.Folders -> FoldersPage()
                 LibPage.Covers -> CoversPage()
+                LibPage.Nas -> NasPage()
                 LibPage.MusicVideos -> SongList(allSongs.filter { isVideoPath(it.path) }, onPlay, onAdd = { addTo = it }, alphabet = true,
                     empty = "No hay videos musicales.\nPon tus videos dentro de alguna de tus “Carpetas de música”\ny toca ⟳ para volver a buscar.")
                 LibPage.AnimatedCoversP -> AnimatedCoversPage()
@@ -440,6 +443,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.Folders -> "Carpetas de música"
     LibPage.Covers -> "Carátulas en internet"
     LibPage.MusicVideos -> "Videos musicales"
+    LibPage.Nas -> "Sincronizar con NAS"
     LibPage.AnimatedCoversP -> "Carátulas animadas"
 }
 
@@ -462,6 +466,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
             Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
         Entry("Carátulas animadas", if (AnimatedScanner.running) "…" else "", Icons.Filled.AutoAwesome, Retro.Teal, LibPage.AnimatedCoversP),
+        Entry("Sincronizar con NAS", if (NasSync.running) "…" else "", Icons.Filled.CloudSync, Retro.Blue, LibPage.Nas),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1431,5 +1436,85 @@ private fun AnimatedCoversPage() {
                     color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
             }
         }
+    }
+}
+
+
+/** Página para sincronizar la música con el NAS por WebDAV. */
+@Composable
+private fun NasPage() {
+    val context = LocalContext.current
+    var picking by remember { mutableStateOf(false) }
+    var showPass by remember { mutableStateOf(false) }
+    val fieldColors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Retro.Text, unfocusedTextColor = Retro.Text, focusedBorderColor = Retro.Orange,
+        unfocusedBorderColor = Retro.SubText, focusedLabelColor = Retro.Orange, unfocusedLabelColor = Retro.SubText, cursorColor = Retro.Orange)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Conexión (WebDAV)", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                androidx.compose.material3.OutlinedTextField(NasSync.url, { NasSync.url = it }, singleLine = true, enabled = !NasSync.running,
+                    label = { Text("Dirección de la carpeta de música") }, placeholder = { Text("http://192.168.1.50:5005/Musica") },
+                    colors = fieldColors, modifier = Modifier.fillMaxWidth())
+                androidx.compose.material3.OutlinedTextField(NasSync.user, { NasSync.user = it }, singleLine = true, enabled = !NasSync.running,
+                    label = { Text("Usuario del NAS") }, colors = fieldColors, modifier = Modifier.fillMaxWidth())
+                androidx.compose.material3.OutlinedTextField(NasSync.password, { NasSync.password = it }, singleLine = true, enabled = !NasSync.running,
+                    label = { Text("Contraseña") }, colors = fieldColors, modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = if (showPass) androidx.compose.ui.text.input.VisualTransformation.None
+                        else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    trailingIcon = { Text(if (showPass) "Ocultar" else "Ver", color = Retro.Orange, fontSize = 12.sp,
+                        modifier = Modifier.clickable { showPass = !showPass }.padding(8.dp)) })
+                if (NasSync.url.trim().startsWith("http://")) Text(
+                    "Con «http://» la contraseña viaja sin cifrar: úsalo sólo en el WiFi de tu casa. Desde fuera usa una dirección «https://».",
+                    color = Retro.Yellow, fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !NasSync.running) { picking = true }.padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Folder, null, tint = Retro.Orange); Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Carpeta de música en el teléfono", color = Retro.SubText, fontSize = 12.sp)
+                        Text(NasSync.localFolder.substringAfter("/0/", NasSync.localFolder), color = Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (!NasSync.running) {
+                    Text("Probar conexión", color = Retro.Orange, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { NasSync.test { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }.padding(vertical = 6.dp))
+                    RetroButton("Sincronizar ahora", Icons.Filled.CloudSync, Modifier.fillMaxWidth()) {
+                        if (NasSync.url.isBlank()) Toast.makeText(context, "Escribe la dirección del NAS", Toast.LENGTH_SHORT).show() else NasSync.start()
+                    }
+                } else {
+                    val t = NasSync.total
+                    if (t > 0) LinearProgressIndicator(progress = { NasSync.done.toFloat() / t }, modifier = Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
+                    else LinearProgressIndicator(Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
+                    Text((if (t > 0) "${NasSync.done} de $t · " else "") + NasSync.status, color = Retro.SubText, fontSize = 12.sp, maxLines = 2)
+                    RetroButton("Detener", Icons.Filled.Stop, Modifier.fillMaxWidth()) { NasSync.stop() }
+                }
+                Text("Sube al NAS lo que falta allá y baja al teléfono lo que falta aquí. Compara por nombre y tamaño. No borra ni reemplaza nada en ningún lado.",
+                    color = Retro.SubText, fontSize = 11.sp)
+            }
+        }
+        if (NasSync.finished || NasSync.uploaded.isNotEmpty() || NasSync.downloaded.isNotEmpty()) {
+            item {
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
+                    Text("Resumen", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text(NasSync.status, color = if (NasSync.status.startsWith("Error")) Retro.Red else Retro.SubText, fontSize = 13.sp)
+                    Text("⬆ Subidos al NAS: ${NasSync.uploaded.size}", color = Retro.Text, modifier = Modifier.padding(top = 6.dp))
+                    Text("⬇ Descargados al teléfono: ${NasSync.downloaded.size}", color = Retro.Text)
+                    if (NasSync.different.isNotEmpty()) Text("≠ Mismo nombre pero distinto tamaño (no se tocaron): ${NasSync.different.size}", color = Retro.Yellow)
+                    if (NasSync.failed.isNotEmpty()) Text("✕ Con error: ${NasSync.failed.size}", color = Retro.Red)
+                    if (NasSync.finished && NasSync.uploaded.isEmpty() && NasSync.downloaded.isEmpty() && NasSync.failed.isEmpty() && !NasSync.status.startsWith("Error"))
+                        Text("Todo estaba ya igual en los dos lados.", color = Retro.SubText, fontSize = 13.sp)
+                }
+            }
+            @Composable
+            fun Line(prefix: String, name: String, color: Color) =
+                Text("$prefix $name", color = color, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 6.dp))
+            items(NasSync.uploaded.toList()) { Line("⬆", it, Retro.Text) }
+            items(NasSync.downloaded.toList()) { Line("⬇", it, Retro.Text) }
+            items(NasSync.different.toList()) { Line("≠", it, Retro.Yellow) }
+            items(NasSync.failed.toList()) { Line("✕", it, Retro.Red) }
+        }
+    }
+    if (picking) FolderWindow("Carpeta de música en el teléfono", "Usar esta carpeta", java.io.File(NasSync.localFolder), { picking = false }) {
+        NasSync.localFolder = it.absolutePath; NasSync.saveSettings(); picking = false
     }
 }
