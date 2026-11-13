@@ -251,6 +251,7 @@ private fun MediaGalleryScreen(
                         TabRow(selectedTabIndex = tab) {
                             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(if (videos) "Videos" else "Fotos") })
                             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(if (videos) "Carpetas" else "Álbumes") })
+                            if (videos) Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("♥ Favoritos") })
                         }
                     }
                 }
@@ -272,6 +273,13 @@ private fun MediaGalleryScreen(
                     MediaItems(list, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(list, it) }, onLongClick = { toggle(it) })
                 }
                 tab == 0 -> MediaItems(items, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(items, it) }, onLongClick = { toggle(it) })
+                tab == 2 -> {
+                    val favs = items.filter { LibraryStore.isFavorite(it.path) }
+                    if (favs.isEmpty()) Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("Aún no tienes videos favoritos.\nAbre un video y tócale el corazón ♥", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    } else MediaItems(favs, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(favs, it) }, onLongClick = { toggle(it) })
+                }
                 else -> AlbumGrid(items, listView, onOpen = { album = it })
             }
         }
