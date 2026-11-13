@@ -129,6 +129,7 @@ sealed interface Overlay {
     data object Gallery : Overlay
     data object Videos : Overlay
     data object Trash : Overlay
+    data object Web : Overlay
     data class Pdf(val file: File) : Overlay
 }
 
@@ -175,6 +176,7 @@ fun AppRoot() {
         open(Overlay.Video(VideoSession.files, p.currentMediaItemIndex.coerceAtLeast(0), resume = true))
     }
     AppNav.openTrash = { open(Overlay.Trash) }
+    AppNav.openWeb = { open(Overlay.Web) }
     fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
     var folderRequest by remember { mutableStateOf<File?>(null) }
     var libraryRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -348,6 +350,7 @@ fun AppRoot() {
                         onClose = { close(o) },
                         onHome = { goHome() }
                     )
+                    Overlay.Web -> WebBrowserScreen(null, onClose = { close(o) }, onHome = { goHome() })
                     Overlay.Trash -> TrashScreen(onClose = { close(o) }, onHome = { goHome() })
                     is Overlay.Pdf -> PdfViewerScreen(o.file, onClose = { close(o) }, onHome = { goHome() })
                     Overlay.MyPc -> MyComputerScreen(
@@ -527,7 +530,7 @@ private fun enterFor(o: Overlay): androidx.compose.animation.EnterTransition = w
         androidx.compose.animation.scaleIn(smooth, initialScale = 0.86f,
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
     // secciones: entran deslizándose de lado
-    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos, Overlay.Trash -> androidx.compose.animation.slideInHorizontally(smoothOffset) { it / 3 } +
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos, Overlay.Trash, Overlay.Web -> androidx.compose.animation.slideInHorizontally(smoothOffset) { it / 3 } +
         androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
         androidx.compose.animation.scaleIn(smooth, initialScale = 0.95f)
     // fotos, videos, carrusel: zoom desde el centro
@@ -540,7 +543,7 @@ private fun exitFor(o: Overlay): androidx.compose.animation.ExitTransition = whe
         androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
         androidx.compose.animation.scaleOut(smooth, targetScale = 0.86f,
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))
-    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos, Overlay.Trash -> androidx.compose.animation.slideOutHorizontally(smoothOffset) { it / 3 } +
+    Overlay.Library, Overlay.MyPc, Overlay.Gallery, Overlay.Videos, Overlay.Trash, Overlay.Web -> androidx.compose.animation.slideOutHorizontally(smoothOffset) { it / 3 } +
         androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
         androidx.compose.animation.scaleOut(smooth, targetScale = 0.95f)
     else -> androidx.compose.animation.scaleOut(smooth, targetScale = 0.82f) +

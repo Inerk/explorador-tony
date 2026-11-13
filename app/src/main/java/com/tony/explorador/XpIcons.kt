@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -48,6 +48,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.GALLERY -> drawGallery()
             XpIconKind.VIDEO_PLAYER -> drawVideoPlayer()
             XpIconKind.TRASH -> drawTrash()
+            XpIconKind.INTERNET -> drawInternet()
         }
     }
 }
@@ -390,4 +391,29 @@ private fun DrawScope.drawTrash() {
     // flechitas de reciclaje (un triángulo verde)
     val tri = Path().apply { moveTo(w * 0.5f, h * 0.52f); lineTo(w * 0.59f, h * 0.68f); lineTo(w * 0.41f, h * 0.68f); close() }
     drawPath(tri, Color(0xFF3FAE5A), style = Stroke(w * 0.035f))
+}
+
+/** Internet: un planeta con meridianos y un anillo tipo órbita. */
+private fun DrawScope.drawInternet() {
+    val w = size.width
+    val c = Offset(w * 0.5f, size.height * 0.5f)
+    val r = w * 0.34f
+    drawCircle(Brush.radialGradient(listOf(Color(0xFF9FE3FF), Color(0xFF3D8BFF), Color(0xFF1B3FA8)),
+        center = Offset(c.x - r * 0.35f, c.y - r * 0.4f), radius = r * 1.6f), r, c)
+    // meridianos y paralelos
+    val line = Color.White.copy(alpha = 0.75f)
+    drawOval(line, Offset(c.x - r * 0.45f, c.y - r), Size(r * 0.9f, r * 2f), style = Stroke(w * 0.022f))
+    drawLine(line, Offset(c.x, c.y - r), Offset(c.x, c.y + r), w * 0.022f)
+    drawLine(line, Offset(c.x - r, c.y), Offset(c.x + r, c.y), w * 0.022f)
+    drawLine(line, Offset(c.x - r * 0.85f, c.y - r * 0.5f), Offset(c.x + r * 0.85f, c.y - r * 0.5f), w * 0.018f)
+    drawLine(line, Offset(c.x - r * 0.85f, c.y + r * 0.5f), Offset(c.x + r * 0.85f, c.y + r * 0.5f), w * 0.018f)
+    drawCircle(Color(0xFF12307A), r, c, style = Stroke(w * 0.02f))
+    // órbita rosa inclinada
+    rotate(-22f, c) {
+        drawOval(Color(0xFFFF7AD9), Offset(c.x - r * 1.35f, c.y - r * 0.38f), Size(r * 2.7f, r * 0.76f), style = Stroke(w * 0.035f))
+    }
+    drawCircle(Color.White, w * 0.045f, Offset(c.x + r * 1.15f, c.y - r * 0.62f))
+    // brillo
+    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.7f), Color.Transparent), startY = c.y - r, endY = c.y),
+        Offset(c.x - r * 0.6f, c.y - r * 0.92f), Size(r * 1.2f, r * 0.75f))
 }

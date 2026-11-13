@@ -66,6 +66,7 @@ import java.io.File
 /** Atajos para abrir pantallas desde cualquier parte. */
 object AppNav {
     var openTrash: () -> Unit = {}
+    var openWeb: () -> Unit = {}
 }
 
 /**

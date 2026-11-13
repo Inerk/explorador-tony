@@ -135,11 +135,16 @@ fun XpDesktop(
         add(DeskApp("explorer", "Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) })
         add(DeskApp("updates", "Actualizar", XpIconKind.DRIVE) { onCheckUpdates() })
         add(DeskApp("trash", "Papelera", XpIconKind.TRASH) { AppNav.openTrash() })
+        add(DeskApp("web", "Internet", XpIconKind.INTERNET) { AppNav.openWeb() })
     }
+    val webPrefsContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {
         LibraryStore.ensureDesktopDefaults(
-            listOf("mypc", "sd", "docs", "music", "pictures", "camera", "videos", "downloads", "panel", "trash").filter { it in apps }
+            listOf("mypc", "sd", "docs", "music", "pictures", "camera", "videos", "downloads", "panel", "trash", "web").filter { it in apps }
         )
+        // el icono de Internet se agrega una sola vez a quien ya tenía la app
+        val prefs = webPrefsContext.getSharedPreferences("iconos", android.content.Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("web", false)) { LibraryStore.setDesktopVisible("web", true); prefs.edit().putBoolean("web", true).apply() }
         // a quien ya tenía la app se le agrega el icono de la Papelera una sola vez
         if (!Trash.iconAdded) { LibraryStore.setDesktopVisible("trash", true); Trash.markIconAdded() }
     }
