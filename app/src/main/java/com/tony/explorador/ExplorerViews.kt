@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.TableRows
@@ -141,7 +143,7 @@ private fun SelectedMark(selected: Boolean) {
 @Composable
 fun CompactFileList(
     files: List<File>, selection: Set<File>, state: LazyListState,
-    onClick: (File) -> Unit, onLongClick: (File) -> Unit,
+    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {},
 ) {
     LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
         items(files, key = { it.absolutePath }) { file ->
@@ -162,6 +164,7 @@ fun CompactFileList(
                     value = withContext(Dispatchers.IO) { if (file.isDirectory) "" else formatSize(file.length()) }
                 }
                 Text(info, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MoreDots(Modifier.padding(start = 6.dp)) { onMenu(file) }
             }
             HorizontalDivider(Modifier.padding(start = 48.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         }
@@ -173,7 +176,7 @@ fun CompactFileList(
 @Composable
 fun FileGrid(
     files: List<File>, selection: Set<File>, big: Boolean, showHidden: Boolean, state: LazyGridState,
-    onClick: (File) -> Unit, onLongClick: (File) -> Unit,
+    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {},
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(if (big) 160.dp else 92.dp),
@@ -202,6 +205,7 @@ fun FileGrid(
                 ) {
                     FilePreview(file, kind, if (big) 72.dp else 48.dp, Modifier.fillMaxSize(), richPdf = big)
                     SelectedMark(selected)
+                    MoreDots(Modifier.align(Alignment.TopEnd), onImage = media) { onMenu(file) }
                 }
                 Text(
                     file.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
@@ -218,5 +222,20 @@ fun FileGrid(
                 }
             }
         }
+    }
+}
+
+
+/** Los tres puntos de cada archivo. */
+@Composable
+fun MoreDots(modifier: Modifier = Modifier, onImage: Boolean = false, onClick: () -> Unit) {
+    Box(
+        modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .then(if (onImage) Modifier.background(Color.Black.copy(alpha = 0.35f)) else Modifier)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Filled.MoreVert, "Opciones", tint = if (onImage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp))
     }
 }

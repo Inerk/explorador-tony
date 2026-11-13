@@ -136,6 +136,18 @@ fun XpDesktop(
         add(DeskApp("updates", "Actualizar", XpIconKind.DRIVE) { onCheckUpdates() })
         add(DeskApp("trash", "Papelera", XpIconKind.TRASH) { AppNav.openTrash() })
         add(DeskApp("web", "Internet", XpIconKind.INTERNET) { AppNav.openWeb() })
+        // accesos directos a archivos y carpetas
+        LibraryStore.desktopIds.filter { it.startsWith("file:") }.forEach { id ->
+            val f = java.io.File(id.removePrefix("file:"))
+            val icon = when (f.kind()) {
+                FileKind.FOLDER -> XpIconKind.FOLDER
+                FileKind.IMAGE -> XpIconKind.PICTURES
+                FileKind.AUDIO -> XpIconKind.MUSIC
+                FileKind.VIDEO -> XpIconKind.VIDEOS
+                else -> XpIconKind.DOCUMENTS
+            }
+            add(DeskApp(id, f.name, icon) { if (f.isDirectory) onOpenFolder(f) else AppNav.openFile(f) })
+        }
     }
     val webPrefsContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) {

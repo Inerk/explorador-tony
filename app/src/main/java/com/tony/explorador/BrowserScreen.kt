@@ -154,6 +154,9 @@ fun BrowserScreen(
 
     var showNewFolder by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<File?>(null) }
+    var transferFiles by remember { mutableStateOf(listOf<File>()) }   // lo que se va a copiar o mover
+    var transferMove by remember { mutableStateOf(false) }
+    var menuFile by remember { mutableStateOf<File?>(null) }           // archivo con el menú ⋮ abierto
     var confirmDelete by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var importCandidate by remember { mutableStateOf<File?>(null) }
@@ -258,10 +261,10 @@ fun BrowserScreen(
                     actions = {
                         IconButton(onClick = { selection = shownFiles.toSet() }) { Icon(Icons.Filled.SelectAll, "Seleccionar todo") }
                         IconButton(onClick = {
-                            clipboard = selection.toList(); clipboardMove = false; selection = emptySet()
+                            transferFiles = selection.toList(); transferMove = false; selection = emptySet()
                         }) { Icon(Icons.Filled.ContentCopy, "Copiar") }
                         IconButton(onClick = {
-                            clipboard = selection.toList(); clipboardMove = true; selection = emptySet()
+                            transferFiles = selection.toList(); transferMove = true; selection = emptySet()
                         }) { Icon(Icons.Filled.ContentCut, "Mover") }
                         var more by remember { mutableStateOf(false) }
                         IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, "Más") }
@@ -466,9 +469,9 @@ fun BrowserScreen(
                                 }
                             }
                             when (ExplorerView.of(LibraryStore.explorerView)) {
-                                ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile) { toggleSelect(it) }
-                                ExplorerView.GRID -> FileGrid(shownFiles, selection, big = false, showHidden = showHidden, state = gridState, onClick = clickFile) { toggleSelect(it) }
-                                ExplorerView.BIG -> FileGrid(shownFiles, selection, big = true, showHidden = showHidden, state = gridState, onClick = clickFile) { toggleSelect(it) }
+                                ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
+                                ExplorerView.GRID -> FileGrid(shownFiles, selection, big = false, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
+                                ExplorerView.BIG -> FileGrid(shownFiles, selection, big = true, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
                                 ExplorerView.LIST -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                                 items(shownFiles, key = { it.absolutePath }) { file ->
                                     FileRow(
@@ -477,7 +480,8 @@ fun BrowserScreen(
                                         showPath = searchResults != null,
                                         showHidden = showHidden,
                                         onClick = { clickFile(file) },
-                                        onLongClick = { toggleSelect(file) }
+                                        onLongClick = { toggleSelect(file) },
+                                        onMenu = { menuFile = file }
                                     )
                                 }
                                 }
@@ -529,6 +533,65 @@ fun BrowserScreen(
                 }
             }
         )
+    }
+
+    // abrir archivos desde un acceso directo del escritorio
+    AppNav.openFile = { f ->
+        if (f.exists()) openFile(f, listOf(f))
+        else android.widget.Toast.makeText(context, "Ese archivo ya no está ahí", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    // mini ventana para elegir a dónde copiar o mover, sin salir de donde estás
+    if (transferFiles.isNotEmpty()) {
+        val files = transferFiles
+        val move = transferMove
+        FolderWindow(
+            title = if (move) "Mover ${files.size} elemento(s) a…" else "Copiar ${files.size} elemento(s) a…",
+            confirm = if (move) "Mover aquí" else "Pegar aquí",
+            start = currentDir,
+            onDismiss = { transferFiles = emptyList() },
+            onPick = { dest ->
+                transferFiles = emptyList()
+                scope.launch {
+                    val n = if (move) moveInto(files, dest) else copyInto(files, dest)
+                    refresh()
+                    snackbar.showSnackbar(if (n == files.size) "Listo: $n ${if (move) "movidos" else "copiados"} a ${dest.name}"
+                        else "Se ${if (move) "movieron" else "copiaron"} $n de ${files.size}")
+                }
+            }
+        )
+    }
+
+    // menú ⋮ de un archivo
+    menuFile?.let { f ->
+        val options = listOf<Pair<String, () -> Unit>>(
+            "Abrir" to { openFile(f, shownFiles) },
+            "Copiar a…" to { transferFiles = listOf(f); transferMove = false },
+            "Mover a…" to { transferFiles = listOf(f); transferMove = true },
+            "Renombrar" to { renameTarget = f },
+            "Compartir" to { shareFiles(context, listOf(f)) },
+            "Acceso directo en el escritorio" to {
+                LibraryStore.addFileShortcut(f.absolutePath)
+                android.widget.Toast.makeText(context, "Acceso directo creado en el escritorio", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            "Seleccionar" to { toggleSelect(f) },
+            "Eliminar (a la Papelera)" to {
+                scope.launch {
+                    val ok = Trash.moveToTrash(listOf(f)) == 1
+                    refresh()
+                    snackbar.showSnackbar(if (ok) "Enviado a la papelera" else "No se pudo eliminar")
+                }
+            },
+        ).filter { f.isFile || it.first != "Compartir" }
+        ThemedDialog(f.name, { menuFile = null }, listOf(DialogButton("Cerrar", true) { menuFile = null })) {
+            Column {
+                options.forEach { (label, action) ->
+                    Text(label, fontWeight = FontWeight.Medium,
+                        color = if (label.startsWith("Eliminar")) MaterialTheme.colorScheme.error else LocalContentColor.current,
+                        modifier = Modifier.fillMaxWidth().clickable { menuFile = null; action() }.padding(vertical = 12.dp))
+                }
+            }
+        }
     }
 
     renameTarget?.let { target ->
@@ -686,6 +749,7 @@ private fun FileRow(
     showHidden: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onMenu: () -> Unit = {},
 ) {
     val kind = remember(file) { file.kind() }
     val subtitle by produceState(initialValue = "", file, showHidden) {
@@ -729,6 +793,7 @@ private fun FileRow(
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        MoreDots(onClick = onMenu)
     }
 }
 

@@ -67,6 +67,7 @@ import java.io.File
 object AppNav {
     var openTrash: () -> Unit = {}
     var openWeb: () -> Unit = {}
+    var openFile: (java.io.File) -> Unit = {}
 }
 
 /**

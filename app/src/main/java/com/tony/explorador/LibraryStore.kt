@@ -154,6 +154,8 @@ object LibraryStore {
         if (!visible) { desktopIds.remove(id); desktopPos.remove(id); desktopShortcuts.remove(id) }
         save()
     }
+    /** Acceso directo en el escritorio a un archivo o carpeta. */
+    fun addFileShortcut(path: String) = addDesktopShortcut("file:$path")
     fun addDesktopShortcut(id: String) {
         if (id !in desktopIds) { desktopIds.add(id); if (id !in desktopShortcuts) desktopShortcuts.add(id) }
         save()
