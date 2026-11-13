@@ -198,7 +198,7 @@ private fun MediaGalleryScreen(
     var confirmTrash by remember { mutableStateOf(false) }
     val folders = (if (videos) LibraryStore.videoFolders else LibraryStore.galleryFolders).toList()
     val cacheKey = "$videos|" + folders.joinToString("|")
-    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(mediaCache[cacheKey], folders, reload) {
+    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(mediaCache[cacheKey], folders, reload, Trash.changes) {
         // 1) lo que Android ya tiene registrado, de inmediato
         val quick = loadMedia(context, videos, folders)
         value = quick
@@ -263,7 +263,7 @@ private fun MediaGalleryScreen(
                         TabRow(selectedTabIndex = tab) {
                             Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(if (videos) "Videos" else "Fotos") })
                             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(if (videos) "Carpetas" else "Álbumes") })
-                            if (videos) Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("♥ Favoritos") })
+                            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("♥ Favoritos") })
                         }
                     }
                 }
@@ -288,7 +288,7 @@ private fun MediaGalleryScreen(
                 tab == 2 -> {
                     val favs = items.filter { LibraryStore.isFavorite(it.path) }
                     if (favs.isEmpty()) Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("Aún no tienes videos favoritos.\nAbre un video y tócale el corazón ♥", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        Text("Aún no tienes favoritos.\nAbre ${if (videos) "un video" else "una foto"} y tócale el corazón ♥", color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     } else MediaItems(favs, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(favs, it) }, onLongClick = { toggle(it) })
                 }

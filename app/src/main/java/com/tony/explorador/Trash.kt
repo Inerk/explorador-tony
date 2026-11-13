@@ -87,6 +87,9 @@ object Trash {
         private set
     var iconAdded = false
         private set
+    /** Sube cada vez que algo entra o sale de la papelera (para refrescar galería y videos). */
+    var changes by mutableIntStateOf(0)
+        private set
 
     fun stored(e: Entry) = File(dir, e.id + "_" + e.name)
 
@@ -148,6 +151,7 @@ object Trash {
             withContext(Dispatchers.Main) {
                 entries.addAll(0, added)
                 added.forEach { LibraryStore.removeSong(it.original) }
+                changes++
                 save()
             }
         }
@@ -164,7 +168,7 @@ object Trash {
             if (move(stored(e), target)) { done.add(e); paths.add(target.absolutePath) }
         }
         if (paths.isNotEmpty()) MediaScannerConnection.scanFile(app, paths.toTypedArray(), null, null)
-        withContext(Dispatchers.Main) { entries.removeAll(done.toSet()); save() }
+        withContext(Dispatchers.Main) { entries.removeAll(done.toSet()); changes++; save() }
         done.size
     }
 
