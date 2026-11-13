@@ -123,6 +123,52 @@ object LibraryStore {
         private set
     fun changeSongView(v: String) { songView = v; save() }
 
+    /** Año (etiqueta) y fecha en que se agregó cada canción: ruta → [año, fecha ms]. Se llena en segundo plano. */
+    var songMeta by mutableStateOf<Map<String, LongArray>>(emptyMap())
+        private set
+    private var metaLoading = false
+
+    suspend fun loadMeta() {
+        if (metaLoading) return
+        metaLoading = true
+        try {
+            val list = songs
+            val map = withContext(Dispatchers.IO) {
+                val m = HashMap<String, LongArray>(list.size * 2)
+                runCatching {
+                    appContext.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.YEAR, MediaStore.Audio.Media.DATE_ADDED), null, null, null)?.use { c ->
+                        while (c.moveToNext()) {
+                            val path = c.getString(0) ?: continue
+                            m[path] = longArrayOf(c.getLong(1), c.getLong(2) * 1000L)
+                        }
+                    }
+                }
+                runCatching {
+                    appContext.contentResolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(MediaStore.Video.Media.DATA, MediaStore.Video.Media.DATE_ADDED), null, null, null)?.use { c ->
+                        while (c.moveToNext()) {
+                            val path = c.getString(0) ?: continue
+                            m[path] = longArrayOf(0L, c.getLong(1) * 1000L)
+                        }
+                    }
+                }
+                val out = HashMap<String, LongArray>(list.size * 2)
+                for (sg in list) {
+                    val v = m[sg.path]
+                    out[sg.path] = if (v != null && v[1] > 0) v else longArrayOf(v?.get(0) ?: 0L, File(sg.path).lastModified())
+                }
+                out
+            }
+            songMeta = map
+        } finally { metaLoading = false }
+    }
+
+    /** Listas que se esconden del menú de la Biblioteca. */
+    var hiddenLists by mutableStateOf(setOf<String>())
+        private set
+    fun toggleListVisible(id: String) { hiddenLists = if (id in hiddenLists) hiddenLists - id else hiddenLists + id; save() }
+
     /** Estilo de la barra de avance del reproductor: wave, galaxy, eq, neon, line. */
     var seekStyle by mutableStateOf("galaxy")
         private set
@@ -318,6 +364,7 @@ object LibraryStore {
             val (found, lists) = withContext(Dispatchers.IO) { scanFolders(folders) }
             songs = found
             playlistFiles = lists
+            songMeta = emptyMap()
             withContext(Dispatchers.IO) { runCatching { saveSongsCache(found) } }
         } finally {
             scanning = false
@@ -507,6 +554,7 @@ object LibraryStore {
             put("lyricsHighlight", lyricsHighlight)
             put("songView", songView)
             put("seekStyle", seekStyle)
+            put("hiddenLists", hiddenLists.joinToString(","))
             put("galleryView", galleryView)
             put("videoView", videoView)
             put("galleryFolders", JSONArray(galleryFolders.toList()))
@@ -545,6 +593,7 @@ object LibraryStore {
         lyricsPlace = o.optString("lyricsPlace", if (o.optBoolean("lyricsOverCover", false)) "over" else "below")
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("seekStyle").takeIf { it.isNotBlank() }?.let { seekStyle = it }
+        hiddenLists = o.optString("hiddenLists").split(',').filter { it.isNotBlank() }.toSet()
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }
         o.optJSONArray("galleryFolders")?.let { a -> for (i in 0 until a.length()) galleryFolders.add(a.getString(i)) }

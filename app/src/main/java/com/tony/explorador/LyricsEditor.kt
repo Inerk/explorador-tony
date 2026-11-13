@@ -88,6 +88,8 @@ object MusicUi {
     var syncLyricsFor by mutableStateOf<String?>(null)
     /** Ajustes de música abiertos. */
     var settingsOpen by mutableStateOf(false)
+    /** Abrir la página de carpetas donde se busca música (desde Ajustes). */
+    var openScanFolders by mutableStateOf(false)
     /** La ventana flotante de letra se escondió (vuelve con la siguiente canción). */
     var floatHiddenFor by mutableStateOf<String?>(null)
     var floatOffset by mutableStateOf(Offset.Zero)
@@ -350,6 +352,20 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
             }
             Text("La ventana flotante se ve en toda la app y la puedes arrastrar; con la ✕ se esconde hasta la siguiente canción.",
                 color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
+
+            Section("Listas en la Biblioteca")
+            Text("Escoge cuáles se ven en el menú.", color = Soft, fontSize = 12.sp)
+            LibraryListNames.forEach { (id, label) ->
+                Row(Modifier.fillMaxWidth().clickable { LibraryStore.toggleListVisible(id) }.padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Checkbox(id !in LibraryStore.hiddenLists, { LibraryStore.toggleListVisible(id) },
+                        colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = Accent, uncheckedColor = Soft))
+                    Text(label, color = Color.White, fontSize = 15.sp)
+                }
+            }
+            Text("Carpetas donde buscar música", color = Color.White, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Card)
+                    .clickable { MusicUi.openScanFolders = true; onDismiss() }.padding(14.dp))
 
             Section("Barra de avance")
             // vista previa en vivo (se mueve con la música si algo está sonando)

@@ -58,6 +58,8 @@ import androidx.compose.material.icons.filled.ViewHeadline
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Palette
@@ -191,6 +193,9 @@ private sealed interface LibPage {
     data object Nas : LibPage
     data object AnimatedCoversP : LibPage
     data object LyricsP : LibPage
+    data object Recent : LibPage
+    data object Years : LibPage
+    data class FolderBrowse(val path: String?) : LibPage
 }
 
 @Composable
@@ -260,6 +265,10 @@ fun LibraryScreen(
     val songs = remember(allSongs) { allSongs.filterNot { isVideoPath(it.path) && LibraryStore.pairFor(it.path) != null } }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
     var menuQuery by remember { mutableStateOf("") }
+    // Ajustes → «Carpetas donde buscar música»
+    LaunchedEffect(MusicUi.openScanFolders) {
+        if (MusicUi.openScanFolders) { MusicUi.openScanFolders = false; setDrawer(false); push(LibPage.Folders) }
+    }
     var menuField by remember { mutableStateOf("all") }
 
     Box(
@@ -420,6 +429,10 @@ fun LibraryScreen(
                     empty = "No hay videos musicales.\nPon tus videos dentro de alguna de tus “Carpetas de música”\ny toca ⟳ para volver a buscar.")
                 LibPage.AnimatedCoversP -> AnimatedCoversPage()
                 LibPage.LyricsP -> LyricsLocalPage()
+                LibPage.Recent -> RecentPage(songs, onPlay)
+                LibPage.Years -> YearsPage(songs, onPlay, onAlbum = { push(LibPage.Album(it)) })
+                is LibPage.FolderBrowse -> FolderBrowser(p.path, allSongs, onOpen = { push(LibPage.FolderBrowse(it)) }, onPlay = onPlay,
+                    onAdd = { addTo = it })
             }
             }
             }
@@ -490,9 +503,33 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.Nas -> "Sincronizar con NAS"
     LibPage.AnimatedCoversP -> "Carátulas animadas"
     LibPage.LyricsP -> "Letras"
+    LibPage.Recent -> "Últimas agregadas"
+    LibPage.Years -> "Por año"
+    is LibPage.FolderBrowse -> p.path?.let { File(it).name } ?: "Carpeta"
 }
 
 // ───────── Menú principal ─────────
+
+private class ListDef(val label: String, val sub: String, val icon: ImageVector, val page: LibPage)
+
+/** Todas las listas que puede mostrar la Biblioteca (en Ajustes se eligen cuáles se ven). */
+private fun libraryLists(nArtists: Int, nAlbums: Int, nVideos: Int, songCount: Int): List<Pair<String, ListDef>> = listOf(
+    "playlists" to ListDef("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, LibPage.Playlists),
+    "artists" to ListDef("Artistas", "$nArtists", Icons.Filled.Mic, LibPage.Artists),
+    "albums" to ListDef("Álbumes", "$nAlbums", Icons.Filled.Album, LibPage.Albums),
+    "songs" to ListDef("Canciones", "$songCount", Icons.Filled.MusicNote, LibPage.Songs),
+    "recent" to ListDef("Últimas agregadas", "", Icons.Filled.NewReleases, LibPage.Recent),
+    "years" to ListDef("Por año", "", Icons.Filled.CalendarMonth, LibPage.Years),
+    "folder" to ListDef("Carpeta", "", Icons.Filled.FolderOpen, LibPage.FolderBrowse(null)),
+    "videos" to ListDef("Videos musicales", "$nVideos", Icons.Filled.Movie, LibPage.MusicVideos),
+    "favorites" to ListDef("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.StarBorder, LibPage.Favorites),
+    "most" to ListDef("Más escuchadas", "", Icons.Filled.TrendingUp, LibPage.MostPlayed),
+)
+
+/** Nombres de las listas para el ajuste de cuáles mostrar. */
+val LibraryListNames = listOf("playlists" to "Listas de reproducción", "artists" to "Artistas", "albums" to "Álbumes",
+    "songs" to "Canciones", "recent" to "Últimas agregadas", "years" to "Por año", "folder" to "Carpeta",
+    "videos" to "Videos musicales", "favorites" to "Favoritas", "most" to "Más escuchadas")
 
 @Composable
 private fun MainMenu(
@@ -501,21 +538,13 @@ private fun MainMenu(
 ) {
     var skinDialog by remember { mutableStateOf(false) }
     if (skinDialog) MusicSkinDialog(onDismiss = { skinDialog = false })
-    data class Entry(val label: String, val sub: String, val icon: ImageVector, val page: LibPage?, val action: (() -> Unit)? = null)
+    data class Entry(val label: String, val sub: String, val icon: ImageVector, val page: LibPage?, val action: (() -> Unit)? = null, val id: String = "")
     val all = LibraryStore.songs
     val nArtists = remember(all) { all.mapTo(HashSet()) { it.artist }.size }
     val nAlbums = remember(all) { all.mapTo(HashSet()) { it.album }.size }
     val nVideos = remember(all) { all.count { isVideoPath(it.path) } }
-    val main = listOf(
-        Entry("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, LibPage.Playlists),
-        Entry("Artistas", "$nArtists", Icons.Filled.Mic, LibPage.Artists),
-        Entry("Álbumes", "$nAlbums", Icons.Filled.Album, LibPage.Albums),
-        Entry("Canciones", "$songCount", Icons.Filled.MusicNote, LibPage.Songs),
-        Entry("Videos musicales", "$nVideos", Icons.Filled.Movie, LibPage.MusicVideos),
-        Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.StarBorder, LibPage.Favorites),
-        Entry("Más escuchadas", "", Icons.Filled.TrendingUp, LibPage.MostPlayed),
-        Entry("Carpetas", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, LibPage.Folders),
-    )
+    val main = libraryLists(nArtists, nAlbums, nVideos, songCount).filter { it.first !in LibraryStore.hiddenLists }
+        .map { (id, l) -> Entry(l.label, l.sub, l.icon, l.page, id = id) }
     val tools = listOf(
         Entry("Carátulas en internet", if (CoverScanner.running) "buscando…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
             Icons.Filled.ImageSearch, LibPage.Covers),
@@ -1763,4 +1792,148 @@ private fun LyricsLocalPage() {
                 modifier = Modifier.padding(horizontal = 6.dp))
         }
     }
+}
+
+
+// ───────── Últimas agregadas y Por año (como la galería) ─────────
+
+private val MONTHS = listOf("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+@Composable
+private fun MetaLoader(): Boolean {
+    LaunchedEffect(LibraryStore.songs) { if (LibraryStore.songMeta.isEmpty()) LibraryStore.loadMeta() }
+    if (LibraryStore.songMeta.isEmpty() && LibraryStore.songs.isNotEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Retro.Orange, strokeWidth = 2.dp)
+        }
+        return false
+    }
+    return true
+}
+
+@Composable
+private fun CoverTile(path: String, title: String, sub: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val thumb by produceState(peekCover(path), path, LibraryStore.tagsVersion) { if (value == null) value = loadThumb(path) }
+    Column(modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(4.dp)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp))
+            .background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Panel), contentAlignment = Alignment.Center) {
+            val b = thumb
+            if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            else Icon(Icons.Filled.MusicNote, null, tint = Retro.Orange.copy(alpha = 0.7f), modifier = Modifier.size(32.dp))
+        }
+        Text(title, color = Retro.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 4.dp))
+        Text(sub, color = Retro.SubText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, count: String, onPlay: (() -> Unit)?) {
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 4.dp, top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = Retro.Text, fontSize = 20.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+        Text(count, color = Retro.SubText, fontSize = 13.sp)
+        if (onPlay != null) IconButton(onClick = onPlay) { Icon(Icons.Filled.PlayArrow, "Reproducir", tint = Retro.Orange) }
+    }
+}
+
+/** Canciones de la más nueva a la más vieja, separadas por mes, en cuadritos como la galería. */
+@Composable
+private fun RecentPage(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit) {
+    if (!MetaLoader()) return
+    val meta = LibraryStore.songMeta
+    val sorted = remember(songs, meta) { songs.sortedByDescending { meta[it.path]?.get(1) ?: 0L } }
+    val sections = remember(sorted) {
+        val cal = java.util.Calendar.getInstance()
+        sorted.groupBy { s ->
+            cal.timeInMillis = meta[s.path]?.get(1) ?: 0L
+            "${MONTHS[cal.get(java.util.Calendar.MONTH)].replaceFirstChar { it.uppercase() }} ${cal.get(java.util.Calendar.YEAR)}"
+        }.toList()
+    }
+    if (sorted.isEmpty()) { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canciones.", color = Retro.SubText) }; return }
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        androidx.compose.foundation.lazy.grid.GridCells.Adaptive(108.dp), Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        sections.forEach { (month, list) ->
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, key = "h$month") {
+                SectionHeader(month, "${list.size}") { onPlay(list, 0, false) }
+            }
+            items(list.size, key = { "s$month${list[it].path}" }) { i ->
+                val s = list[i]
+                CoverTile(s.path, s.title, s.artist) { onPlay(sorted, sorted.indexOf(s).coerceAtLeast(0), false) }
+            }
+        }
+    }
+}
+
+/** Álbumes agrupados por el año de la canción (etiqueta), del más nuevo al más viejo. */
+@Composable
+private fun YearsPage(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, onAlbum: (String) -> Unit) {
+    if (!MetaLoader()) return
+    val meta = LibraryStore.songMeta
+    val years = remember(songs, meta) {
+        songs.groupBy { (meta[it.path]?.get(0) ?: 0L).toInt().let { y -> if (y in 1900..2100) y else 0 } }
+            .toList().sortedWith(compareBy<Pair<Int, List<Song>>> { it.first == 0 }.thenByDescending { it.first })
+    }
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        androidx.compose.foundation.lazy.grid.GridCells.Adaptive(108.dp), Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        years.forEach { (year, list) ->
+            val albums = list.groupBy { it.album }.toList()
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }, key = "y$year") {
+                SectionHeader(if (year == 0) "Sin año" else "$year", "${list.size} canciones") { onPlay(list, 0, false) }
+            }
+            items(albums.size, key = { "a$year${albums[it].first}" }) { i ->
+                val (album, ss) = albums[i]
+                CoverTile(ss.first().path, album, ss.first().artist) {
+                    if (album == UNKNOWN_ALBUM || album.isBlank()) onPlay(ss, 0, false) else onAlbum(album)
+                }
+            }
+        }
+    }
+}
+
+// ───────── Carpeta: tu música como explorador ─────────
+
+@Composable
+private fun FolderBrowser(path: String?, songs: List<Song>, onOpen: (String) -> Unit, onPlay: (List<Song>, Int, Boolean) -> Unit,
+                          onAdd: (List<Song>) -> Unit) {
+    // todo sale de la lista de canciones (sin leer el disco): rápido aunque tengas miles
+    val (folders, here) = remember(path, songs) {
+        if (path == null) {
+            val roots = LibraryStore.musicFolders.toList()
+            roots.map { r -> r to songs.count { it.path.startsWith(r.trimEnd('/') + "/") } }.filter { it.second > 0 } to emptyList<Song>()
+        } else {
+            val prefix = path.trimEnd('/') + "/"
+            val counts = LinkedHashMap<String, Int>()
+            val direct = ArrayList<Song>()
+            for (s in songs) {
+                if (!s.path.startsWith(prefix)) continue
+                val rest = s.path.substring(prefix.length)
+                val slash = rest.indexOf('/')
+                if (slash < 0) direct.add(s) else { val d = prefix + rest.substring(0, slash); counts[d] = (counts[d] ?: 0) + 1 }
+            }
+            counts.toList().sortedBy { File(it.first).name.lowercase(Locale.ROOT) } to direct.sortedBy { File(it.path).name.lowercase(Locale.ROOT) }
+        }
+    }
+    // si solo hay una carpeta raíz, entra directo
+    if (path == null && folders.size == 1) { FolderBrowser(folders.first().first, songs, onOpen, onPlay, onAdd); return }
+    SongList(here, onPlay, onAdd, empty = if (folders.isEmpty()) "No hay música aquí." else "", header = {
+        Column {
+            folders.forEach { (dir, n) ->
+                Row(Modifier.fillMaxWidth().clickable { onOpen(dir) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    if (Retro.isLavanda) SoftIcon(Icons.Filled.Folder, Retro.Orange, 40.dp)
+                    else Icon(Icons.Filled.Folder, null, tint = Retro.Orange, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(File(dir).name, color = Retro.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("$n canciones", color = Retro.SubText, fontSize = 12.sp)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Retro.SubText)
+                }
+            }
+        }
+    })
 }
