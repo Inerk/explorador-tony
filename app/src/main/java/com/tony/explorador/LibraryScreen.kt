@@ -18,7 +18,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -255,6 +259,7 @@ fun LibraryScreen(
     val songs = remember(allSongs) { allSongs.filterNot { isVideoPath(it.path) && LibraryStore.pairFor(it.path) != null } }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
     var menuQuery by remember { mutableStateOf("") }
+    var menuField by remember { mutableStateOf("all") }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -300,7 +305,7 @@ fun LibraryScreen(
     ) {
         // Encabezado: en el menú principal es limpio (el título grande va abajo); en las listas, el metálico
         val clean = page == LibPage.Menu
-        if (clean) Box(Modifier.fillMaxWidth().safeDrawingPadding()) {
+        if (clean) Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = Retro.Text) }
                 Spacer(Modifier.weight(1f))
@@ -308,7 +313,7 @@ fun LibraryScreen(
                 HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) { Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.Text) }
             }
-        } else Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
+        } else Box(Modifier.fillMaxWidth().background(Retro.metal).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -366,8 +371,9 @@ fun LibraryScreen(
                         fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
                         modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp))
                     LibSearchField(menuQuery, { menuQuery = it }, "Buscar canción, artista o álbum")
+                    if (menuQuery.isNotBlank()) SearchFieldChips(songs, menuQuery, menuField) { menuField = it }
                     if (menuQuery.isBlank()) MainMenu(songs.size, onOpen = { push(it) }, big = true, onPlay = onPlay)
-                    else SongList(songs.filter { songMatches(it, menuQuery) }, onPlay, onAdd = { addTo = it }, searchable = false,
+                    else SongList(songs.filter { songMatches(it, menuQuery, menuField) }, onPlay, onAdd = { addTo = it }, searchable = false,
                         empty = "No encontré nada con «${menuQuery.trim()}»")
                 }
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
@@ -434,7 +440,7 @@ fun LibraryScreen(
                 .background(Retro.bgBrush)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
         ) {
-            Box(Modifier.fillMaxWidth().safeDrawingPadding()) {
+            Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
                     Text("Biblioteca", color = Retro.Text, fontWeight = FontWeight.Black, fontSize = 30.sp,
                         fontFamily = if (Retro.isVintage) FontFamily.Serif else null, modifier = Modifier.weight(1f))
@@ -612,9 +618,9 @@ private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Uni
 }
 
 /** ¿La canción coincide con lo buscado? (sin importar acentos ni mayúsculas; varias palabras = todas deben estar) */
-private fun songMatches(s: Song, q: String): Boolean {
+private fun songMatches(s: Song, q: String, field: String = "all"): Boolean {
     fun norm(t: String) = java.text.Normalizer.normalize(t.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-    val hay = norm(s.title + " " + s.artist + " " + s.album)
+    val hay = norm(when (field) { "title" -> s.title; "artist" -> s.artist; "album" -> s.album; else -> s.title + " " + s.artist + " " + s.album })
     return norm(q).split(' ').filter { it.isNotBlank() }.all { hay.contains(it) }
 }
 
@@ -645,6 +651,29 @@ private fun LibSearchField(value: String, onChange: (String) -> Unit, hint: Stri
     }
 }
 
+private val SEARCH_FIELDS = listOf("all" to "Todo", "title" to "Canción", "artist" to "Artista", "album" to "Álbum")
+
+/** Etiquetas debajo del buscador para buscar solo en el nombre, el artista o el álbum. */
+@Composable
+private fun SearchFieldChips(songs: List<Song>, q: String, field: String, onField: (String) -> Unit) {
+    val counts = remember(songs, q) { SEARCH_FIELDS.associate { (k, _) -> k to songs.count { songMatches(it, q, k) } } }
+    androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+        items(SEARCH_FIELDS.size) { i ->
+            val (k, label) = SEARCH_FIELDS[i]
+            val on = field == k
+            Row(Modifier.clip(CircleShape)
+                .background(if (on) Retro.Orange else Retro.Text.copy(alpha = 0.08f))
+                .clickable { onField(k) }.padding(horizontal = 14.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = if (on) Retro.OnAccent else Retro.Text, fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium)
+                Spacer(Modifier.width(5.dp))
+                Text("${counts[k] ?: 0}", color = if (on) Retro.OnAccent.copy(alpha = 0.75f) else Retro.SubText, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
 @Composable
 private fun SongList(
     songs: List<Song>,
@@ -658,9 +687,13 @@ private fun SongList(
     searchable: Boolean = true,
 ) {
     var q by remember { mutableStateOf("") }
-    val shown = remember(songs, q) { if (q.isBlank()) songs else songs.filter { songMatches(it, q) } }
+    var field by remember { mutableStateOf("all") }
+    val shown = remember(songs, q, field) { if (q.isBlank()) songs else songs.filter { songMatches(it, q, field) } }
     Column(Modifier.fillMaxSize()) {
-        if (searchable && songs.size > 6) LibSearchField(q, { q = it }, "Buscar en ${songs.size} canciones")
+        if (searchable && songs.size > 6) {
+            LibSearchField(q, { q = it }, "Buscar en ${songs.size} canciones")
+            if (q.isNotBlank()) SearchFieldChips(songs, q, field) { field = it }
+        }
         SongListInner(shown, onPlay, onAdd, showCounts, if (q.isNotBlank()) "No encontré nada con «${q.trim()}»" else empty,
             onRemove, header, alphabet && q.isBlank())
     }
