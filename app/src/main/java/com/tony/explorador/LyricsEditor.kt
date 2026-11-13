@@ -334,6 +334,15 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
                 "over" to "Encima de la carátula",
                 "float" to "En una ventana flotante",
             ).forEach { (id, label) -> Radio(label, LibraryStore.lyricsPlace == id) { LibraryStore.changeLyricsPlace(id) } }
+            Row(Modifier.fillMaxWidth().clickable { LibraryStore.changeLyricsTranslate(!LibraryStore.lyricsTranslate) }.padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Traducir letras al español", color = Color.White)
+                    Text("Si la canción está en otro idioma, sale la traducción debajo de cada línea. Se traduce en el teléfono; la primera vez de cada idioma baja un paquete (~30 MB).",
+                        color = Soft, fontSize = 11.sp)
+                }
+                Switch(LibraryStore.lyricsTranslate, { LibraryStore.changeLyricsTranslate(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Accent))
+            }
             Text("La ventana flotante se ve en toda la app y la puedes arrastrar; con la ✕ se esconde hasta la siguiente canción.",
                 color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
 
@@ -383,6 +392,7 @@ fun FloatingLyricsWindow(player: Player, modifier: Modifier = Modifier) {
     if (MusicUi.floatHiddenFor == path) return
     val info by rememberTrackInfo(path)
     val lyrics = info?.lyrics.orEmpty()
+    val translation by rememberLyricsTranslation(lyrics)
     if (lyrics.isEmpty() || player.mediaItemCount == 0) return
     val pos = player.currentPosition + tick * 0L
     val idx = currentLyricIndex(lyrics, pos)
@@ -401,6 +411,9 @@ fun FloatingLyricsWindow(player: Player, modifier: Modifier = Modifier) {
             if (synced) {
                 Text(lyrics.getOrNull(idx)?.text?.ifBlank { "♪" } ?: "♪", color = accent, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                     lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                translation?.getOrNull(idx)?.takeIf { it.isNotBlank() && !it.equals(lyrics.getOrNull(idx)?.text?.trim(), true) }?.let {
+                    Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
                 lyrics.getOrNull(idx + 1)?.let {
                     Text(it.text.ifBlank { "♪" }, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

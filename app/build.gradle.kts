@@ -73,5 +73,7 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
     implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
