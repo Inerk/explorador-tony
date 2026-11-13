@@ -61,11 +61,11 @@ fun XpDownloadDialog(tag: String, progress: Float, totalBytes: Long) {
                 Text("Actualizaciones automáticas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
             Column(Modifier.fillMaxWidth().background(XpColors.Window).padding(14.dp)) {
-                Text("Descargando actualizaciones…", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.Black)
+                Text("Descargando actualizaciones…", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = XpColors.Ink)
                 Spacer(Modifier.height(10.dp))
                 FlyingPapers(Modifier.fillMaxWidth().height(70.dp))
                 Spacer(Modifier.height(10.dp))
-                Text("Explorador Tony $tag", fontSize = 13.sp, color = Color.Black)
+                Text("Explorador Tony $tag", fontSize = 13.sp, color = XpColors.Ink)
                 Spacer(Modifier.height(6.dp))
                 XpBlocksBar(progress)
                 Spacer(Modifier.height(6.dp))
@@ -73,7 +73,7 @@ fun XpDownloadDialog(tag: String, progress: Float, totalBytes: Long) {
                 Text(
                     if (totalBytes > 0) "${formatSize(done)} de ${formatSize(totalBytes)} (${(progress * 100).toInt()} %)"
                     else "${(progress * 100).toInt()} %",
-                    fontSize = 12.sp, color = Color(0xFF333333)
+                    fontSize = 12.sp, color = XpColors.InkSoft
                 )
                 val elapsed = (System.currentTimeMillis() - start) / 1000f
                 val remaining = if (progress > 0.03f) ((elapsed / progress) * (1 - progress)).toInt() else -1
@@ -83,7 +83,7 @@ fun XpDownloadDialog(tag: String, progress: Float, totalBytes: Long) {
                         remaining < 60 -> "Tiempo restante: $remaining segundos"
                         else -> "Tiempo restante: ${remaining / 60} min ${remaining % 60} s"
                     },
-                    fontSize = 12.sp, color = Color(0xFF333333)
+                    fontSize = 12.sp, color = XpColors.InkSoft
                 )
             }
         }
@@ -213,7 +213,7 @@ fun XpBlocksBar(progress: Float) {
     Canvas(
         Modifier.fillMaxWidth().height(18.dp)
             .border(1.dp, Color(0xFF7F9DB9), RoundedCornerShape(3.dp))
-            .background(Color.White, RoundedCornerShape(3.dp))
+            .background(XpColors.Paper, RoundedCornerShape(3.dp))
     ) {
         val pad = 3.dp.toPx()
         val block = 8.dp.toPx()

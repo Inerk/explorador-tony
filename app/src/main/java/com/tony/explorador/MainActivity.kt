@@ -76,7 +76,20 @@ class MainActivity : ComponentActivity() {
 fun ExploradorTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
+    androidx.compose.runtime.SideEffect { XpColors.systemDark = dark }
+    val C = androidx.compose.ui.graphics.Color
     val scheme = when {
+        LibraryStore.theme == AppTheme.XP && XpColors.dark -> darkColorScheme(
+            primary = C(0xFFB99CFF), onPrimary = C(0xFF1A1145),
+            primaryContainer = C(0xFF3A2A7A), onPrimaryContainer = C(0xFFEDE6FF),
+            secondary = C(0xFFFF8FDD), onSecondary = C(0xFF2A0F2A),
+            secondaryContainer = C(0xFF3A2A7A), onSecondaryContainer = C(0xFFEDE6FF),
+            background = C(0xFF120E26), onBackground = C(0xFFF1ECFF),
+            surface = C(0xFF120E26), onSurface = C(0xFFF1ECFF),
+            surfaceVariant = C(0xFF241C4A), onSurfaceVariant = C(0xFFB5ABD6),
+            surfaceContainer = C(0xFF1B1538), surfaceContainerHigh = C(0xFF241C4A), surfaceContainerHighest = C(0xFF2C2358),
+            surfaceContainerLow = C(0xFF171232), outline = C(0xFF6E62A0), outlineVariant = C(0xFF3A3166),
+        )
         LibraryStore.theme == AppTheme.XP -> lightColorScheme(
             primary = XpColors.SelectBlue,
             onPrimary = androidx.compose.ui.graphics.Color.White,

@@ -2,6 +2,8 @@ package com.tony.explorador
 
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 
 /** Temas de la app. Para agregar uno nuevo: añádelo aquí y en [skinFor]. */
 enum class AppTheme(val label: String) {
@@ -33,11 +35,23 @@ object XpColors {
     val StartBottom = Color(0xFF6A35D8)
     val TrayTop = Color(0xFF3A2A8C)
     val TrayBottom = Color(0xFF1B1250)
-    val Window = Color(0xFFEEEAFB)
+    /** Si el teléfono está en modo oscuro (lo actualiza el tema de la app). */
+    var systemDark by androidx.compose.runtime.mutableStateOf(false)
+    /** Modo oscuro activo: manual, o automático según el teléfono. */
+    val dark: Boolean get() = LibraryStore.darkMode == "dark" || (LibraryStore.darkMode == "auto" && systemDark)
+    val Window get() = if (dark) Color(0xFF1B1538) else Color(0xFFEEEAFB)
+    /** Fondo del contenido (antes blanco). */
+    val Paper get() = if (dark) Color(0xFF120E26) else Color.White
+    /** Texto principal. */
+    val Ink get() = if (dark) Color(0xFFF1ECFF) else Color.Black
+    /** Texto secundario. */
+    val InkSoft get() = if (dark) Color(0xFFB5ABD6) else Color(0xFF555555)
+    /** Texto de encabezados. */
+    val InkBlue get() = if (dark) Color(0xFFC9B6FF) else Color(0xFF0A246A)
     val SideTop = Color(0xFF8E6BF0)
     val SideBottom = Color(0xFF5B3FC8)
-    val SidePanel = Color(0xFFE3DCFA)
-    val SideHeader = Color(0xFF5B2FC0)
+    val SidePanel get() = if (dark) Color(0xFF241C4A) else Color(0xFFE3DCFA)
+    val SideHeader get() = if (dark) Color(0xFFC9B6FF) else Color(0xFF5B2FC0)
     val SelectBlue = Color(0xFF7A4FE0)
     val SkyTop = Color(0xFF2E6FD8)
     val SkyBottom = Color(0xFF9CC9F5)
@@ -62,9 +76,9 @@ fun skinFor(theme: AppTheme): Skin = when (theme) {
     AppTheme.XP -> Skin(
         titleBar = XpColors.titleBrush,
         titleText = Color.White,
-        listBackground = Color.White,
-        listText = Color.Black,
-        listSubText = Color(0xFF6D6D6D),
+        listBackground = XpColors.Paper,
+        listText = XpColors.Ink,
+        listSubText = XpColors.InkSoft,
         selection = XpColors.SelectBlue.copy(alpha = 0.25f),
         isRetro = true,
     )

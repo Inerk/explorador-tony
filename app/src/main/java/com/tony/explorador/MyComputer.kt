@@ -130,7 +130,7 @@ fun MyComputerScreen(
     onHome: () -> Unit,
 ) {
     BackHandler(onBack = onClose)
-    Column(Modifier.fillMaxSize().background(Color.White).pointerInput(Unit) {}) {
+    Column(Modifier.fillMaxSize().background(XpColors.Paper).pointerInput(Unit) {}) {
         // Barra de título XP
         Box(Modifier.fillMaxWidth().background(XpColors.titleBrush).statusBarsPadding()) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -156,7 +156,7 @@ fun MyComputerContent(onOpenFolder: (File) -> Unit, onOpenMusic: () -> Unit) {
     val internal = roots.first().file
     fun dir(name: String) = File(internal, name)
 
-    Box(Modifier.fillMaxSize().background(Color.White)) {
+    Box(Modifier.fillMaxSize().background(XpColors.Paper)) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             // Panel azul de la izquierda (aquí arriba): información del sistema
             item {
@@ -170,7 +170,7 @@ fun MyComputerContent(onOpenFolder: (File) -> Unit, onOpenMusic: () -> Unit) {
                             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                                 Text("$label:", fontSize = 12.sp, color = Color(0xFF215DC6), fontWeight = FontWeight.Bold,
                                     modifier = Modifier.width(110.dp))
-                                Text(value, fontSize = 12.sp, color = Color.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(value, fontSize = 12.sp, color = XpColors.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -196,11 +196,11 @@ fun MyComputerContent(onOpenFolder: (File) -> Unit, onOpenMusic: () -> Unit) {
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(if (r.name.startsWith("Tarjeta")) "Tarjeta SD (E:)" else "Disco local (C:)",
-                                fontWeight = FontWeight.Bold, color = Color.Black)
+                                fontWeight = FontWeight.Bold, color = XpColors.Ink)
                             Spacer(Modifier.height(4.dp))
                             UsageBar(if (total > 0) (total - free).toFloat() / total else 0f)
                             Spacer(Modifier.height(2.dp))
-                            Text("${formatSize(free)} libres de ${formatSize(total)}", fontSize = 12.sp, color = Color(0xFF555555))
+                            Text("${formatSize(free)} libres de ${formatSize(total)}", fontSize = 12.sp, color = XpColors.InkSoft)
                         }
                     }
                 }
@@ -226,13 +226,13 @@ fun MyComputerContent(onOpenFolder: (File) -> Unit, onOpenMusic: () -> Unit) {
                         XpIcon(icon, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(label, fontWeight = FontWeight.Bold, color = Color.Black)
+                            Text(label, fontWeight = FontWeight.Bold, color = XpColors.Ink)
                             Text(
                                 when {
                                     stat == null -> "Contando…"
                                     else -> "${stat.count} ${if (stat.count == 1) "archivo" else "archivos"} · ${formatSize(stat.bytes)}"
                                 },
-                                fontSize = 12.sp, color = Color(0xFF555555)
+                                fontSize = 12.sp, color = XpColors.InkSoft
                             )
                         }
                     }
@@ -268,7 +268,7 @@ private fun PlaceLink(label: String, icon: XpIconKind, onClick: () -> Unit) {
 @Composable
 private fun SectionHeader(text: String) {
     Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 4.dp)) {
-        Text(text, fontWeight = FontWeight.Bold, color = Color(0xFF0A246A), fontSize = 14.sp)
+        Text(text, fontWeight = FontWeight.Bold, color = XpColors.InkBlue, fontSize = 14.sp)
         Box(
             Modifier.fillMaxWidth().height(2.dp)
                 .background(Brush.horizontalGradient(listOf(Color(0xFF7BA2E7), Color.Transparent)))
@@ -282,7 +282,7 @@ private fun UsageBar(fraction: Float) {
     Canvas(
         Modifier.fillMaxWidth().height(14.dp)
             .border(1.dp, Color(0xFF7F9DB9))
-            .background(Color.White)
+            .background(XpColors.Paper)
     ) {
         val pad = 2.dp.toPx()
         val block = 6.dp.toPx()

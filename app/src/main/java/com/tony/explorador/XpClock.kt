@@ -120,11 +120,11 @@ fun XpClockWindow(onClose: () -> Unit, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(6.dp))
             Text(
                 SimpleDateFormat("h:mm:ss a", esMX).format(Date(now)),
-                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF0A246A)
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = XpColors.InkBlue
             )
             Text(
                 SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy", esMX).format(Date(now)).replaceFirstChar { it.uppercase() },
-                fontSize = 10.sp, color = Color(0xFF333333)
+                fontSize = 10.sp, color = XpColors.InkSoft
             )
             Spacer(Modifier.height(6.dp))
             MonthCalendar(today, monthShift, onShift = { monthShift += it })
@@ -187,17 +187,17 @@ private fun MonthCalendar(today: Calendar, shift: Int, onShift: (Int) -> Unit) {
     val todayNum = today.get(Calendar.DAY_OF_MONTH)
 
     Column(
-        Modifier.fillMaxWidth().background(Color.White).border(1.dp, Color(0xFF7F9DB9)).padding(6.dp)
+        Modifier.fillMaxWidth().background(XpColors.Paper).border(1.dp, Color(0xFF7F9DB9)).padding(6.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("‹", fontSize = 18.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(-1) }.padding(horizontal = 10.dp))
-            Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0A246A), textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = XpColors.InkBlue, textAlign = TextAlign.Center, modifier = Modifier.weight(1f)
                 .clickable { if (shift != 0) onShift(-shift) })
             Text("›", fontSize = 18.sp, color = XpColors.SideHeader, modifier = Modifier.clickable { onShift(1) }.padding(horizontal = 10.dp))
         }
         Row(Modifier.fillMaxWidth().background(XpColors.SidePanel)) {
             listOf("L", "M", "M", "J", "V", "S", "D").forEach {
-                Text(it, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0A246A),
+                Text(it, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = XpColors.InkBlue,
                     textAlign = TextAlign.Center, modifier = Modifier.weight(1f).padding(vertical = 3.dp))
             }
         }

@@ -365,14 +365,14 @@ private fun StartMenu(
         }
         Box(Modifier.fillMaxWidth().height(2.dp).background(XpColors.StartMenuOrange))
         Row(Modifier.fillMaxWidth().height(300.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(vertical = 6.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight().background(XpColors.Paper).padding(vertical = 6.dp)) {
                 entries.forEach { app ->
-                    StartEntry(app, Color.Black, FontWeight.SemiBold, iconSize = 36) { onPicked(); app.action() }
+                    StartEntry(app, XpColors.Ink, FontWeight.SemiBold, iconSize = 36) { onPicked(); app.action() }
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight().background(XpColors.SidePanel).padding(vertical = 6.dp)) {
                 places.forEach { app ->
-                    StartEntry(app, Color(0xFF0A246A), FontWeight.Bold, iconSize = 28) { onPicked(); app.action() }
+                    StartEntry(app, XpColors.InkBlue, FontWeight.Bold, iconSize = 28) { onPicked(); app.action() }
                 }
             }
         }

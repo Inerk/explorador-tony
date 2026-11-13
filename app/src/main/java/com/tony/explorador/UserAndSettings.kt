@@ -204,7 +204,7 @@ fun ControlPanelContent(
     var historyOpen by remember { mutableStateOf(false) }
     var windowSkinOpen by remember { mutableStateOf(false) }
 
-    LazyColumn(Modifier.fillMaxSize().background(Color.White)) {
+    LazyColumn(Modifier.fillMaxSize().background(XpColors.Paper)) {
         item {
             Box(
                 Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(XpColors.SideTop, XpColors.SideBottom))).padding(12.dp)
@@ -219,11 +219,19 @@ fun ControlPanelContent(
         item { PanelItem(XpIconKind.MUSIC, "Tema del reproductor", LibraryStore.musicSkin.label) { musicSkinOpen = true } }
         item { PanelItem(XpIconKind.COMPUTER, "Ventana del reproductor", LibraryStore.windowSkin.label) { windowSkinOpen = true } }
         item { PanelItem(XpIconKind.FOLDER, "Carpetas de música", "Dónde busca canciones la app") { onMusicFolders() } }
+        item {
+            val mode = LibraryStore.darkMode
+            PanelItem(XpIconKind.SETTINGS, "Modo claro u oscuro", when (mode) {
+                "dark" -> "Oscuro · toca para cambiar"
+                "light" -> "Claro · toca para cambiar"
+                else -> "Automático (según el teléfono) · toca para cambiar"
+            }) { LibraryStore.changeDarkMode(when (mode) { "auto" -> "light"; "light" -> "dark"; else -> "auto" }) }
+        }
         item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName (beta)") { onUpdates() } }
         item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
         item {
             Text("★ $APP_CREDITS · v$versionName", fontSize = 12.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                color = Color(0xFF555555), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = XpColors.InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
         }
         item { PanelItem(XpIconKind.COMPUTER, "Acerca de", "Explorador Tony") { aboutOpen = true } }
@@ -246,7 +254,7 @@ fun ControlPanelContent(
                             Text(skin.label)
                         }
                     }
-                    Text("También puedes cambiarla con el botón ◐ de la ventana.", fontSize = 12.sp, color = Color.Gray)
+                    Text("También puedes cambiarla con el botón ◐ de la ventana.", fontSize = 12.sp, color = XpColors.InkSoft)
                 }
             },
             confirmButton = { TextButton(onClick = { windowSkinOpen = false }) { Text("Cerrar") } }
@@ -272,7 +280,7 @@ private fun PanelItem(icon: XpIconKind?, title: String, subtitle: String, avatar
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, color = XpColors.SideHeader, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color(0xFF555555), fontSize = 12.sp)
+            Text(subtitle, color = XpColors.InkSoft, fontSize = 12.sp)
         }
     }
 }
@@ -293,7 +301,7 @@ fun MusicSkinDialog(onDismiss: () -> Unit) {
                         Text(skin.label)
                     }
                 }
-                Text("Solo cambia colores e íconos; todo funciona igual.", fontSize = 12.sp, color = Color.Gray)
+                Text("Solo cambia colores e íconos; todo funciona igual.", fontSize = 12.sp, color = XpColors.InkSoft)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } }

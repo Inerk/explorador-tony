@@ -97,10 +97,10 @@ fun ThemedDialog(
                 XpCaptionButton("✕", XpRedButton, onDismiss)
             }
             Column(Modifier.fillMaxWidth().background(XpColors.Window).padding(14.dp)) {
-                CompositionLocalProvider(LocalContentColor provides Color.Black) {
+                CompositionLocalProvider(LocalContentColor provides XpColors.Ink) {
                     content()
                 }
-                if (credits) CreditsLine(Color(0xFF555555))
+                if (credits) CreditsLine(XpColors.InkSoft)
                 Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     buttons.forEach { b ->

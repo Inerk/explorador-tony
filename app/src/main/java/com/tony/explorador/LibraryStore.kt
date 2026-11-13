@@ -114,6 +114,10 @@ object LibraryStore {
     var explorerView by mutableStateOf("list")
         private set
     fun changeExplorerView(v: String) { explorerView = v; save() }
+    /** "auto" (según el teléfono), "light" o "dark". */
+    var darkMode by mutableStateOf("auto")
+        private set
+    fun changeDarkMode(v: String) { darkMode = v; save() }
     /** Cómo se ven las listas de canciones: "compact", "cards" o "grid". */
     var songView by mutableStateOf("compact")
         private set
@@ -432,6 +436,7 @@ object LibraryStore {
             put("windowSkin", windowSkin.name)
             put("wallpaper", wallpaper)
             put("explorerView", explorerView)
+            put("darkMode", darkMode)
             put("songView", songView)
             put("galleryView", galleryView)
             put("videoView", videoView)
@@ -465,6 +470,7 @@ object LibraryStore {
         o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
+        o.optString("darkMode").takeIf { it.isNotBlank() }?.let { darkMode = it }
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }
