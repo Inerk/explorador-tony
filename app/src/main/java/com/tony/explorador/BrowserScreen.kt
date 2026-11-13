@@ -202,16 +202,16 @@ fun BrowserScreen(
     fun openFile(file: File, siblings: List<File>) {
         when (file.kind()) {
             FileKind.FOLDER -> goTo(file)
-            FileKind.IMAGE -> {
-                val list = siblings.filter { it.kind() == FileKind.IMAGE }
+            FileKind.IMAGE -> scope.launch {
+                val list = withContext(Dispatchers.IO) { siblings.filter { it.kind() == FileKind.IMAGE } }
                 onOpenImages(list, list.indexOf(file).coerceAtLeast(0))
             }
-            FileKind.VIDEO -> {
-                val list = siblings.filter { it.kind() == FileKind.VIDEO }
+            FileKind.VIDEO -> scope.launch {
+                val list = withContext(Dispatchers.IO) { siblings.filter { it.kind() == FileKind.VIDEO } }
                 onOpenVideo(list, list.indexOf(file).coerceAtLeast(0))
             }
-            FileKind.AUDIO -> {
-                val list = siblings.filter { it.kind() == FileKind.AUDIO }
+            FileKind.AUDIO -> scope.launch {
+                val list = withContext(Dispatchers.IO) { siblings.filter { it.kind() == FileKind.AUDIO } }
                 onPlayMusic(list, list.indexOf(file).coerceAtLeast(0))
             }
             FileKind.OTHER -> {
@@ -489,12 +489,15 @@ fun BrowserScreen(
                             LaunchedEffect(currentDir) { listState.scrollToItem(0); gridState.scrollToItem(0) }
                             val clickFile: (File) -> Unit = { file ->
                                 if (selection.isNotEmpty()) toggleSelect(file)
-                                else {
-                                    val siblings = if (searchResults != null)
-                                        file.parentFile?.let { listFolder(it, sortMode, ascending, showHidden) } ?: listOf(file)
-                                    else shownFiles
-                                    openFile(file, siblings)
-                                }
+                                else if (searchResults != null) {
+                                    // leer la carpeta del resultado en segundo plano (en el hilo principal congelaba la app)
+                                    scope.launch {
+                                        val siblings = withContext(Dispatchers.IO) {
+                                            file.parentFile?.let { listFolder(it, sortMode, ascending, showHidden) } ?: listOf(file)
+                                        }
+                                        openFile(file, siblings)
+                                    }
+                                } else openFile(file, shownFiles)
                             }
                             when (ExplorerView.of(LibraryStore.explorerView)) {
                                 ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })

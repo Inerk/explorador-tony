@@ -47,14 +47,21 @@ fun formatDate(millis: Long): String = dateFormat.format(Date(millis))
 
 fun listFolder(dir: File, sort: SortMode, ascending: Boolean, showHidden: Boolean): List<File> {
     val files = dir.listFiles()?.filter { showHidden || !it.name.startsWith(".") } ?: emptyList()
-    val comparator: Comparator<File> = when (sort) {
-        SortMode.NAME -> compareBy { it.name.lowercase(Locale.ROOT) }
-        SortMode.DATE -> compareBy { it.lastModified() }
-        SortMode.SIZE -> compareBy { if (it.isDirectory) 0L else it.length() }
+    // se lee cada dato del disco una sola vez (antes se leía en cada comparación y en carpetas grandes congelaba la app)
+    class Entry(val f: File, val dirFlag: Boolean, val key: Comparable<*>)
+    val entries = files.map { f ->
+        val d = f.isDirectory
+        Entry(f, d, when (sort) {
+            SortMode.NAME -> f.name.lowercase(Locale.ROOT)
+            SortMode.DATE -> f.lastModified()
+            SortMode.SIZE -> if (d) 0L else f.length()
+        })
     }
-    val ordered = if (ascending) comparator else comparator.reversed()
+    @Suppress("UNCHECKED_CAST")
+    val byKey = Comparator<Entry> { a, b -> (a.key as Comparable<Any>).compareTo(b.key) }
+    val ordered = if (ascending) byKey else byKey.reversed()
     // carpetas siempre primero
-    return files.sortedWith(compareBy<File> { !it.isDirectory }.then(ordered))
+    return entries.sortedWith(compareBy<Entry> { !it.dirFlag }.then(ordered)).map { it.f }
 }
 
 data class StorageRoot(val name: String, val file: File)
