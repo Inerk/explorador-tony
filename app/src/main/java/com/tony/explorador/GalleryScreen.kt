@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Close
@@ -192,6 +194,9 @@ private fun MediaGalleryScreen(
 ) {
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var query by remember { mutableStateOf<String?>(null) }     // null = búsqueda cerrada
+    var dateYear by remember { mutableStateOf<Int?>(null) }
+    var dateMonth by remember { mutableStateOf<Int?>(null) }
     val selected = remember { mutableStateListOf<String>() }
     var reload by remember { mutableIntStateOf(0) }
     var pickFor by remember { mutableStateOf<String?>(null) }   // "copy" o "move"
@@ -215,7 +220,16 @@ private fun MediaGalleryScreen(
     val listView = (if (videos) LibraryStore.videoView else LibraryStore.galleryView) == "list"
     val appName = if (videos) "Videos" else "Galería"
 
-    BackHandler { if (selected.isNotEmpty()) selected.clear() else if (album != null) album = null else onClose() }
+    BackHandler {
+        when {
+            selected.isNotEmpty() -> selected.clear()
+            query != null -> query = null
+            album != null -> album = null
+            tab == 3 && dateMonth != null -> dateMonth = null
+            tab == 3 && dateYear != null -> dateYear = null
+            else -> onClose()
+        }
+    }
     fun toggle(item: GalleryItem) { if (item.path in selected) selected.remove(item.path) else selected.add(item.path) }
     fun chosenFiles() = selected.map { File(it) }
 
@@ -250,8 +264,9 @@ private fun MediaGalleryScreen(
                             XpIcon(if (videos) XpIconKind.VIDEO_PLAYER else XpIconKind.GALLERY, 30.dp)
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text(album ?: appName, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        Text(album ?: appName, fontSize = 26.sp, fontWeight = FontWeight.Black,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { query = if (query == null) "" else null }) { Icon(Icons.Filled.Search, "Buscar") }
                         IconButton(onClick = { LibraryStore.changeMediaView(videos, if (listView) "grid" else "list") }) {
                             Icon(if (listView) Icons.Filled.GridView else Icons.Filled.TableRows,
                                 if (listView) "Ver en cuadrícula" else "Ver en lista")
@@ -259,11 +274,23 @@ private fun MediaGalleryScreen(
                         IconButton(onClick = { settingsOpen = true }) { Icon(Icons.Filled.Settings, "Ajustes") }
                         HomeButton(onHome, Modifier.padding(end = 10.dp), dark = false)
                     }
-                    if (album == null) {
-                        TabRow(selectedTabIndex = tab) {
-                            Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(if (videos) "Videos" else "Fotos") })
-                            Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(if (videos) "Carpetas" else "Álbumes") })
-                            Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("♥ Favoritos") })
+                    query?.let { q ->
+                        androidx.compose.material3.OutlinedTextField(
+                            value = q, onValueChange = { query = it }, singleLine = true,
+                            placeholder = { Text(if (videos) "Nombre, carpeta o fecha" else "Palabras en la foto, nombre, álbum o fecha") },
+                            leadingIcon = { Icon(Icons.Filled.Search, null) },
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                        if (!videos) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            val all = data?.first.orEmpty()
+                            Text(
+                                if (PhotoText.running) "Leyendo texto de las fotos… ${PhotoText.done} de ${PhotoText.total}"
+                                else "Texto leído en ${PhotoText.indexed.coerceAtMost(all.size)} de ${all.size} fotos",
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { if (PhotoText.running) PhotoText.stop() else PhotoText.start(all.map { it.path }) }) {
+                                Text(if (PhotoText.running) "Detener" else "Leer texto de mis fotos")
+                            }
                         }
                     }
                 }
@@ -280,19 +307,59 @@ private fun MediaGalleryScreen(
                         TextButton(onClick = { settingsOpen = true }) { Text("Revisar carpetas elegidas") }
                     }
                 }
+                !query.isNullOrBlank() -> {
+                    // buscar: palabras dentro de la foto, nombre, álbum o fecha («noviembre 2026», «2025»)
+                    val q = PhotoText.norm(query!!.trim())
+                    val found = remember(q, items, PhotoText.version) {
+                        items.filter { it ->
+                            PhotoText.norm(it.file.name).contains(q) || PhotoText.norm(it.album).contains(q) ||
+                                PhotoText.norm(monthFormat.format(Date(it.date))).contains(q) ||
+                                PhotoText.norm(dayFormat.format(Date(it.date))).contains(q) ||
+                                (!videos && PhotoText.matches(it.path, q))
+                        }
+                    }
+                    if (found.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("Sin resultados para «${query}»", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else Box(Modifier.weight(1f)) {
+                        MediaItems(found, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(found, it) }, onLongClick = { toggle(it) })
+                    }
+                }
+                tab == 3 && album == null -> Box(Modifier.weight(1f)) {
+                    DatesView(items, videos, listView, selected, dateYear, dateMonth, onYear = { dateYear = it }, onMonth = { dateMonth = it },
+                        onClick = { list, it -> if (selected.isNotEmpty()) toggle(it) else open(list, it) }, onLongClick = { toggle(it) })
+                }
                 album != null -> {
                     val list = items.filter { it.album == album }
                     MediaItems(list, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(list, it) }, onLongClick = { toggle(it) })
                 }
-                tab == 0 -> MediaItems(items, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(items, it) }, onLongClick = { toggle(it) })
+                tab == 0 -> Box(Modifier.weight(1f)) { MediaItems(items, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(items, it) }, onLongClick = { toggle(it) }) }
                 tab == 2 -> {
                     val favs = items.filter { LibraryStore.isFavorite(it.path) }
-                    if (favs.isEmpty()) Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    if (favs.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         Text("Aún no tienes favoritos.\nAbre ${if (videos) "un video" else "una foto"} y tócale el corazón ♥", color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                    } else MediaItems(favs, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(favs, it) }, onLongClick = { toggle(it) })
+                    } else Box(Modifier.weight(1f)) { MediaItems(favs, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(favs, it) }, onLongClick = { toggle(it) }) }
                 }
-                else -> AlbumGrid(items, listView, onOpen = { album = it })
+                else -> Box(Modifier.weight(1f)) { AlbumGrid(items, listView, onOpen = { album = it }) }
+            }
+            // pestañas abajo, en cápsula (estilo galería de iPhone)
+            if (album == null && query == null && selected.isEmpty()) {
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                    Row(
+                        Modifier.clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf(3 to "Fechas", 0 to if (videos) "Videos" else "Todas", 1 to if (videos) "Carpetas" else "Álbumes", 2 to "♥").forEach { (id, label) ->
+                            val on = tab == id
+                            Text(label, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, fontSize = 14.sp,
+                                color = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.clip(RoundedCornerShape(50))
+                                    .background(if (on) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { tab = id; dateYear = null; dateMonth = null }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp))
+                        }
+                    }
+                }
             }
         }
     }
@@ -532,4 +599,62 @@ private fun MediaSettingsDialog(videos: Boolean, all: List<GalleryItem>, onDismi
         if (f.absolutePath !in chosen) chosen.add(f.absolutePath)
         picking = false
     })
+}
+
+
+private val monthName = SimpleDateFormat("MMMM", Locale("es", "MX"))
+
+/** Pestaña «Fechas»: años → meses → fotos, con tarjetas grandes como la galería de iPhone. */
+@Composable
+private fun DatesView(
+    items: List<GalleryItem>, videos: Boolean, listView: Boolean, selected: List<String>,
+    year: Int?, month: Int?, onYear: (Int?) -> Unit, onMonth: (Int?) -> Unit,
+    onClick: (List<GalleryItem>, GalleryItem) -> Unit, onLongClick: (GalleryItem) -> Unit,
+) {
+    // año → mes → fotos
+    val tree = remember(items) {
+        val cal = java.util.Calendar.getInstance()
+        items.groupBy { cal.timeInMillis = it.date; cal.get(java.util.Calendar.YEAR) }
+            .mapValues { (_, l) -> l.groupBy { cal.timeInMillis = it.date; cal.get(java.util.Calendar.MONTH) } }
+    }
+    @Composable
+    fun Card(title: String, subtitle: String, cover: GalleryItem, onOpen: () -> Unit) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(22.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant).clickable(onClick = onOpen)
+        ) {
+            AsyncImage(model = cover.file, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent, Color.Black.copy(alpha = 0.25f)))))
+            Column(Modifier.padding(16.dp)) {
+                Text(title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                Text(subtitle, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+    val months = year?.let { tree[it] }
+    val list = if (month != null) months?.get(month) else null
+    when {
+        list != null && year != null && month != null -> Column(Modifier.fillMaxSize()) {
+            Text("‹  " + monthName.format(Date(list.first().date)).replaceFirstChar { it.uppercase() } + " $year",
+                fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { onMonth(null) }.padding(horizontal = 14.dp, vertical = 10.dp))
+            MediaItems(list, videos, listView, selected, onClick = { onClick(list, it) }, onLongClick = onLongClick)
+        }
+        months != null && year != null -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Text("‹  $year", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { onYear(null) }.padding(vertical = 4.dp))
+            }
+            items(months.keys.sortedDescending(), key = { it }) { m ->
+                val l = months.getValue(m)
+                Card(monthName.format(Date(l.first().date)).replaceFirstChar { it.uppercase() }, "${l.size} ${if (videos) "videos" else "fotos"}", l.first()) { onMonth(m) }
+            }
+        }
+        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(tree.keys.sortedDescending(), key = { it }) { y ->
+                val all = tree.getValue(y).values.flatten()
+                Card("$y", "${all.size} ${if (videos) "videos" else "fotos"}", all.first()) { onYear(y) }
+            }
+        }
+    }
 }

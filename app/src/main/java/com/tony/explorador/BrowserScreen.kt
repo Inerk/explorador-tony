@@ -781,7 +781,8 @@ private fun FileRow(
                     }
                 }
                 FileKind.AUDIO -> FilePreview(file, kind, 32.dp, Modifier.fillMaxSize())
-                else -> Icon(fileIcon(file, kind), null, modifier = Modifier.size(32.dp), tint = fileColor(file, kind))
+                else -> if (file.isPdf()) FilePreview(file, kind, 32.dp, Modifier.fillMaxSize(), richPdf = true)
+                    else Icon(fileIcon(file, kind), null, modifier = Modifier.size(32.dp), tint = fileColor(file, kind))
             }
             if (selected) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)))

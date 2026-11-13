@@ -68,6 +68,8 @@ object AppNav {
     var openTrash: () -> Unit = {}
     var openWeb: () -> Unit = {}
     var openFile: (java.io.File) -> Unit = {}
+    /** Sube cuando la app se abre desde el icono «Música Tony». */
+    var musicLaunch by androidx.compose.runtime.mutableIntStateOf(0)
 }
 
 /**

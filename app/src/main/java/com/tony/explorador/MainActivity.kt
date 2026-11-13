@@ -61,6 +61,7 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) checkMusicLaunch(intent)
         enableEdgeToEdge()
         setContent {
             ExploradorTheme {
@@ -69,6 +70,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        checkMusicLaunch(intent)
+    }
+
+    /** Si se abrió desde el icono «Música Tony», entra directo a la música. */
+    private fun checkMusicLaunch(intent: android.content.Intent?) {
+        if (intent?.component?.className?.endsWith("MusicAlias") == true) AppNav.musicLaunch++
     }
 }
 
@@ -174,6 +185,9 @@ fun AppRoot() {
     fun expandFloatingVideo() {
         val p = VideoSession.player ?: return
         open(Overlay.Video(VideoSession.files, p.currentMediaItemIndex.coerceAtLeast(0), resume = true))
+    }
+    LaunchedEffect(AppNav.musicLaunch) {
+        if (AppNav.musicLaunch > 0) { if (Overlay.Music !in overlays) open(Overlay.Library) }
     }
     AppNav.openTrash = { open(Overlay.Trash) }
     AppNav.openWeb = { open(Overlay.Web) }

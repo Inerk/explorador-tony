@@ -72,4 +72,5 @@ dependencies {
     implementation("io.coil-kt:coil-video:2.7.0")
     implementation("androidx.palette:palette-ktx:1.0.0")
     implementation("net.jthink:jaudiotagger:3.0.1")
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 }

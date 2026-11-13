@@ -197,13 +197,13 @@ fun FileGrid(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val thumbShape = RoundedCornerShape(if (big) 12.dp else 10.dp)
-                val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || (big && (kind == FileKind.AUDIO || file.isPdf()))
+                val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || file.isPdf() || (big && kind == FileKind.AUDIO)
                 Box(
                     Modifier.fillMaxWidth().aspectRatio(if (big && kind == FileKind.VIDEO) 16f / 10f else 1f).clip(thumbShape)
                         .then(if (media) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thumbShape) else Modifier),
                     contentAlignment = Alignment.Center
                 ) {
-                    FilePreview(file, kind, if (big) 72.dp else 48.dp, Modifier.fillMaxSize(), richPdf = big)
+                    FilePreview(file, kind, if (big) 72.dp else 48.dp, Modifier.fillMaxSize(), richPdf = true)
                     SelectedMark(selected)
                     MoreDots(Modifier.align(Alignment.TopEnd), onImage = media) { onMenu(file) }
                 }
