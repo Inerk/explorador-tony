@@ -78,6 +78,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
@@ -371,9 +372,12 @@ fun LibraryScreen(
                         fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
                         modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp))
                     LibSearchField(menuQuery, { menuQuery = it }, "Buscar canción, artista o álbum")
-                    if (menuQuery.isNotBlank()) SearchFieldChips(songs, menuQuery, menuField) { menuField = it }
+                    val menuResult = rememberSongSearch(songs, menuQuery, menuField)
+                    if (menuQuery.isNotBlank() && menuResult != null) SearchFieldChips(menuResult.counts, menuField) { menuField = it }
                     if (menuQuery.isBlank()) MainMenu(songs.size, onOpen = { push(it) }, big = true, onPlay = onPlay)
-                    else SongList(songs.filter { songMatches(it, menuQuery, menuField) }, onPlay, onAdd = { addTo = it }, searchable = false,
+                    else if (menuResult == null) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = Retro.Orange, strokeWidth = 2.dp, modifier = Modifier.size(24.dp)) }
+                    else SongList(menuResult.songs, onPlay, onAdd = { addTo = it }, searchable = false,
                         empty = "No encontré nada con «${menuQuery.trim()}»")
                 }
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
@@ -498,12 +502,16 @@ private fun MainMenu(
     var skinDialog by remember { mutableStateOf(false) }
     if (skinDialog) MusicSkinDialog(onDismiss = { skinDialog = false })
     data class Entry(val label: String, val sub: String, val icon: ImageVector, val page: LibPage?, val action: (() -> Unit)? = null)
+    val all = LibraryStore.songs
+    val nArtists = remember(all) { all.mapTo(HashSet()) { it.artist }.size }
+    val nAlbums = remember(all) { all.mapTo(HashSet()) { it.album }.size }
+    val nVideos = remember(all) { all.count { isVideoPath(it.path) } }
     val main = listOf(
         Entry("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, LibPage.Playlists),
-        Entry("Artistas", "${LibraryStore.songs.map { it.artist }.distinct().size}", Icons.Filled.Mic, LibPage.Artists),
-        Entry("Álbumes", "${LibraryStore.songs.map { it.album }.distinct().size}", Icons.Filled.Album, LibPage.Albums),
+        Entry("Artistas", "$nArtists", Icons.Filled.Mic, LibPage.Artists),
+        Entry("Álbumes", "$nAlbums", Icons.Filled.Album, LibPage.Albums),
         Entry("Canciones", "$songCount", Icons.Filled.MusicNote, LibPage.Songs),
-        Entry("Videos musicales", "${LibraryStore.songs.count { isVideoPath(it.path) }}", Icons.Filled.Movie, LibPage.MusicVideos),
+        Entry("Videos musicales", "$nVideos", Icons.Filled.Movie, LibPage.MusicVideos),
         Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.StarBorder, LibPage.Favorites),
         Entry("Más escuchadas", "", Icons.Filled.TrendingUp, LibPage.MostPlayed),
         Entry("Carpetas", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, LibPage.Folders),
@@ -617,11 +625,57 @@ private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Uni
     }
 }
 
+private val ACCENTS = Regex("\\p{M}+")
+private fun normText(t: String) = java.text.Normalizer.normalize(t.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD).replace(ACCENTS, "")
+
+/** Título, artista y álbum ya "limpios" (sin acentos ni mayúsculas), para no recalcularlos en cada letra que escribes. */
+private object SongIndex {
+    private val cache = java.util.concurrent.ConcurrentHashMap<Song, Array<String>>()
+    fun of(s: Song): Array<String> = cache.getOrPut(s) {
+        if (cache.size > 20000) cache.clear()
+        arrayOf(normText(s.title), normText(s.artist), normText(s.album))
+    }
+}
+
+private fun matchesIn(hay: String, words: List<String>) = words.all { hay.contains(it) }
+
 /** ¿La canción coincide con lo buscado? (sin importar acentos ni mayúsculas; varias palabras = todas deben estar) */
 private fun songMatches(s: Song, q: String, field: String = "all"): Boolean {
-    fun norm(t: String) = java.text.Normalizer.normalize(t.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-    val hay = norm(when (field) { "title" -> s.title; "artist" -> s.artist; "album" -> s.album; else -> s.title + " " + s.artist + " " + s.album })
-    return norm(q).split(' ').filter { it.isNotBlank() }.all { hay.contains(it) }
+    val words = normText(q).split(' ').filter { it.isNotBlank() }
+    val ix = SongIndex.of(s)
+    return when (field) {
+        "title" -> matchesIn(ix[0], words)
+        "artist" -> matchesIn(ix[1], words)
+        "album" -> matchesIn(ix[2], words)
+        else -> matchesIn(ix[0] + " " + ix[1] + " " + ix[2], words)
+    }
+}
+
+/** Resultado de búsqueda: lo encontrado en el campo elegido y cuántas hay en cada etiqueta. */
+private class SearchResult(val songs: List<Song>, val counts: Map<String, Int>)
+
+/** Busca en segundo plano y espera a que dejes de escribir un instante, para que no se trabe. */
+@Composable
+private fun rememberSongSearch(songs: List<Song>, q: String, field: String): SearchResult? {
+    val r by androidx.compose.runtime.produceState<SearchResult?>(null, songs, q, field) {
+        if (q.isBlank()) { value = null; return@produceState }
+        kotlinx.coroutines.delay(140)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val words = normText(q).split(' ').filter { it.isNotBlank() }
+            var cT = 0; var cA = 0; var cB = 0; var cAll = 0
+            val out = ArrayList<Song>()
+            for (s in songs) {
+                val ix = SongIndex.of(s)
+                val t = matchesIn(ix[0], words); val a = matchesIn(ix[1], words); val b = matchesIn(ix[2], words)
+                val all = t || a || b || matchesIn(ix[0] + " " + ix[1] + " " + ix[2], words)
+                if (t) cT++; if (a) cA++; if (b) cB++; if (all) cAll++
+                val hit = when (field) { "title" -> t; "artist" -> a; "album" -> b; else -> all }
+                if (hit) out.add(s)
+            }
+            SearchResult(out, mapOf("all" to cAll, "title" to cT, "artist" to cA, "album" to cB))
+        }
+    }
+    return r
 }
 
 /** Buscador redondito de la parte de arriba. */
@@ -655,8 +709,7 @@ private val SEARCH_FIELDS = listOf("all" to "Todo", "title" to "Canción", "arti
 
 /** Etiquetas debajo del buscador para buscar solo en el nombre, el artista o el álbum. */
 @Composable
-private fun SearchFieldChips(songs: List<Song>, q: String, field: String, onField: (String) -> Unit) {
-    val counts = remember(songs, q) { SEARCH_FIELDS.associate { (k, _) -> k to songs.count { songMatches(it, q, k) } } }
+private fun SearchFieldChips(counts: Map<String, Int>, field: String, onField: (String) -> Unit) {
     androidx.compose.foundation.lazy.LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
         items(SEARCH_FIELDS.size) { i ->
@@ -688,11 +741,12 @@ private fun SongList(
 ) {
     var q by remember { mutableStateOf("") }
     var field by remember { mutableStateOf("all") }
-    val shown = remember(songs, q, field) { if (q.isBlank()) songs else songs.filter { songMatches(it, q, field) } }
+    val result = rememberSongSearch(songs, q, field)
+    val shown = if (q.isBlank()) songs else result?.songs ?: songs
     Column(Modifier.fillMaxSize()) {
         if (searchable && songs.size > 6) {
             LibSearchField(q, { q = it }, "Buscar en ${songs.size} canciones")
-            if (q.isNotBlank()) SearchFieldChips(songs, q, field) { field = it }
+            if (q.isNotBlank() && result != null) SearchFieldChips(result.counts, field) { field = it }
         }
         SongListInner(shown, onPlay, onAdd, showCounts, if (q.isNotBlank()) "No encontré nada con «${q.trim()}»" else empty,
             onRemove, header, alphabet && q.isBlank())
