@@ -13,11 +13,12 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             runCatching {
                 java.io.File(filesDir, "ultimo_error.txt").writeText(
-                    "Explorador Tony v" + currentVersionName(this) + " · Android " + android.os.Build.VERSION.RELEASE + "\n" +
-                        android.util.Log.getStackTraceString(e).take(6000))
+                    "Explorador Tony v" + currentVersionName(this) + " · Android " + android.os.Build.VERSION.RELEASE +
+                        " · hilo " + t.name + "\n" + android.util.Log.getStackTraceString(e).take(6000))
             }
             previous?.uncaughtException(t, e)
         }
+        runCatching { ExitReport.check(this) }
         TagOverrides.init(this)
         LibraryStore.init(this)
         Trash.init(this)

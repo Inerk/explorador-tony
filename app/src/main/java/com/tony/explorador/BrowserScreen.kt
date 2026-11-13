@@ -240,8 +240,20 @@ fun BrowserScreen(
         }
     }
 
-    val formatCounts = remember(searchResults) { searchResults?.let { formatGroups(it) }.orEmpty() }
-    val shownFiles = searchResults?.let { r -> if (formatFilter.isEmpty()) r else r.filter { formatKey(it) in formatFilter } } ?: files
+    // los formatos se calculan fuera del hilo principal (revisar miles de archivos congela la pantalla)
+    val formatInfo by produceState(Pair(emptyList<Pair<String, Int>>(), emptyMap<String, String>()), searchResults) {
+        val r = searchResults
+        value = if (r == null) Pair(emptyList(), emptyMap()) else withContext(Dispatchers.IO) {
+            val keys = HashMap<String, String>(r.size * 2)
+            for (f in r) keys[f.absolutePath] = formatKey(f)
+            Pair(keys.values.groupingBy { it }.eachCount().entries
+                .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key }).map { it.key to it.value }, keys)
+        }
+    }
+    val formatCounts = formatInfo.first
+    val shownFiles = searchResults?.let { r ->
+        if (formatFilter.isEmpty()) r else r.filter { (formatInfo.second[it.absolutePath] ?: "") in formatFilter }
+    }?.distinctBy { it.absolutePath } ?: files
 
     if (skin.isRetro && currentDir == null && !searchActive) {
         XpDesktop(
