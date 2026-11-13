@@ -26,6 +26,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.TableRows
+import androidx.compose.material.icons.outlined.ViewHeadline
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.ViewModule
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CheckCircle
@@ -68,10 +72,10 @@ import java.util.Locale
 
 /** Las formas de ver una carpeta en el explorador. */
 enum class ExplorerView(val id: String, val label: String, val icon: ImageVector) {
-    LIST("list", "Lista", Icons.Filled.TableRows),
-    COMPACT("compact", "Lista compacta", Icons.Filled.ViewHeadline),
-    GRID("grid", "Cuadrícula", Icons.Filled.GridView),
-    BIG("big", "Iconos grandes", Icons.Filled.ViewModule);
+    LIST("list", "Lista", Icons.Outlined.TableRows),
+    COMPACT("compact", "Lista compacta", Icons.Outlined.ViewHeadline),
+    GRID("grid", "Cuadrícula", Icons.Outlined.GridView),
+    BIG("big", "Iconos grandes", Icons.Outlined.ViewModule);
 
     companion object {
         fun of(id: String) = entries.firstOrNull { it.id == id } ?: LIST

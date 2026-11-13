@@ -59,6 +59,11 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.VerticalSplit
+import androidx.compose.material.icons.outlined.VerticalSplit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -342,6 +347,7 @@ fun BrowserScreen(
                     }
                 )
                 else -> Box(Modifier.background(ExpTheme.bar)) { TopAppBar(
+                    expandedHeight = 50.dp,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
                         titleContentColor = ExpTheme.onBar,
@@ -351,7 +357,7 @@ fun BrowserScreen(
                     navigationIcon = {
                         if (currentDir != null) {
                             IconButton(onClick = { if (isRoot) goTo(null) else goTo(currentDir?.parentFile) }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás")
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Atrás", modifier = Modifier.size(22.dp))
                             }
                         }
                     },
@@ -360,7 +366,7 @@ fun BrowserScreen(
                         if (currentDir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
                     },
                     actions = {
-                        IconButton(onClick = { searchActive = true }) { Icon(Icons.Filled.Search, "Buscar") }
+                        IconButton(onClick = { searchActive = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.Search, "Buscar", modifier = Modifier.size(21.dp)) }
                         if (currentDir != null) {
                             // vista previa / detalles, como el panel de Windows
                             var paneMenu by remember { mutableStateOf(false) }
@@ -368,10 +374,10 @@ fun BrowserScreen(
                             Box {
                                 Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape)
                                     .background(if (paneOn) ExpTheme.onBar else ExpTheme.crumbBg)
-                                    .clickable { paneMenu = true }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    .clickable { paneMenu = true }.padding(horizontal = 9.dp, vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Filled.VerticalSplit, null, tint = if (paneOn) Color.White else ExpTheme.onBar, modifier = Modifier.size(18.dp))
-                                    Text(" Vista previa", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (paneOn) Color.White else ExpTheme.onBar)
+                                    Icon(Icons.Outlined.VerticalSplit, null, tint = if (paneOn) Color.White else ExpTheme.onBar, modifier = Modifier.size(15.dp))
+                                    Text(" Vista previa", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (paneOn) Color.White else ExpTheme.onBar)
                                 }
                                 DropdownMenu(expanded = paneMenu, onDismissRequest = { paneMenu = false }) {
                                     listOf("preview" to "Panel de vista previa", "details" to "Panel de detalles", "" to "Sin panel").forEach { (id, label) ->
@@ -382,7 +388,7 @@ fun BrowserScreen(
                             }
                             var viewMenu by remember { mutableStateOf(false) }
                             val view = ExplorerView.of(LibraryStore.explorerView)
-                            IconButton(onClick = { viewMenu = true }) { Icon(view.icon, "Vista") }
+                            IconButton(onClick = { viewMenu = true }, modifier = Modifier.size(40.dp)) { Icon(view.icon, "Vista", modifier = Modifier.size(21.dp)) }
                             DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
                                 ExplorerView.entries.forEach { v ->
                                     DropdownMenuItem(
@@ -395,7 +401,7 @@ fun BrowserScreen(
                         }
                         if (currentDir != null) {
                             var sortMenu by remember { mutableStateOf(false) }
-                            IconButton(onClick = { sortMenu = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Ordenar") }
+                            IconButton(onClick = { sortMenu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Outlined.Sort, "Ordenar", modifier = Modifier.size(21.dp)) }
                             DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                                 SortMode.entries.forEach { mode ->
                                     DropdownMenuItem(
@@ -410,7 +416,7 @@ fun BrowserScreen(
                             }
                         }
                         var more by remember { mutableStateOf(false) }
-                        IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, "Más") }
+                        IconButton(onClick = { more = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreVert, "Más", modifier = Modifier.size(21.dp)) }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             if (currentDir != null) {
                                 DropdownMenuItem(text = { Text("Nueva carpeta") }, leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
@@ -482,7 +488,9 @@ fun BrowserScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             // cuadrito flotante de música (en lugar de la barra de abajo)
-            if (controller != null) MiniCoverPlayer(controller, onOpen = onOpenMusicPlayer,
+            // con el panel de vista previa abierto, la música se controla desde el panel (sin cuadrito flotante)
+            val paneShowing = LibraryStore.previewPane.isNotEmpty() && currentDir != null && searchResults == null
+            if (controller != null && !paneShowing) MiniCoverPlayer(controller, onOpen = onOpenMusicPlayer,
                 modifier = Modifier.align(Alignment.BottomEnd).zIndex(10f))
             when {
                 currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary, onOpenGallery = onOpenGallery, onOpenVideos = onOpenVideos)
@@ -548,7 +556,8 @@ fun BrowserScreen(
                                 val totalPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (wide) maxWidth else maxHeight).toPx() }
                                 val pane: @Composable (Modifier) -> Unit = { m ->
                                     PreviewPane(focused, currentDir, LibraryStore.previewPane, onMode = { LibraryStore.changePreviewPane(it) },
-                                        onOpen = { f -> openFile(f, shownFiles) }, onClose = { LibraryStore.changePreviewPane("") }, modifier = m)
+                                        onOpen = { f -> openFile(f, shownFiles) }, onClose = { LibraryStore.changePreviewPane("") }, modifier = m,
+                                        controller = controller, onExpandVideo = onExpandVideo)
                                 }
                                 if (wide) Row(Modifier.fillMaxSize()) {
                                     Box(Modifier.weight(1f - paneFrac).fillMaxHeight()) { filesView() }

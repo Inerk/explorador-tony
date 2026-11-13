@@ -35,9 +35,14 @@ import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.media3.common.Player
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.TableChart
@@ -179,15 +184,15 @@ fun ExplorerCrumbs(dir: File, roots: List<StorageRoot>, onNavigate: (File) -> Un
             verticalAlignment = Alignment.CenterVertically) {
             crumbs.forEachIndexed { i, (name, file) ->
                 val last = i == crumbs.lastIndex
-                if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ExpTheme.sub, modifier = Modifier.size(18.dp))
+                if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ExpTheme.sub, modifier = Modifier.size(15.dp))
                 Row(Modifier.clip(CircleShape).background(if (last) ExpTheme.onBar else ExpTheme.crumbBg)
-                    .clickable { onNavigate(file) }.padding(horizontal = 12.dp, vertical = 6.dp),
+                    .clickable { onNavigate(file) }.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     if (i == 0) {
-                        Icon(Icons.Filled.Home, null, tint = if (last) Color.White else ExpTheme.onBar, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(5.dp))
+                        Icon(Icons.Outlined.Home, null, tint = if (last) Color.White else ExpTheme.onBar, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
                     }
-                    Text(name, fontSize = 13.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium,
+                    Text(name, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium,
                         color = if (last) Color.White else ExpTheme.onBar, maxLines = 1)
                 }
             }
@@ -218,7 +223,7 @@ fun PaneHandle(vertical: Boolean, onDrag: (Float) -> Unit) {
 @Composable
 fun PreviewPane(
     file: File?, dir: File?, mode: String, onMode: (String) -> Unit, onOpen: (File) -> Unit, onClose: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier, controller: Player? = null, onExpandVideo: () -> Unit = {},
 ) {
     val target = file ?: dir
     Column(modifier.background(ExpTheme.paneBg)) {
@@ -243,24 +248,18 @@ fun PreviewPane(
                 Text("Toca un archivo para verlo aquí.\nTócalo otra vez para abrirlo.", color = ExpTheme.sub, fontSize = 13.sp)
             }
         } else if (mode == "details") DetailsBody(target, isCurrentDir = file == null)
-        else PreviewBody(target, onOpen)
+        else PreviewBody(target, onOpen, controller, onExpandVideo)
     }
 }
 
 @Composable
-private fun PreviewBody(f: File, onOpen: (File) -> Unit) {
+private fun PreviewBody(f: File, onOpen: (File) -> Unit, controller: Player?, onExpandVideo: () -> Unit) {
     val kind = remember(f) { f.kind() }
     val ext = f.extension.lowercase(Locale.ROOT)
     Box(Modifier.fillMaxSize().padding(10.dp), contentAlignment = Alignment.Center) {
         when {
             kind == FileKind.IMAGE -> AsyncImage(f, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)))
-            kind == FileKind.VIDEO -> Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color.Black).clickable { onOpen(f) },
-                contentAlignment = Alignment.Center) {
-                AsyncImage(f, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                Box(Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.PlayArrow, "Reproducir", tint = Color.White, modifier = Modifier.size(34.dp))
-                }
-            }
+            kind == FileKind.VIDEO -> PaneVideo(f, controller, onExpandVideo)
             kind == FileKind.AUDIO -> {
                 val info by rememberTrackInfo(f.absolutePath)
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -275,11 +274,7 @@ private fun PreviewBody(f: File, onOpen: (File) -> Unit) {
                         Text(info?.title ?: f.nameWithoutExtension, color = ExpTheme.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(info?.artist ?: "", color = ExpTheme.sub, fontSize = 13.sp, maxLines = 1)
                         Text(info?.album ?: "", color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
-                        Row(Modifier.padding(top = 10.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { onOpen(f) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Text(" Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
+                        PaneAudioControls(f, controller) { onOpen(f) }
                     }
                 }
             }
@@ -409,6 +404,98 @@ private fun DetailsBody(f: File, isCurrentDir: Boolean) {
                     Text(k, color = ExpTheme.sub, fontSize = 12.sp, modifier = Modifier.width(92.dp))
                     Text(v, color = ExpTheme.text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
+            }
+        }
+    }
+}
+
+
+private fun fmtTime(ms: Long): String { val t = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(t / 60, t % 60) }
+
+/** Controles de música dentro del panel (usa el mismo reproductor de la app, sin el cuadrito flotante). */
+@Composable
+private fun PaneAudioControls(f: File, controller: Player?, onStart: () -> Unit) {
+    val tick = observePlayer(controller, 300)
+    val p = controller
+    val isThis = p != null && p.currentMediaItem?.mediaId == f.absolutePath
+    if (!isThis) {
+        Row(Modifier.padding(top = 10.dp).clip(CircleShape).background(ExpTheme.onBar).clickable(onClick = onStart)
+            .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text(" Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+        return
+    }
+    p!!
+    val pos = p.currentPosition + tick * 0L
+    val dur = p.duration.coerceAtLeast(1L)
+    Column(Modifier.padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { if (p.isPlaying) p.pause() else p.play() },
+                contentAlignment = Alignment.Center) {
+                Icon(if (p.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = p.hasNextMediaItem()) { p.seekToNextMediaItem() },
+                contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.SkipNext, "Siguiente", tint = ExpTheme.onBar, modifier = Modifier.size(22.dp))
+            }
+        }
+        androidx.compose.material3.Slider(
+            value = (pos.toFloat() / dur).coerceIn(0f, 1f), onValueChange = { p.seekTo((it * dur).toLong()) },
+            colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = ExpTheme.onBar, activeTrackColor = ExpTheme.onBar,
+                inactiveTrackColor = ExpTheme.line),
+            modifier = Modifier.height(28.dp)
+        )
+        Text("${fmtTime(pos)} / ${fmtTime(p.duration)}", color = ExpTheme.sub, fontSize = 11.sp)
+    }
+}
+
+/** Video que se reproduce ahí mismo en el panel; el botón de agrandar lo pasa al reproductor normal sin cortarlo. */
+@Composable
+private fun PaneVideo(f: File, controller: Player?, onExpand: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val vp = VideoSession.player
+    val active = vp != null && VideoSession.files.size == 1 && VideoSession.files.first() == f
+    // al cambiar de archivo o cerrar el panel, se pausa el video del panel
+    androidx.compose.runtime.DisposableEffect(f) {
+        onDispose {
+            val pl = VideoSession.player
+            if (pl != null && VideoSession.files.size == 1 && VideoSession.files.first() == f && !VideoSession.floating) pl.pause()
+        }
+    }
+    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
+        if (!active) {
+            AsyncImage(f, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+            Box(Modifier.size(56.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f)).clickable {
+                controller?.pause()
+                VideoSession.obtain(context, listOf(f), 0, resume = false).play()
+            }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, "Reproducir aquí", tint = Color.White, modifier = Modifier.size(34.dp))
+            }
+        } else {
+            val tick = observePlayer(vp, 300)
+            VideoView(vp!!, Modifier.fillMaxSize().clickable { if (vp.isPlaying) vp.pause() else { controller?.pause(); vp.play() } }, crop = false)
+            // controles chiquitos abajo
+            val pos = vp.currentPosition + tick * 0L
+            val dur = vp.duration.coerceAtLeast(1L)
+            Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))))
+                .padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (vp.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White,
+                    modifier = Modifier.size(28.dp).clip(CircleShape).clickable { if (vp.isPlaying) vp.pause() else { controller?.pause(); vp.play() } })
+                androidx.compose.material3.Slider(
+                    value = (pos.toFloat() / dur).coerceIn(0f, 1f), onValueChange = { vp.seekTo((it * dur).toLong()) },
+                    colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f).height(24.dp).padding(horizontal = 6.dp)
+                )
+                Text(fmtTime(pos), color = Color.White, fontSize = 11.sp)
+            }
+            // agrandar: abre el reproductor normal donde va
+            Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(34.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
+                .clickable(onClick = onExpand), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.OpenInFull, "Agrandar", tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
     }
