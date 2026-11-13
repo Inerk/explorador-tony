@@ -61,6 +61,9 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
@@ -285,8 +288,17 @@ fun LibraryScreen(
             }
             .background(Retro.bgBrush)
     ) {
-        // Encabezado metálico
-        Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
+        // Encabezado: en el menú principal es limpio (el título grande va abajo); en las listas, el metálico
+        val clean = page == LibPage.Menu
+        if (clean) Box(Modifier.fillMaxWidth().safeDrawingPadding()) {
+            Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = Retro.Text) }
+                Spacer(Modifier.weight(1f))
+                Text("${songs.size} canciones", color = Retro.SubText, fontSize = 13.sp, modifier = Modifier.padding(end = 6.dp))
+                HomeButton(onHome, dark = Retro.isWmp)
+                IconButton(onClick = { scope.launch { LibraryStore.scan() } }) { Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.Text) }
+            }
+        } else Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -309,13 +321,10 @@ fun LibraryScreen(
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
                     Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.HeaderIcon)
                 }
-                IconButton(onClick = { MusicUi.settingsOpen = true }) {
-                    Icon(Icons.Filled.Settings, "Ajustes de música", tint = Retro.HeaderIcon)
-                }
             }
         }
         // franja naranja
-        Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
+        if (!clean) Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
         if (LibraryStore.scanning) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Retro.Orange, trackColor = Retro.Panel)
         }
@@ -342,7 +351,7 @@ fun LibraryScreen(
             ) { (_, shownPage) ->
             androidx.compose.runtime.CompositionLocalProvider(LocalLibGoTo provides libGoTo) {
             when (val p = shownPage) {
-                LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) })
+                LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) }, big = true, onPlay = onPlay)
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
                 LibPage.Artists -> GroupList(
                     groups = songs.groupBy { it.artist }.toSortedMap(compareBy { it.lowercase(Locale.ROOT) }),
@@ -407,14 +416,13 @@ fun LibraryScreen(
                 .background(Retro.bgBrush)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
         ) {
-            Box(Modifier.fillMaxWidth().background(Retro.metal).safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Música", color = Retro.HeaderText, fontWeight = FontWeight.Black, fontSize = 20.sp,
+            Box(Modifier.fillMaxWidth().safeDrawingPadding()) {
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+                    Text("Biblioteca", color = Retro.Text, fontWeight = FontWeight.Black, fontSize = 30.sp,
                         fontFamily = if (Retro.isVintage) FontFamily.Serif else null, modifier = Modifier.weight(1f))
-                    Text("♪ ${songs.size}", color = Retro.Orange, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                    Text("${songs.size} canciones", color = Retro.SubText, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
                 }
             }
-            Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
             Box(Modifier.weight(1f)) { MainMenu(songs.size, onOpen = { openFromDrawer(it) }, current = stack.last()) }
         }
     }
@@ -459,67 +467,104 @@ private fun pageTitle(p: LibPage): String = when (p) {
 // ───────── Menú principal ─────────
 
 @Composable
-private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage? = null) {
+private fun MainMenu(
+    songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage? = null,
+    big: Boolean = false, onPlay: ((List<Song>, Int, Boolean) -> Unit)? = null,
+) {
     var skinDialog by remember { mutableStateOf(false) }
     if (skinDialog) MusicSkinDialog(onDismiss = { skinDialog = false })
-    data class Entry(val label: String, val sub: String, val icon: ImageVector, val color: Color, val page: LibPage)
-    val entries = listOf(
-        Entry("Canciones", "$songCount", Icons.Filled.MusicNote, Retro.Orange, LibPage.Songs),
-        Entry("Artistas", "${LibraryStore.songs.map { it.artist }.distinct().size}", Icons.Filled.Person, Retro.Blue, LibPage.Artists),
-        Entry("Álbumes", "${LibraryStore.songs.map { it.album }.distinct().size}", Icons.Filled.Album, Retro.Lime, LibPage.Albums),
-        Entry("Videos musicales", "${LibraryStore.songs.count { isVideoPath(it.path) }}", Icons.Filled.Movie, Retro.Purple, LibPage.MusicVideos),
-        Entry("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, Retro.Pink, LibPage.Playlists),
-        Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.Star, Retro.Yellow, LibPage.Favorites),
-        Entry("Más escuchadas", "", Icons.Filled.TrendingUp, Retro.Teal, LibPage.MostPlayed),
-        Entry("Carpetas de música", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, Retro.Gray, LibPage.Folders),
-        Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
-            Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
-        Entry("Carátulas animadas", if (AnimatedScanner.running) "…" else "", Icons.Filled.AutoAwesome, Retro.Teal, LibPage.AnimatedCoversP),
-        Entry("Letras", if (LyricsLocal.running) "…" else "", Icons.Filled.Lyrics, Retro.Pink, LibPage.LyricsP),
-        Entry("Sincronizar con NAS", if (NasSync.running) "…" else "", Icons.Filled.CloudSync, Retro.Blue, LibPage.Nas),
-        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
+    data class Entry(val label: String, val sub: String, val icon: ImageVector, val page: LibPage?, val action: (() -> Unit)? = null)
+    val main = listOf(
+        Entry("Listas de reproducción", "${LibraryStore.playlists.size}", Icons.AutoMirrored.Filled.QueueMusic, LibPage.Playlists),
+        Entry("Artistas", "${LibraryStore.songs.map { it.artist }.distinct().size}", Icons.Filled.Mic, LibPage.Artists),
+        Entry("Álbumes", "${LibraryStore.songs.map { it.album }.distinct().size}", Icons.Filled.Album, LibPage.Albums),
+        Entry("Canciones", "$songCount", Icons.Filled.MusicNote, LibPage.Songs),
+        Entry("Videos musicales", "${LibraryStore.songs.count { isVideoPath(it.path) }}", Icons.Filled.Movie, LibPage.MusicVideos),
+        Entry("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.StarBorder, LibPage.Favorites),
+        Entry("Más escuchadas", "", Icons.Filled.TrendingUp, LibPage.MostPlayed),
+        Entry("Carpetas", "${LibraryStore.musicFolders.size}", Icons.Filled.FolderOpen, LibPage.Folders),
     )
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(entries) { e ->
-            Row(
-                Modifier.fillMaxWidth().height(64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (current == e.page && e.page != LibPage.Menu) Retro.Orange.copy(alpha = 0.22f) else Retro.Panel)
-                    .border(1.dp, if (current == e.page && e.page != LibPage.Menu) Retro.Orange else Color.White.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-                    .clickable { if (e.label == "Tema del reproductor") skinDialog = true else onOpen(e.page) },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // bloque de color a la izquierda
-                if (Retro.isOriginal) {
-                    Box(Modifier.width(68.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        ReliefIcon(e.icon, e.color, 46.dp)
-                    }
-                } else if (Retro.isVintage) {
-                    Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        BrassMedallion(e.icon, e.color, 44.dp)
-                    }
-                } else if (Retro.isWmp) {
-                    Box(Modifier.width(66.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        GlassOrb(e.icon, e.color, 44.dp)
-                    }
-                } else {
-                    Box(
-                        Modifier.width(64.dp).fillMaxHeight()
-                            .background(Brush.verticalGradient(listOf(e.color.copy(alpha = 0.95f), e.color.copy(alpha = 0.65f)))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(e.icon, null, tint = if (e.color == Retro.Yellow) Color(0xFF3A2E00) else Color.White, modifier = Modifier.size(30.dp))
-                    }
+    val tools = listOf(
+        Entry("Carátulas en internet", if (CoverScanner.running) "buscando…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
+            Icons.Filled.ImageSearch, LibPage.Covers),
+        Entry("Carátulas animadas", if (AnimatedScanner.running) "buscando…" else "", Icons.Filled.AutoAwesome, LibPage.AnimatedCoversP),
+        Entry("Letras", if (LyricsLocal.running) "buscando…" else "", Icons.Filled.Lyrics, LibPage.LyricsP),
+        Entry("Sincronizar con NAS", if (NasSync.running) "sincronizando…" else "", Icons.Filled.CloudSync, LibPage.Nas),
+        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null) { skinDialog = true },
+        Entry("Ajustes", "", Icons.Filled.Settings, null) { MusicUi.settingsOpen = true },
+    )
+    val accent = Retro.Orange
+    val divider = Retro.Text.copy(alpha = 0.10f)
+
+    @Composable
+    fun Row1(e: Entry, last: Boolean) {
+        val selected = current != null && current == e.page && e.page != LibPage.Menu
+        Box(Modifier.fillMaxWidth().background(if (selected) accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable { e.action?.invoke() ?: e.page?.let(onOpen) }) {
+            Row(Modifier.fillMaxWidth().height(if (big) 60.dp else 54.dp).padding(start = 20.dp, end = 16.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(e.icon, null, tint = accent, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.width(20.dp))
+                Text(e.label, color = Retro.Text, fontSize = if (big) 19.sp else 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f))
+                if (e.sub.isNotEmpty()) Text(e.sub, color = Retro.SubText, fontSize = 14.sp, modifier = Modifier.padding(end = 6.dp))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Retro.SubText.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
+            }
+            if (!last) Box(Modifier.align(Alignment.BottomStart).padding(start = 68.dp, end = 16.dp).fillMaxWidth().height(0.6.dp).background(divider))
+        }
+    }
+
+    // lo último que escuchaste, un cuadro por álbum
+    val recents = remember(LibraryStore.lastPlayed.size, LibraryStore.songs.size) {
+        LibraryStore.songs.filter { LibraryStore.lastPlayed.containsKey(it.path) }
+            .sortedByDescending { LibraryStore.lastPlayed[it.path] ?: 0L }
+            .distinctBy { it.album.ifBlank { it.path } }.take(10)
+    }
+
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        if (big) item {
+            Text("Biblioteca", color = Retro.Text, fontSize = 34.sp, fontWeight = FontWeight.Black,
+                fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
+                modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 10.dp))
+        }
+        items(main.size) { i -> Row1(main[i], i == main.lastIndex) }
+        item {
+            Text("Herramientas", color = Retro.SubText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 4.dp))
+        }
+        items(tools.size) { i -> Row1(tools[i], i == tools.lastIndex) }
+        if (big && recents.isNotEmpty() && onPlay != null) {
+            item {
+                Text("Recientes", color = Retro.Text, fontSize = 24.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(start = 20.dp, top = 26.dp, bottom = 12.dp))
+            }
+            items(recents.chunked(2).size) { r ->
+                val pair = recents.chunked(2)[r]
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    pair.forEach { s -> RecentCard(s, Modifier.weight(1f)) {
+                        val album = LibraryStore.songs.filter { it.album == s.album && s.album.isNotBlank() }.ifEmpty { listOf(s) }
+                        onPlay(album, album.indexOf(s).coerceAtLeast(0), false)
+                    } }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
-                Text(e.label, color = Retro.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
-                if (e.sub.isNotEmpty()) {
-                    Text(e.sub, color = e.color, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(end = 8.dp))
-                }
-                Text("›", color = Retro.SubText, fontSize = 26.sp, modifier = Modifier.padding(end = 14.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun RecentCard(song: Song, modifier: Modifier, onClick: () -> Unit) {
+    val cover by produceState(peekCover(song.path), song.path, LibraryStore.tagsVersion) { value = loadCover(song.path) }
+    Column(modifier.clickable(onClick = onClick)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).shadow(6.dp, RoundedCornerShape(10.dp)).clip(RoundedCornerShape(10.dp))
+            .background(Retro.Panel), contentAlignment = Alignment.Center) {
+            val b = cover
+            if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            else Icon(Icons.Filled.Album, null, tint = Retro.SubText, modifier = Modifier.size(48.dp))
+        }
+        Text(song.album.ifBlank { song.title }, color = Retro.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+        Text(song.artist, color = Retro.SubText, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

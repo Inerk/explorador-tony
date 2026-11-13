@@ -232,6 +232,11 @@ object LibraryStore {
         private set
     fun changeLyricsTranslate(v: Boolean) { lyricsTranslate = v; save() }
 
+    /** Qué línea va grande cuando hay traducción: "original" o "translation". */
+    var lyricsHighlight by mutableStateOf("original")
+        private set
+    fun changeLyricsHighlight(v: String) { lyricsHighlight = v; save() }
+
     var lyricsPlace by mutableStateOf("below")
         private set
     fun changeLyricsPlace(v: String) { lyricsPlace = v; save() }
@@ -499,6 +504,7 @@ object LibraryStore {
             put("darkMode", darkMode)
             put("lyricsPlace", lyricsPlace)
             put("lyricsTranslate", lyricsTranslate)
+            put("lyricsHighlight", lyricsHighlight)
             put("songView", songView)
             put("seekStyle", seekStyle)
             put("galleryView", galleryView)
@@ -535,6 +541,7 @@ object LibraryStore {
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
         o.optString("darkMode").takeIf { it.isNotBlank() }?.let { darkMode = it }
         lyricsTranslate = o.optBoolean("lyricsTranslate", true)
+        lyricsHighlight = o.optString("lyricsHighlight", "original")
         lyricsPlace = o.optString("lyricsPlace", if (o.optBoolean("lyricsOverCover", false)) "over" else "below")
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("seekStyle").takeIf { it.isNotBlank() }?.let { seekStyle = it }

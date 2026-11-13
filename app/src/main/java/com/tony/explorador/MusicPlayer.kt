@@ -312,6 +312,13 @@ fun MusicPlayerScreen(
     val lyricIndex = currentLyricIndex(lyrics, position)
     val translation by rememberLyricsTranslation(lyrics)
     fun tr(i: Int): String? = translation?.getOrNull(i)?.takeIf { it.isNotBlank() && !it.equals(lyrics.getOrNull(i)?.text?.trim(), true) }
+    val trFirst = LibraryStore.lyricsHighlight == "translation"
+    /** Línea resaltada y la de abajo (original o traducida, según Ajustes). */
+    fun lyricPair(i: Int): Pair<String, String?> {
+        val o = lyrics.getOrNull(i)?.text?.ifBlank { "♪" } ?: "♪"
+        val t = tr(i)
+        return if (trFirst && t != null) t to o else o to t
+    }
     val pairPath = player.currentMediaItem?.mediaId?.let { LibraryStore.pairFor(it) }
     val animatedCover by rememberAnimatedCover(player.currentMediaItem?.mediaId,
         player.currentMediaItem?.mediaId?.let { LibraryStore.songFor(it)?.album } ?: album)
@@ -393,19 +400,8 @@ fun MusicPlayerScreen(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    IconButton(onClick = { MusicUi.settingsOpen = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Ajustes de música", tint = Color.White)
-                    }
-                    IconButton(onClick = { lyricsMode = !lyricsMode }) {
-                        Icon(Icons.Filled.Lyrics, contentDescription = "Letra",
-                            tint = if (lyricsMode) accent else Color.White)
-                    }
-                    IconButton(onClick = {
-                        if (q.value > 0.5f && !lyricsMode) toCover() else { lyricsMode = false; toQueue() }
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = "Lista",
-                            tint = if (q.value > 0.5f && !lyricsMode) accent else Color.White)
-                    }
+                    // mismo ancho que los botones de la izquierda para que el título quede centrado
+                    Spacer(Modifier.width(96.dp))
                 }
 
                 // Centro: portada que se encoge hacia la lista, o la letra
@@ -520,13 +516,13 @@ fun MusicPlayerScreen(
                 }
                 // Vistazo de la letra bajo la portada
                 if (!lyricsMode && lyrics.isNotEmpty() && LibraryStore.lyricsPlace == "below") {
-                    val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
+                    val (line, second) = lyricPair(lyricIndex)
                     Text(
                         line, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = accent, textAlign = TextAlign.Start,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { lyricsMode = true }
                     )
-                    tr(lyricIndex)?.let {
+                    second?.let {
                         Text(it, fontSize = 14.sp, lineHeight = 18.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 2,
                             overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
                     }
@@ -539,14 +535,15 @@ fun MusicPlayerScreen(
                                 (androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 })
                         }) { idx ->
                             Column {
-                                Text(lyrics.getOrNull(idx)?.text?.ifBlank { "♪" } ?: "♪", fontSize = 26.sp, lineHeight = 31.sp,
+                                val (first, second) = lyricPair(idx)
+                                Text(first, fontSize = 26.sp, lineHeight = 31.sp,
                                     fontWeight = FontWeight.Bold, color = accent, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                tr(idx)?.let {
+                                second?.let {
                                     Text(it, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f),
                                         maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                                 lyrics.getOrNull(idx + 1)?.let {
-                                    Text(it.text.ifBlank { "♪" }, fontSize = 17.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.55f),
+                                    Text(lyricPair(idx + 1).first, fontSize = 17.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.55f),
                                         maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                                 }
                             }
@@ -874,11 +871,15 @@ private fun LyricsPanel(path: String?, lines: List<LyricLine>, current: Int, acc
         contentPadding = PaddingValues(vertical = 24.dp)
     ) {
         itemsIndexed(lines) { i, line ->
+            val trLine = translation?.getOrNull(i)?.takeIf { it.isNotBlank() && !it.equals(line.text.trim(), true) }
+            val trFirst = LibraryStore.lyricsHighlight == "translation" && trLine != null
+            val mainText = if (trFirst) trLine!! else line.text.ifBlank { "♪" }
+            val subText = if (trFirst) line.text else trLine
             val active = i == current
             val alpha by animateFloatAsState(if (active) 1f else if (i < current) 0.35f else 0.5f, tween(300), label = "a")
             val size by animateFloatAsState(if (active) 27f else 21f, tween(300), label = "s")
             Text(
-                text = line.text.ifBlank { "♪" },
+                text = mainText,
                 fontSize = size.sp,
                 lineHeight = (size * 1.25f).sp,
                 fontWeight = if (active) FontWeight.ExtraBold else FontWeight.Bold,
@@ -887,9 +888,9 @@ private fun LyricsPanel(path: String?, lines: List<LyricLine>, current: Int, acc
                     .alpha(alpha)
                     .clip(RoundedCornerShape(10.dp))
                     .clickable { if (line.timeMs >= 0) onSeek(line.timeMs) }
-                    .padding(top = 9.dp, bottom = if (translation?.getOrNull(i).isNullOrBlank()) 9.dp else 1.dp, start = 4.dp, end = 4.dp)
+                    .padding(top = 9.dp, bottom = if (subText.isNullOrBlank()) 9.dp else 1.dp, start = 4.dp, end = 4.dp)
             )
-            translation?.getOrNull(i)?.takeIf { it.isNotBlank() && !it.equals(line.text.trim(), true) }?.let {
+            subText?.takeIf { it.isNotBlank() }?.let {
                 Text(it, fontSize = (size * 0.68f).sp, lineHeight = (size * 0.85f).sp, fontWeight = FontWeight.SemiBold,
                     color = if (active) accent else Color.White,
                     modifier = Modifier.fillMaxWidth().alpha(alpha * 0.85f).padding(start = 4.dp, end = 4.dp, bottom = 9.dp))

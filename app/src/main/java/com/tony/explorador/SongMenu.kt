@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
@@ -107,6 +108,7 @@ fun SongMenuWindow(
         MenuOption("Artista", Icons.Filled.Mic) { onGoTo("artist", artist) },
         MenuOption("Álbum", Icons.Filled.Album) { onGoTo("album", album) },
         MenuOption("Carpeta", Icons.Filled.Folder) { onGoTo("folder", File(path).parent ?: "/") },
+        MenuOption("Ajustes", Icons.Filled.Settings) { onDismiss(); MusicUi.settingsOpen = true },
         MenuOption("Eliminar", Icons.Filled.Delete, Color(0xFFFF6B5E)) { confirmDelete = true },
     )
 

@@ -343,6 +343,11 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
                 }
                 Switch(LibraryStore.lyricsTranslate, { LibraryStore.changeLyricsTranslate(it) }, colors = SwitchDefaults.colors(checkedTrackColor = Accent))
             }
+            if (LibraryStore.lyricsTranslate) {
+                Text("Resaltar", color = Soft, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, top = 4.dp))
+                Radio("La letra original (traducción abajo, chiquita)", LibraryStore.lyricsHighlight == "original") { LibraryStore.changeLyricsHighlight("original") }
+                Radio("La traducción (original abajo, chiquita)", LibraryStore.lyricsHighlight == "translation") { LibraryStore.changeLyricsHighlight("translation") }
+            }
             Text("La ventana flotante se ve en toda la app y la puedes arrastrar; con la ✕ se esconde hasta la siguiente canción.",
                 color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
 
@@ -365,7 +370,7 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
             MusicSkin.entries.forEach { sk -> Radio(sk.label, LibraryStore.musicSkin == sk) { LibraryStore.changeMusicSkin(sk) } }
 
             Section("Letras")
-            Text("Para ajustar los tiempos de una letra: en el reproductor toca ⋮ → «Sincronizar letra».", color = Soft, fontSize = 13.sp)
+            Text("Para ajustar los tiempos de una letra: en el reproductor toca ⋮ → «Sincronizar letra». Toca la carátula para ver la letra completa y desliza la carátula hacia abajo para ver la lista.", color = Soft, fontSize = 13.sp)
         }
     }
 }
@@ -409,9 +414,12 @@ fun FloatingLyricsWindow(player: Player, modifier: Modifier = Modifier) {
     ) {
         Column {
             if (synced) {
-                Text(lyrics.getOrNull(idx)?.text?.ifBlank { "♪" } ?: "♪", color = accent, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                val orig = lyrics.getOrNull(idx)?.text?.ifBlank { "♪" } ?: "♪"
+                val trl = translation?.getOrNull(idx)?.takeIf { it.isNotBlank() && !it.equals(lyrics.getOrNull(idx)?.text?.trim(), true) }
+                val swap = LibraryStore.lyricsHighlight == "translation" && trl != null
+                Text(if (swap) trl!! else orig, color = accent, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                     lineHeight = 25.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                translation?.getOrNull(idx)?.takeIf { it.isNotBlank() && !it.equals(lyrics.getOrNull(idx)?.text?.trim(), true) }?.let {
+                (if (swap) orig else trl)?.let {
                     Text(it, color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 lyrics.getOrNull(idx + 1)?.let {
