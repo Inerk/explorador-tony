@@ -638,7 +638,11 @@ fun BrowserScreen(
 
     // mandar a la TV (solo ese archivo; en fotos puedes pasar a la siguiente de la carpeta)
     castFile?.let { cf ->
-        val sibs = remember(cf, shownFiles) { if (cf.kind() == FileKind.IMAGE) shownFiles.filter { it.kind() == FileKind.IMAGE } else listOf(cf) }
+        // solo por extensión (sin tocar el disco, para no trabar carpetas grandes)
+        val imgExt = setOf("jpg", "jpeg", "png", "webp", "gif", "heic", "bmp")
+        val sibs = remember(cf, shownFiles) {
+            if (cf.extension.lowercase(Locale.ROOT) in imgExt) shownFiles.filter { it.extension.lowercase(Locale.ROOT) in imgExt } else listOf(cf)
+        }
         CastPickerSheet(cf, sibs) { castFile = null }
     }
 
