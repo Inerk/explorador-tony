@@ -108,8 +108,24 @@ object SpectrumAnalyzer : TeeAudioProcessor.AudioBufferSink {
             while (frames.isNotEmpty() && frames.first().time <= target) {
                 latest = frames.removeFirst()
             }
+            if (latest != null) lastShown = latest.bands
             return latest?.bands
         }
+    }
+
+    @Volatile private var lastShown: FloatArray? = null
+
+    /** Como [current] pero sin consumir nada: varias cosas pueden leerlo a la vez (barra de avance, ecualizador). */
+    fun peek(): FloatArray? {
+        val target = System.nanoTime() - DELAY_NANOS
+        synchronized(lock) {
+            var latest: Frame? = null
+            for (f in frames) { if (f.time <= target) latest = f else break }
+            // tira lo viejo pero deja el último que ya sonó
+            while (frames.size > 1 && frames[1].time <= target) frames.removeFirst()
+            if (latest != null) { lastShown = latest.bands; return latest.bands }
+        }
+        return lastShown
     }
 
     /** FFT clásica (Cooley–Tukey) en el mismo arreglo. */

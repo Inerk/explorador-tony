@@ -122,6 +122,11 @@ object LibraryStore {
     var songView by mutableStateOf("compact")
         private set
     fun changeSongView(v: String) { songView = v; save() }
+
+    /** Estilo de la barra de avance del reproductor: wave, galaxy, eq, neon, line. */
+    var seekStyle by mutableStateOf("galaxy")
+        private set
+    fun changeSeekStyle(v: String) { seekStyle = v; save() }
     /** "grid" o "list" */
     var galleryView by mutableStateOf("grid")
         private set
@@ -489,6 +494,7 @@ object LibraryStore {
             put("darkMode", darkMode)
             put("lyricsPlace", lyricsPlace)
             put("songView", songView)
+            put("seekStyle", seekStyle)
             put("galleryView", galleryView)
             put("videoView", videoView)
             put("galleryFolders", JSONArray(galleryFolders.toList()))
@@ -524,6 +530,7 @@ object LibraryStore {
         o.optString("darkMode").takeIf { it.isNotBlank() }?.let { darkMode = it }
         lyricsPlace = o.optString("lyricsPlace", if (o.optBoolean("lyricsOverCover", false)) "over" else "below")
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
+        o.optString("seekStyle").takeIf { it.isNotBlank() }?.let { seekStyle = it }
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }
         o.optJSONArray("galleryFolders")?.let { a -> for (i in 0 until a.length()) galleryFolders.add(a.getString(i)) }

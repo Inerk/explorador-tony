@@ -337,6 +337,15 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
             Text("La ventana flotante se ve en toda la app y la puedes arrastrar; con la ✕ se esconde hasta la siguiente canción.",
                 color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp, bottom = 4.dp))
 
+            Section("Barra de avance")
+            // vista previa en vivo (se mueve con la música si algo está sonando)
+            Box(Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 4.dp).clip(RoundedCornerShape(14.dp)).background(Card).padding(horizontal = 12.dp)) {
+                WaveSeekBar(progress = 0.62f, playing = true, accent = Accent, onSeekChange = {}, onSeekEnd = {},
+                    style = LibraryStore.seekStyle, interactive = false)
+            }
+            SeekStyles.forEach { (id, label) -> Radio(label, LibraryStore.seekStyle == id) { LibraryStore.changeSeekStyle(id) } }
+            Text("Se mueve al ritmo de la música que está sonando.", color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp))
+
             Section("Portada")
             Row(Modifier.fillMaxWidth().clickable { MotionPref.on = !MotionPref.on }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Mostrar video o carátula animada", color = Color.White, modifier = Modifier.weight(1f))
