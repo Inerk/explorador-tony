@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.ViewHeadline
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.MusicNote
@@ -125,39 +126,47 @@ private object Retro {
     private val wmp get() = LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
+    private val lav get() = LibraryStore.musicSkin == MusicSkin.LAVANDA
     val isWmp get() = wmp
     val isVintage get() = vin
     val isOriginal get() = org
+    val isLavanda get() = lav
     private val now get() = NowPlaying.colors
-    private fun pick(walkman: Color, media: Color, vintage: Color, original: Color = walkman) =
-        if (org) original else if (vin) vintage else if (wmp) media else walkman
-    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D), now.bottom)
+    private fun pick(walkman: Color, media: Color, vintage: Color, original: Color = walkman, lavanda: Color = walkman) =
+        if (lav) lavanda else if (org) original else if (vin) vintage else if (wmp) media else walkman
+    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D), now.bottom, Color(0xFFF7F4FD))
     /** Fondo: en Original es el degradado de la portada que suena, como en el reproductor. */
-    val bgBrush: Brush get() = if (org) Brush.verticalGradient(listOf(now.top, now.bottom, Color(0xFF07080B)))
-        else Brush.verticalGradient(listOf(Bg, Bg))
-    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f))
-    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass, now.accent)
-    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight, now.accent.copy(alpha = 0.7f))
-    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E), now.onAccent)
-    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream, Color.White)
-    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim, Color.White.copy(alpha = 0.6f))
-    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream, Color.White)
-    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight, Color.White)
+    val bgBrush: Brush get() = when {
+        org -> Brush.verticalGradient(listOf(now.top, now.bottom, Color(0xFF07080B)))
+        lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
+        else -> Brush.verticalGradient(listOf(Bg, Bg))
+    }
+    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f), Color.White)
+    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass, now.accent, Color(0xFF7C4DDB))
+    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight, now.accent.copy(alpha = 0.7f), Color(0xFFB79BF2))
+    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E), now.onAccent, Color.White)
+    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream, Color.White, Color(0xFF221B33))
+    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim, Color.White.copy(alpha = 0.6f), Color(0xFF7D7394))
+    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream, Color.White, Color(0xFF221B33))
+    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight, Color.White, Color(0xFF6A3FD0))
+    /** Resalte de la canción que suena / tocado. */
+    val Highlight get() = if (lav) Color(0xFF7C4DDB).copy(alpha = 0.10f) else Color.White.copy(alpha = 0.10f)
     val metal: Brush get() = when {
+        lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
         org -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent))
         vin -> Brush.verticalGradient(listOf(Color(0xFF8B5A2B), Color(0xFF5A3517), Color(0xFF3A2212)))
         wmp -> Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
         else -> Brush.verticalGradient(listOf(Color(0xFFE9EBEF), Color(0xFFB9BDC6), Color(0xFF8C919C)))
     }
-    // colores de cada sección
-    val Red get() = pick(Color(0xFFE53935), Color(0xFF5B8DEF), Color(0xFFB5562A), Color(0xFFFF5A5F))
-    val Blue get() = pick(Color(0xFF1E88E5), Color(0xFF2D7DD2), Color(0xFF2F6B66), Color(0xFF4D8DFF))
-    val Lime get() = pick(Color(0xFF7CB342), Color(0xFF2FBF9A), Color(0xFF6B7A2E), Color(0xFF34C759))
-    val Pink get() = pick(Color(0xFFD81B60), Color(0xFF8E6CEF), Color(0xFF8E2C2C), Color(0xFFFF4FA3))
-    val Yellow get() = pick(Color(0xFFFDD835), Color(0xFFF2C94C), Color(0xFFC9A24A), Color(0xFFFFC83D))
-    val Teal get() = pick(Color(0xFF00ACC1), Color(0xFF2EC4E6), Color(0xFF3E7A8A), Color(0xFF2FD3E0))
-    val Purple get() = pick(Color(0xFF8E24AA), Color(0xFF7B61FF), Color(0xFF6A3B5C), Color(0xFFAF6BFF))
-    val Gray get() = pick(Color(0xFF78909C), Color(0xFF6F86A8), Color(0xFF6E5A48), Color(0xFF8E9BB0))
+    // colores de cada sección (en Lavanda todos son tonos de morado)
+    val Red get() = pick(Color(0xFFE53935), Color(0xFF5B8DEF), Color(0xFFB5562A), Color(0xFFFF5A5F), Color(0xFF8E5BE8))
+    val Blue get() = pick(Color(0xFF1E88E5), Color(0xFF2D7DD2), Color(0xFF2F6B66), Color(0xFF4D8DFF), Color(0xFF7C4DDB))
+    val Lime get() = pick(Color(0xFF7CB342), Color(0xFF2FBF9A), Color(0xFF6B7A2E), Color(0xFF34C759), Color(0xFF9B6CF0))
+    val Pink get() = pick(Color(0xFFD81B60), Color(0xFF8E6CEF), Color(0xFF8E2C2C), Color(0xFFFF4FA3), Color(0xFFA77BF3))
+    val Yellow get() = pick(Color(0xFFFDD835), Color(0xFFF2C94C), Color(0xFFC9A24A), Color(0xFFFFC83D), Color(0xFF6A3FD0))
+    val Teal get() = pick(Color(0xFF00ACC1), Color(0xFF2EC4E6), Color(0xFF3E7A8A), Color(0xFF2FD3E0), Color(0xFF8A62E6))
+    val Purple get() = pick(Color(0xFF8E24AA), Color(0xFF7B61FF), Color(0xFF6A3B5C), Color(0xFFAF6BFF), Color(0xFF7C4DDB))
+    val Gray get() = pick(Color(0xFF78909C), Color(0xFF6F86A8), Color(0xFF6E5A48), Color(0xFF8E9BB0), Color(0xFF9C8FBF))
 }
 
 private sealed interface LibPage {
@@ -245,6 +254,7 @@ fun LibraryScreen(
     // si una canción está en audio y en video, en las listas sale una sola vez (el video queda en «Videos musicales»)
     val songs = remember(allSongs) { allSongs.filterNot { isVideoPath(it.path) && LibraryStore.pairFor(it.path) != null } }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
+    var menuQuery by remember { mutableStateOf("") }
 
     Box(
         Modifier.fillMaxSize().background(Color.Black)
@@ -351,7 +361,15 @@ fun LibraryScreen(
             ) { (_, shownPage) ->
             androidx.compose.runtime.CompositionLocalProvider(LocalLibGoTo provides libGoTo) {
             when (val p = shownPage) {
-                LibPage.Menu -> MainMenu(songs.size, onOpen = { push(it) }, big = true, onPlay = onPlay)
+                LibPage.Menu -> Column(Modifier.fillMaxSize()) {
+                    Text("Biblioteca", color = Retro.Text, fontSize = 34.sp, fontWeight = FontWeight.Black,
+                        fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
+                        modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp))
+                    LibSearchField(menuQuery, { menuQuery = it }, "Buscar canción, artista o álbum")
+                    if (menuQuery.isBlank()) MainMenu(songs.size, onOpen = { push(it) }, big = true, onPlay = onPlay)
+                    else SongList(songs.filter { songMatches(it, menuQuery) }, onPlay, onAdd = { addTo = it }, searchable = false,
+                        empty = "No encontré nada con «${menuQuery.trim()}»")
+                }
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
                 LibPage.Artists -> GroupList(
                     groups = songs.groupBy { it.artist }.toSortedMap(compareBy { it.lowercase(Locale.ROOT) }),
@@ -503,8 +521,8 @@ private fun MainMenu(
             .clickable { e.action?.invoke() ?: e.page?.let(onOpen) }) {
             Row(Modifier.fillMaxWidth().height(if (big) 60.dp else 54.dp).padding(start = 20.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(e.icon, null, tint = accent, modifier = Modifier.size(28.dp))
-                Spacer(Modifier.width(20.dp))
+                if (Retro.isLavanda) { SoftIcon(e.icon, accent, 34.dp); Spacer(Modifier.width(12.dp)) }
+                else { Icon(e.icon, null, tint = accent, modifier = Modifier.size(28.dp)); Spacer(Modifier.width(20.dp)) }
                 Text(e.label, color = Retro.Text, fontSize = if (big) 19.sp else 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
                 if (e.sub.isNotEmpty()) Text(e.sub, color = Retro.SubText, fontSize = 14.sp, modifier = Modifier.padding(end = 6.dp))
@@ -522,11 +540,6 @@ private fun MainMenu(
     }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        if (big) item {
-            Text("Biblioteca", color = Retro.Text, fontSize = 34.sp, fontWeight = FontWeight.Black,
-                fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
-                modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 10.dp))
-        }
         items(main.size) { i -> Row1(main[i], i == main.lastIndex) }
         item {
             Text("Herramientas", color = Retro.SubText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
@@ -598,8 +611,63 @@ private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Uni
     }
 }
 
+/** ¿La canción coincide con lo buscado? (sin importar acentos ni mayúsculas; varias palabras = todas deben estar) */
+private fun songMatches(s: Song, q: String): Boolean {
+    fun norm(t: String) = java.text.Normalizer.normalize(t.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+    val hay = norm(s.title + " " + s.artist + " " + s.album)
+    return norm(q).split(' ').filter { it.isNotBlank() }.all { hay.contains(it) }
+}
+
+/** Buscador redondito de la parte de arriba. */
+@Composable
+private fun LibSearchField(value: String, onChange: (String) -> Unit, hint: String) {
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(44.dp).clip(RoundedCornerShape(14.dp))
+            .background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Text.copy(alpha = 0.09f)).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.Search, null, tint = Retro.SubText, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text(hint, color = Retro.SubText, fontSize = 16.sp, maxLines = 1)
+            androidx.compose.foundation.text.BasicTextField(
+                value, onChange, singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = Retro.Text, fontSize = 16.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Retro.Orange),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { focus.clearFocus() }),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        if (value.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = Retro.SubText,
+            modifier = Modifier.size(20.dp).clip(CircleShape).clickable { onChange(""); focus.clearFocus() })
+    }
+}
+
 @Composable
 private fun SongList(
+    songs: List<Song>,
+    onPlay: (List<Song>, Int, Boolean) -> Unit,
+    onAdd: (List<Song>) -> Unit,
+    showCounts: Boolean = false,
+    empty: String = "No hay canciones.\nRevisa “Carpetas de música”.",
+    onRemove: ((Song) -> Unit)? = null,
+    header: @Composable () -> Unit = {},
+    alphabet: Boolean = false,
+    searchable: Boolean = true,
+) {
+    var q by remember { mutableStateOf("") }
+    val shown = remember(songs, q) { if (q.isBlank()) songs else songs.filter { songMatches(it, q) } }
+    Column(Modifier.fillMaxSize()) {
+        if (searchable && songs.size > 6) LibSearchField(q, { q = it }, "Buscar en ${songs.size} canciones")
+        SongListInner(shown, onPlay, onAdd, showCounts, if (q.isNotBlank()) "No encontré nada con «${q.trim()}»" else empty,
+            onRemove, header, alphabet && q.isBlank())
+    }
+}
+
+@Composable
+private fun SongListInner(
     songs: List<Song>,
     onPlay: (List<Song>, Int, Boolean) -> Unit,
     onAdd: (List<Song>) -> Unit,
@@ -786,7 +854,7 @@ private fun SongRow(
     fun Cover(size: androidx.compose.ui.unit.Dp, corner: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
         Box(modifier.size(size)) {
             Box(
-                Modifier.fillMaxSize().clip(RoundedCornerShape(corner)).background(Retro.Panel),
+                Modifier.fillMaxSize().clip(RoundedCornerShape(corner)).background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Panel),
                 contentAlignment = Alignment.Center
             ) {
                 val b = thumb
@@ -815,7 +883,7 @@ private fun SongRow(
         "cards" -> Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp)
                 .clip(RoundedCornerShape(30.dp))
-                .background(if (playing) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                .background(if (playing) Retro.Highlight else Color.Transparent)
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -850,7 +918,7 @@ private fun SongRow(
         // cuadrito para la vista en cuadrícula
         "tile" -> Column(
             Modifier.clip(RoundedCornerShape(16.dp))
-                .background(if (playing) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                .background(if (playing) Retro.Highlight else Color.Transparent)
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
                 .padding(6.dp)
         ) {
@@ -862,7 +930,7 @@ private fun SongRow(
         }
         else -> Row(
             Modifier.fillMaxWidth()
-                .background(if (playing) Color.White.copy(alpha = 0.06f) else Color.Transparent)
+                .background(if (playing) Retro.Highlight else Color.Transparent)
                 .combinedClickable(onClick = onClick, onLongClick = { menu = true })
                 .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -919,11 +987,12 @@ private fun GroupList(groups: Map<String, List<Song>>, icon: ImageVector, color:
             ) {
                 Box(
                     Modifier.size(52.dp).clip(if (icon == Icons.Filled.Person) CircleShape else RoundedCornerShape(6.dp))
-                        .background(if (Retro.isOriginal && thumb == null) Color.Transparent else color.copy(alpha = 0.85f)),
+                        .background(if ((Retro.isOriginal || Retro.isLavanda) && thumb == null) Color.Transparent else color.copy(alpha = 0.85f)),
                     contentAlignment = Alignment.Center
                 ) {
                     val b = thumb
                     if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    else if (Retro.isLavanda) SoftIcon(icon, color, 44.dp)
                     else if (Retro.isOriginal) ReliefIcon(icon, color, 42.dp)
                     else Icon(icon, null, tint = Color.White)
                 }

@@ -216,3 +216,32 @@ fun formatColor(ext: String): Color = when (ext.lowercase()) {
 object MotionPref {
     var on by androidx.compose.runtime.mutableStateOf(true)
 }
+
+/**
+ * Ícono "semi relieve en 2D" (tema Lavanda): cuadrito plano lila con una sombra sólida corrida
+ * hacia abajo y un filo de luz arriba; el dibujo va en morado con su sombrita plana.
+ */
+@Composable
+fun SoftIcon(icon: ImageVector, color: Color, size: Dp = 40.dp, modifier: Modifier = Modifier) {
+    Box(modifier.size(size + 4.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.toPx()
+            val o = Offset((this.size.width - s) / 2f, (this.size.height - s) / 2f - 1.5.dp.toPx())
+            val r = androidx.compose.ui.geometry.CornerRadius(s * 0.3f)
+            val sz = Size(s, s)
+            // sombra sólida (sin difuminar): es lo que da el relieve "de caricatura"
+            drawRoundRect(lerp(color, Color.White, 0.55f), o + Offset(0f, 3.dp.toPx()), sz, r)
+            // cara plana
+            drawRoundRect(lerp(color, Color.White, 0.86f), o, sz, r)
+            // filo de luz arriba
+            drawRoundRect(Color.White, o + Offset(s * 0.12f, 1.dp.toPx()), Size(s * 0.76f, 1.6.dp.toPx()),
+                androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()))
+            drawRoundRect(lerp(color, Color.White, 0.65f), o, sz, r, style = Stroke(1.dp.toPx()))
+        }
+        val iconSize = size * 0.56f
+        Box(Modifier.offset(y = (-1.5).dp)) {
+            Icon(icon, null, tint = lerp(color, Color.White, 0.55f), modifier = Modifier.size(iconSize).offset(x = 0.dp, y = 1.5.dp))
+            Icon(icon, null, tint = color, modifier = Modifier.size(iconSize))
+        }
+    }
+}

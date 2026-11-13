@@ -99,6 +99,7 @@ enum class MusicSkin(val label: String) {
     WALKMAN("Walkman (negro y naranja)"),
     MEDIA_PLAYER("Media Player (azul cristal)"),
     VINTAGE("Vintage (tocadiscos y madera)"),
+    LAVANDA("Lavanda (claro, íconos morados)"),
 }
 
 /** Aspecto de la ventanita del reproductor en el escritorio. */
