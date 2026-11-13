@@ -225,7 +225,7 @@ fun SongInfoWindow(
                     Spacer(Modifier.width(12.dp))
                     Text("Editar etiquetas", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp,
                         modifier = Modifier.weight(1f).clip(CircleShape).background(Color.White.copy(alpha = 0.18f))
-                            .clickable(enabled = tags?.canWrite != false) { editing = true }
+                            .clickable { editing = true }
                             .padding(vertical = 14.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 }

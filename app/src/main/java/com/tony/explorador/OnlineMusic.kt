@@ -142,7 +142,7 @@ data class TagChoice(
 
 /** Escribe las etiquetas dentro del archivo de música (MP3, M4A, FLAC, OGG…). */
 suspend fun writeTags(context: Context, path: String, r: TagResult, choice: TagChoice): Result<Unit> = withContext(Dispatchers.IO) {
-    runCatching {
+    val direct = runCatching {
         org.jaudiotagger.tag.TagOptionSingleton.getInstance().setAndroid(true)
         java.util.logging.Logger.getLogger("org.jaudiotagger").level = java.util.logging.Level.OFF
         val file = File(path)
@@ -180,6 +180,27 @@ suspend fun writeTags(context: Context, path: String, r: TagResult, choice: TagC
         }
         MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
         Unit
+    }
+    if (direct.isSuccess) return@withContext direct
+    // no se puede escribir dentro de este archivo (pasa con los videos): se guarda en la app
+    runCatching {
+        val bytes = if (choice.cover && r.artworkUrl != null) URL(r.artworkUrl).openStream().use { it.readBytes() } else null
+        TagOverrides.save(
+            path,
+            title = r.title.takeIf { choice.title }, artist = r.artist.takeIf { choice.artist }, album = r.album.takeIf { choice.album },
+            year = r.year.takeIf { choice.year }, genre = r.genre.takeIf { choice.genre },
+            track = r.trackNumber?.toString().takeIf { choice.track }, coverBytes = bytes,
+        )
+        savedInApp(context, path, r.title.takeIf { choice.title }, r.artist.takeIf { choice.artist }, r.album.takeIf { choice.album })
+    }
+}
+
+private suspend fun savedInApp(context: Context, path: String, title: String?, artist: String?, album: String?) {
+    invalidateTrack(path)
+    withContext(Dispatchers.Main) {
+        LibraryStore.updateSongTags(path, title, artist, album)
+        android.widget.Toast.makeText(context, "En este formato no se puede escribir dentro del archivo: lo guardé en la app.",
+            android.widget.Toast.LENGTH_LONG).show()
     }
 }
 
@@ -274,12 +295,12 @@ suspend fun readFullTags(path: String): FullTags = withContext(Dispatchers.IO) {
         } finally {
             runCatching { r.release() }
         }
-    }
+    }.let { TagOverrides.overlay(path, it) }
 }
 
 /** Guarda a mano las etiquetas que escribiste (vacío = se borra ese dato). */
 suspend fun writeManualTags(context: Context, path: String, t: FullTags): Result<Unit> = withContext(Dispatchers.IO) {
-    runCatching {
+    val direct = runCatching {
         org.jaudiotagger.tag.TagOptionSingleton.getInstance().setAndroid(true)
         val af = org.jaudiotagger.audio.AudioFileIO.read(File(path))
         val tag = af.tagOrCreateAndSetDefault
@@ -301,5 +322,10 @@ suspend fun writeManualTags(context: Context, path: String, t: FullTags): Result
         withContext(Dispatchers.Main) { LibraryStore.updateSongTags(path, t.title, t.artist, t.album) }
         MediaScannerConnection.scanFile(context, arrayOf(path), null, null)
         Unit
+    }
+    if (direct.isSuccess) return@withContext direct
+    runCatching {
+        TagOverrides.save(path, t.title, t.artist, t.album, t.year, t.genre, t.track)
+        savedInApp(context, path, t.title, t.artist, t.album)
     }
 }

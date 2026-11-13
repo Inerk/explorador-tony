@@ -18,6 +18,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
             }
             previous?.uncaughtException(t, e)
         }
+        TagOverrides.init(this)
         LibraryStore.init(this)
         AnimatedCovers.init(this)
         CoverScanner.init(this)

@@ -92,6 +92,13 @@ suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO)
         runCatching { retriever.release() }
     }
     if (cover == null) cover = folderCover(file)
+    // etiquetas guardadas en la app (archivos en los que no se puede escribir, como los videos)
+    TagOverrides.get(path)?.let { o ->
+        if (o.title.isNotBlank()) title = o.title
+        if (o.artist.isNotBlank()) artist = o.artist
+        if (o.album.isNotBlank()) album = o.album
+    }
+    TagOverrides.cover(path, 1000)?.let { cover = it }
 
     val lyrics = findLrc(file)?.let { runCatching { parseLrc(readLrcText(it)) }.getOrNull() } ?: emptyList()
 
@@ -171,6 +178,7 @@ private val noThumb = java.util.Collections.synchronizedSet(HashSet<String>())
 suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
     thumbCache.get(path)?.let { return@withContext it }
     if (path in noThumb) return@withContext null
+    TagOverrides.cover(path, 128)?.let { thumbCache.put(path, it); return@withContext it }
     val r = MediaMetadataRetriever()
     val bmp = try {
         r.setDataSource(path)
@@ -191,6 +199,7 @@ private val noBigCover = java.util.Collections.synchronizedSet(HashSet<String>()
 suspend fun loadCover(path: String): Bitmap? = withContext(Dispatchers.IO) {
     bigCoverCache.get(path)?.let { return@withContext it }
     if (path in noBigCover) return@withContext null
+    TagOverrides.cover(path, 420)?.let { bigCoverCache.put(path, it); return@withContext it }
     val r = MediaMetadataRetriever()
     val bmp = try {
         r.setDataSource(path)

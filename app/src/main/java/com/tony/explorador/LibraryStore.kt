@@ -330,7 +330,7 @@ object LibraryStore {
                 }
             }
         }
-        val sorted = byPath.values.sortedBy { it.title.lowercase(Locale.ROOT) }
+        val sorted = byPath.values.map { TagOverrides.apply(it) }.sortedBy { it.title.lowercase(Locale.ROOT) }
         return sorted to lists.distinctBy { it.absolutePath }
     }
 
