@@ -159,6 +159,7 @@ fun AppRoot() {
     }
 
     val controller = rememberMediaController()
+    androidx.compose.runtime.SideEffect { AppNav.pauseMusic = { controller?.pause() } }
     val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
     val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }
     fun open(o: Overlay) {
@@ -463,6 +464,9 @@ fun AppRoot() {
             MusicUi.syncLyricsFor?.let { p -> LyricsSyncEditor(p, c) { MusicUi.syncLyricsFor = null } }
         }
         if (MusicUi.settingsOpen) MusicSettingsDialog { MusicUi.settingsOpen = false }
+
+        // lo que se está mandando a la TV
+        CastControlBar(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
 
         UpdateDialog(
             state = updateState,

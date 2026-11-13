@@ -167,7 +167,8 @@ fun BrowserScreen(
     var query by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<File>?>(null) }
     var archiveFile by remember { mutableStateOf<File?>(null) }
-    var focused by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
+    var focused by remember { mutableStateOf<File?>(null) }
+    var castFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
     var paneFrac by remember { mutableStateOf(0.42f) }
     var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -574,7 +575,7 @@ fun BrowserScreen(
                                 val pane: @Composable (Modifier) -> Unit = { m ->
                                     PreviewPane(focused, currentDir, LibraryStore.previewPane, onMode = { LibraryStore.changePreviewPane(it) },
                                         onOpen = { f -> openFile(f, shownFiles) }, onClose = { LibraryStore.changePreviewPane("") }, modifier = m,
-                                        controller = controller, onExpandVideo = onExpandVideo)
+                                        controller = controller, onExpandVideo = onExpandVideo, onCast = { castFile = it })
                                 }
                                 if (wide) Row(Modifier.fillMaxSize()) {
                                     Box(Modifier.weight(1f - paneFrac).fillMaxHeight()) { filesView() }
@@ -635,6 +636,12 @@ fun BrowserScreen(
         )
     }
 
+    // mandar a la TV (solo ese archivo; en fotos puedes pasar a la siguiente de la carpeta)
+    castFile?.let { cf ->
+        val sibs = remember(cf, shownFiles) { if (cf.kind() == FileKind.IMAGE) shownFiles.filter { it.kind() == FileKind.IMAGE } else listOf(cf) }
+        CastPickerSheet(cf, sibs) { castFile = null }
+    }
+
     // comprimidos
     archiveFile?.let { af ->
         ArchiveViewer(af, onClose = { archiveFile = null }, onOpen = { f -> openFile(f, listOf(f)) },
@@ -684,6 +691,8 @@ fun BrowserScreen(
             "Compartir" to { shareFiles(context, listOf(f)) },
             *(if (f.isFile && Archives.isArchive(f)) arrayOf<Pair<String, () -> Unit>>("Ver contenido y extraer" to { archiveFile = f }) else emptyArray()),
             "Comprimir…" to { compressItems = listOf(f) },
+            *(if (f.isFile && (f.kind() == FileKind.VIDEO || f.kind() == FileKind.AUDIO || f.kind() == FileKind.IMAGE))
+                arrayOf<Pair<String, () -> Unit>>("Mandar a la TV" to { castFile = f }) else emptyArray()),
             "Acceso directo en el escritorio" to {
                 LibraryStore.addFileShortcut(f.absolutePath)
                 android.widget.Toast.makeText(context, "Acceso directo creado en el escritorio", android.widget.Toast.LENGTH_SHORT).show()

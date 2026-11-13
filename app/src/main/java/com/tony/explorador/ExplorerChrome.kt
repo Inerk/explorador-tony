@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
@@ -234,7 +235,7 @@ fun PaneHandle(vertical: Boolean, onDrag: (Float) -> Unit) {
 @Composable
 fun PreviewPane(
     file: File?, dir: File?, mode: String, onMode: (String) -> Unit, onOpen: (File) -> Unit, onClose: () -> Unit,
-    modifier: Modifier = Modifier, controller: Player? = null, onExpandVideo: () -> Unit = {},
+    modifier: Modifier = Modifier, controller: Player? = null, onExpandVideo: () -> Unit = {}, onCast: (File) -> Unit = {},
 ) {
     val target = file ?: dir
     // al cambiar de archivo o cerrar el panel se pausa el video del panel (cambiar de pestaña no lo pausa)
@@ -255,6 +256,10 @@ fun PreviewPane(
                         .clickable { onMode(id) }.padding(horizontal = 14.dp, vertical = 6.dp))
             }
             Spacer(Modifier.weight(1f))
+            if (file != null && file.isFile && file.kind().let { it == FileKind.VIDEO || it == FileKind.AUDIO || it == FileKind.IMAGE })
+                Box(Modifier.size(32.dp).clip(CircleShape).clickable { onCast(file) }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.Cast, "Mandar a la TV", tint = ExpTheme.onBar, modifier = Modifier.size(19.dp))
+                }
             if (file != null && !file.isDirectory) Text("Abrir", color = ExpTheme.onBar, fontWeight = FontWeight.Bold, fontSize = 13.sp,
                 modifier = Modifier.clip(CircleShape).clickable { onOpen(file) }.padding(horizontal = 12.dp, vertical = 6.dp))
             Box(Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
@@ -548,6 +553,7 @@ fun FileMenuSheet(f: File, options: List<Pair<String, () -> Unit>>, onDismiss: (
                     label == "Compartir" -> Icons.Outlined.Share
                     label.startsWith("Comprimir") -> Icons.Outlined.Archive
                     label.startsWith("Ver contenido") -> Icons.Outlined.Unarchive
+                    label.startsWith("Mandar a la TV") -> Icons.Outlined.Cast
                     label.startsWith("Acceso directo") -> Icons.Outlined.AddToHomeScreen
                     label == "Seleccionar" -> Icons.Outlined.CheckCircle
                     danger -> Icons.Outlined.Delete

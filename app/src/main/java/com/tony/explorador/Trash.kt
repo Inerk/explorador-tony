@@ -72,6 +72,8 @@ object AppNav {
     /** Cuando un archivo cambia de nombre y está en la cola del reproductor. */
     var renameInQueue: (String, String) -> Unit = { _, _ -> }
     var musicLaunch by androidx.compose.runtime.mutableIntStateOf(0)
+    /** Pausa la música del teléfono (al mandar algo a la TV). */
+    var pauseMusic: (() -> Unit)? = null
 }
 
 /**
