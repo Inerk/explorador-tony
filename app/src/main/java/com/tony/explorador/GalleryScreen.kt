@@ -120,7 +120,7 @@ private suspend fun loadMediaStore(context: Context, videos: Boolean): List<Gall
             val iDur = if (videos) c.getColumnIndex(MediaStore.MediaColumns.DURATION) else -1
             while (c.moveToNext()) {
                 val path = c.getString(iData) ?: continue
-                if (path.contains(".animada.", true)) continue   // carátulas animadas: van con la música, no aquí
+                if (path.contains(".animada.", true) || path.contains("/.animadas/")) continue   // carátulas animadas: van con la música, no aquí
                 val taken = c.getLong(iTaken)
                 out.add(
                     GalleryItem(
@@ -153,7 +153,7 @@ private suspend fun loadMedia(context: Context, videos: Boolean, folders: List<S
         val wanted = if (videos) FileKind.VIDEO else FileKind.IMAGE
         folders.forEach { root ->
             File(root).walkTopDown().maxDepth(6).take(20000).forEach { f ->
-                if (f.isFile && f.absolutePath !in known && f.kind() == wanted) {
+                if (f.isFile && f.absolutePath !in known && f.kind() == wanted && f.parentFile?.name != ".animadas") {
                     known.add(f.absolutePath)
                     picked.add(GalleryItem(f.absolutePath, f.parentFile?.name ?: "Otros", f.lastModified(), videos, 0L, f.length()))
                 }

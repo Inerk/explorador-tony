@@ -123,8 +123,11 @@ suspend fun moveInto(sources: List<File>, destDir: File): Int = withContext(Disp
                 File(src.absolutePath + ".tony.json").takeIf { it.isFile }?.renameTo(File(target.absolutePath + ".tony.json"))
                 File(src.parentFile, src.nameWithoutExtension + ".lrc").takeIf { it.isFile }
                     ?.renameTo(File(target.parentFile, target.nameWithoutExtension + ".lrc"))
-                File(src.parentFile, src.nameWithoutExtension + ".animada.mp4").takeIf { it.isFile }
-                    ?.renameTo(File(target.parentFile, target.nameWithoutExtension + ".animada.mp4"))
+                File(File(src.parentFile, ".animadas"), src.nameWithoutExtension + ".mp4").takeIf { it.isFile }?.let { anim ->
+                    val d = File(target.parentFile, ".animadas")
+                    if (!d.isDirectory) { d.mkdirs(); runCatching { File(d, ".nomedia").createNewFile() } }
+                    anim.renameTo(File(d, target.nameWithoutExtension + ".mp4"))
+                }
             }
         }
     }

@@ -169,13 +169,13 @@ object NasSync {
                     val d = queue.removeFirst()
                     status = "Revisando el NAS… ${d.ifEmpty { "/" }}"
                     val (dirs, files) = list(http, d)
-                    dirs.filterNot { it.substringAfterLast('/').startsWith(".") || it.substringAfterLast('/').startsWith("@") }
+                    dirs.filterNot { n -> val b = n.substringAfterLast('/'); (b.startsWith(".") && b != ".animadas") || b.startsWith("@") }
                         .forEach { remoteDirs.add(it); queue.add(it) }
                     remote.addAll(files.filter { wanted(it.rel.substringAfterLast('/')) })
                 }
                 // 2) qué hay en el teléfono
                 status = "Revisando el teléfono…"
-                val local = localRoot.walkTopDown().onEnter { !it.name.startsWith(".") }
+                val local = localRoot.walkTopDown().onEnter { it == localRoot || !it.name.startsWith(".") || it.name == ".animadas" }
                     .filter { it.isFile && wanted(it.name) }
                     .map { Remote(it.relativeTo(localRoot).path.replace(File.separatorChar, '/'), it.length()) }.toList()
 

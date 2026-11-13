@@ -82,15 +82,31 @@ object AnimatedCovers {
     private fun songFile(path: String) = File(dir, "s_${key(path)}.mp4")
     fun albumFile(album: String) = File(dir, "a_${key(album.lowercase(Locale.ROOT))}.mp4")
 
-    /** Nombre de la carátula animada junto a la canción: «Canción.animada.mp4». */
-    fun besideSong(path: String): File = File(File(path).parentFile, File(path).nameWithoutExtension + ".animada.mp4")
-    /** Para todo un álbum: «cover.animada.mp4» en la carpeta de la canción. */
-    fun besideAlbum(path: String): File = File(File(path).parentFile, "cover.animada.mp4")
+    /** Carpeta oculta dentro de la carpeta de la canción donde viven sus carátulas animadas. */
+    const val HIDDEN = ".animadas"
+    fun hiddenDir(path: String): File = File(File(path).parentFile, HIDDEN).also { d ->
+        if (!d.isDirectory) { d.mkdirs(); runCatching { File(d, ".nomedia").createNewFile() } }
+    }
+    /** «.animadas/Canción.mp4» junto a la canción. */
+    fun besideSong(path: String): File = File(File(File(path).parentFile, HIDDEN), File(path).nameWithoutExtension + ".mp4")
+    /** «.animadas/cover.mp4»: para todo el álbum de esa carpeta. */
+    fun besideAlbum(path: String): File = File(File(File(path).parentFile, HIDDEN), "cover.mp4")
+    fun isHidden(f: File) = f.parentFile?.name == HIDDEN
+
+    /** Las que antes se guardaban sueltas («Canción.animada.mp4») se pasan a la carpeta oculta. */
+    private fun migrate(path: String) {
+        val audio = File(path)
+        val old = File(audio.parentFile, audio.nameWithoutExtension + ".animada.mp4")
+        if (old.isFile) { hiddenDir(path); if (!besideSong(path).exists()) old.renameTo(besideSong(path)) }
+        val oldAlbum = File(audio.parentFile, "cover.animada.mp4")
+        if (oldAlbum.isFile) { hiddenDir(path); if (!besideAlbum(path).exists()) oldAlbum.renameTo(besideAlbum(path)) }
+    }
 
     fun find(path: String, album: String?): File? {
         if (!::dir.isInitialized) return null
         val audio = File(path)
         if (audio.kind() == FileKind.VIDEO) return null
+        runCatching { migrate(path) }
         besideSong(path).takeIf { it.isFile }?.let { return it }
         songFile(path).takeIf { it.isFile }?.let { return it }
         besideAlbum(path).takeIf { it.isFile }?.let { return it }
@@ -102,7 +118,7 @@ object AnimatedCovers {
     }
 
     /** Si la que aplica es una que guardó la app (y por eso se puede quitar). */
-    fun isOwn(file: File?): Boolean = file != null && ::dir.isInitialized && (file.parentFile == dir || file.name.contains(".animada."))
+    fun isOwn(file: File?): Boolean = file != null && ::dir.isInitialized && (file.parentFile == dir || isHidden(file))
 
     /** Ahora se guarda en la carpeta de la canción, junto a ella (como las letras). */
     private fun target(path: String, album: String?, forAlbum: Boolean): File =
@@ -111,7 +127,7 @@ object AnimatedCovers {
     /** Importa un video elegido: lo MUEVE a la carpeta de la canción (si no se puede mover, lo copia). */
     suspend fun importFrom(context: Context, uri: Uri, path: String, album: String?, forAlbum: Boolean): Boolean = withContext(Dispatchers.IO) {
         val out = target(path, album, forAlbum)
-        out.parentFile?.mkdirs()
+        hiddenDir(path)
         // ¿de qué archivo real viene? (para moverlo en lugar de copiarlo)
         val source = runCatching {
             context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use { c ->
@@ -140,6 +156,7 @@ object AnimatedCovers {
 
     suspend fun download(url: String, path: String, album: String?, forAlbum: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         val out = target(path, album, forAlbum)
+        hiddenDir(path)
         val tmp = File(out.parentFile, out.name + ".part")
         val r = runCatching {
             val conn = (URL(url.trim()).openConnection() as HttpURLConnection).apply {
@@ -168,7 +185,7 @@ object AnimatedCovers {
 
     fun remove(file: File) {
         if (file.parentFile == dir) file.delete()
-        else if (file.name.contains(".animada.")) {
+        else if (isHidden(file)) {
             // las que están junto a la canción se mandan a la Papelera
             kotlinx.coroutines.CoroutineScope(Dispatchers.Main).launch { Trash.moveToTrash(listOf(file)); version++ }
             return
@@ -298,7 +315,7 @@ fun AnimatedCoverDialog(path: String, album: String?, onDismiss: () -> Unit) {
                 if (cur != null && AnimatedCovers.isOwn(cur)) Opt(Icons.Filled.Delete, "Quitar carátula animada") { AnimatedCovers.remove(cur) }
             }
             Spacer(Modifier.height(6.dp))
-            Text("Se guarda junto a la canción como «${File(path).nameWithoutExtension}.animada.mp4». " +
+            Text("Se guarda en una carpeta oculta «.animadas» dentro de la carpeta de la canción. " +
                 "Si dura lo mismo que la canción (por ejemplo un video con la letra), va al mismo tiempo que la música.",
                 fontSize = 11.sp)
         }
@@ -364,13 +381,14 @@ object AnimatedScanner {
             // 1) videos «….animada.mp4» (por ejemplo los que hagas con la letra): se mueven junto a su canción
             val byName = songs.filterNot { isVideoPath(it.path) }.groupBy { CoverScanner.norm(File(it.path).nameWithoutExtension) }
             val byTitle = songs.filterNot { isVideoPath(it.path) }.groupBy { CoverScanner.norm(it.title + " " + it.artist) }
-            videos.filter { it.name.contains(".animada.", true) }.forEach { v ->
+            videos.filter { it.name.contains(".animada.", true) && !AnimatedCovers.isHidden(it) }.forEach { v ->
                 val base = CoverScanner.norm(v.name.substringBefore(".animada.", v.nameWithoutExtension))
                 val song = byName[base]?.firstOrNull() ?: byTitle[base]?.firstOrNull()
                     ?: byTitle.entries.firstOrNull { (k, _) -> k.isNotBlank() && (k.contains(base) || base.contains(k)) }?.value?.firstOrNull()
                     ?: return@forEach
                 val dest = AnimatedCovers.besideSong(song.path)
                 if (dest.absolutePath == v.absolutePath || dest.exists()) return@forEach
+                AnimatedCovers.hiddenDir(song.path)
                 val ok = v.renameTo(dest) || runCatching { v.copyTo(dest); v.delete(); true }.getOrDefault(false)
                 if (ok) {
                     n++
