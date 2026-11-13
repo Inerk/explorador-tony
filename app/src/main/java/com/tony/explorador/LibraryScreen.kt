@@ -551,8 +551,8 @@ private fun MainMenu(
         Entry("Carátulas animadas", if (AnimatedScanner.running) "buscando…" else "", Icons.Filled.AutoAwesome, LibPage.AnimatedCoversP),
         Entry("Letras", if (LyricsLocal.running) "buscando…" else "", Icons.Filled.Lyrics, LibPage.LyricsP),
         Entry("Sincronizar con NAS", if (NasSync.running) "sincronizando…" else "", Icons.Filled.CloudSync, LibPage.Nas),
-        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null) { skinDialog = true },
-        Entry("Ajustes", "", Icons.Filled.Settings, null) { MusicUi.settingsOpen = true },
+        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null, action = { skinDialog = true }),
+        Entry("Ajustes", "", Icons.Filled.Settings, null, action = { MusicUi.settingsOpen = true }),
     )
     val accent = Retro.Orange
     val divider = Retro.Text.copy(alpha = 0.10f)
