@@ -130,7 +130,7 @@ private fun loadDetails(context: android.content.Context, file: File, isVideo: B
             focal35 <= 60 -> "Lente normal - $mm"
             else -> "Teleobjetivo - $mm"
         }
-        (e.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY) ?: e.getAttribute("ISOSpeedRatings"))?.takeIf { it.isNotBlank() }?.let { l2.add("ISO $it") }
+        (e.getAttribute("PhotographicSensitivity") ?: e.getAttribute("ISOSpeedRatings"))?.takeIf { it.isNotBlank() }?.let { l2.add("ISO $it") }
         if (mm.isNotBlank()) l2.add(mm)
         if (e.getAttribute(ExifInterface.TAG_EXPOSURE_BIAS_VALUE) != null)
             l2.add(String.format(Locale.US, "%.1fev", e.getAttributeDouble(ExifInterface.TAG_EXPOSURE_BIAS_VALUE, 0.0)))
