@@ -1,6 +1,5 @@
 package com.tony.explorador
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -35,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -72,10 +72,9 @@ fun SearchStatusBar(searching: Boolean, progress: Float, where: String, found: I
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
         Box(Modifier.fillMaxWidth().height(22.dp).clip(RoundedCornerShape(6.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)) {
-            AnimatedVisibility(searching || p < 1f, exit = fadeOut(tween(700))) {
-                Box(Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0.02f, 1f))
-                    .background(Brush.horizontalGradient(listOf(Color(0xFF2E9E3E), Color(0xFF5BD46A)))))
-            }
+            val barAlpha by animateFloatAsState(if (searching) 1f else 0.35f, tween(700), label = "barA")
+            Box(Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0.02f, 1f)).alpha(barAlpha)
+                .background(Brush.horizontalGradient(listOf(Color(0xFF2E9E3E), Color(0xFF5BD46A)))))
             if (searching) Box(Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0.02f, 1f))) {
                 // brillo que corre sobre la parte verde
                 Box(Modifier.fillMaxHeight().fillMaxWidth().background(Brush.horizontalGradient(
