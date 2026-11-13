@@ -36,7 +36,38 @@ object TagOverrides {
 
     private fun coverFile(path: String) = File(dir, key(path) + ".jpg")
 
-    @Synchronized fun get(path: String): Entry? = if (::dir.isInitialized) map[path] else null
+    /** Archivo de etiquetas que se guarda junto al video: «Video.mp4.tony.json» (trae también la portada). */
+    fun sidecar(path: String) = File("$path.tony.json")
+    private val checked = HashSet<String>()
+
+    @Synchronized fun get(path: String): Entry? {
+        if (!::dir.isInitialized) return null
+        map[path]?.let { return it }
+        // si el archivo se movió de carpeta, sus etiquetas viajan con él en el archivo de al lado
+        if (!checked.add(path)) return null
+        val f = sidecar(path)
+        if (!f.isFile) return null
+        return runCatching {
+            val o = JSONObject(f.readText())
+            val e = Entry(o.optString("titulo"), o.optString("artista"), o.optString("album"), o.optString("anio"), o.optString("genero"), o.optString("pista"))
+            map[path] = e
+            o.optString("portada").takeIf { it.isNotBlank() }?.let { b64 ->
+                coverFile(path).writeBytes(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
+            }
+            writeIndex()
+            e
+        }.getOrNull()
+    }
+
+    private fun writeIndex() {
+        runCatching {
+            val o = JSONObject()
+            map.forEach { (k, e) ->
+                o.put(k, JSONObject().put("t", e.title).put("a", e.artist).put("l", e.album).put("y", e.year).put("g", e.genre).put("n", e.track))
+            }
+            file.writeText(o.toString())
+        }
+    }
 
     fun cover(path: String, maxSize: Int): Bitmap? {
         if (!::dir.isInitialized) return null
@@ -55,12 +86,14 @@ object TagOverrides {
         val old = map[path] ?: Entry()
         map[path] = Entry(title ?: old.title, artist ?: old.artist, album ?: old.album, year ?: old.year, genre ?: old.genre, track ?: old.track)
         if (coverBytes != null) runCatching { coverFile(path).writeBytes(coverBytes) }
+        writeIndex()
+        // copia junto al archivo, para que las etiquetas no se pierdan si lo mueves o reinstalas la app
         runCatching {
-            val o = JSONObject()
-            map.forEach { (k, e) ->
-                o.put(k, JSONObject().put("t", e.title).put("a", e.artist).put("l", e.album).put("y", e.year).put("g", e.genre).put("n", e.track))
-            }
-            file.writeText(o.toString())
+            val e = map.getValue(path)
+            val o = JSONObject().put("titulo", e.title).put("artista", e.artist).put("album", e.album)
+                .put("anio", e.year).put("genero", e.genre).put("pista", e.track)
+            coverFile(path).takeIf { it.isFile }?.let { o.put("portada", android.util.Base64.encodeToString(it.readBytes(), android.util.Base64.NO_WRAP)) }
+            sidecar(path).writeText(o.toString())
         }
     }
 

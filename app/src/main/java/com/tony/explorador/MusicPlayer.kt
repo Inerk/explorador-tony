@@ -309,6 +309,7 @@ fun MusicPlayerScreen(
     val position = player.currentPosition + tick * 0L
     val lyrics = info?.lyrics.orEmpty()
     val lyricIndex = currentLyricIndex(lyrics, position)
+    val pairPath = player.currentMediaItem?.mediaId?.let { LibraryStore.pairFor(it) }
     val animatedCover by rememberAnimatedCover(player.currentMediaItem?.mediaId,
         player.currentMediaItem?.mediaId?.let { LibraryStore.songFor(it)?.album } ?: album)
 
@@ -435,6 +436,18 @@ fun MusicPlayerScreen(
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
                                     animated = animatedCover,
+                                    pairToggle = pairPath?.let { other -> {
+                                        // cambia entre la canción (carátula) y su video, en el mismo segundo
+                                        val i = player.currentMediaItemIndex
+                                        val pos = player.currentPosition
+                                        val wasPlaying = player.isPlaying
+                                        player.replaceMediaItem(i, mediaItemsFor(listOf(java.io.File(other))).first())
+                                        player.seekTo(i, pos)
+                                        if (wasPlaying) player.play()
+                                        if (isVideoPath(other)) MotionPref.on = true
+                                    } },
+                                    overlayLyric = if (LibraryStore.lyricsOverCover && !lyricsMode && lyrics.isNotEmpty())
+                                        (lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪") else null,
                                     playing = player.isPlaying,
                                     accent = accent,
                                     size = lerpDp(side, QueueThumb, p),
@@ -499,7 +512,7 @@ fun MusicPlayerScreen(
                     }
                 }
                 // Vistazo de la letra bajo la portada
-                if (!lyricsMode && lyrics.isNotEmpty()) {
+                if (!lyricsMode && lyrics.isNotEmpty() && !LibraryStore.lyricsOverCover) {
                     val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
                     Text(
                         line, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = accent, textAlign = TextAlign.Start,
@@ -636,6 +649,8 @@ private fun CoverArt(
     cover: Bitmap?,
     video: Player?,
     animated: java.io.File? = null,
+    pairToggle: (() -> Unit)? = null,
+    overlayLyric: String? = null,
     playing: Boolean,
     accent: Color,
     size: androidx.compose.ui.unit.Dp,
@@ -759,16 +774,29 @@ private fun CoverArt(
             }
         }
         // botón para ver el video / la animación, o sólo la carátula fija
-        if ((video != null || animated != null) && collapse < 0.3f) {
+        // letra encima de la carátula (si así se eligió en ajustes)
+        if (overlayLyric != null && collapse < 0.3f) {
+            Text(
+                overlayLyric, color = Color.White, fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .graphicsLayer { alpha = 1f - collapse / 0.3f }
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
+                    .padding(start = 54.dp, end = 54.dp, top = 34.dp, bottom = 16.dp)
+            )
+        }
+        if ((video != null || animated != null || pairToggle != null) && collapse < 0.3f) {
             Box(
                 Modifier.align(Alignment.BottomStart).padding(10.dp).size(38.dp)
                     .graphicsLayer { alpha = 1f - collapse / 0.3f }
                     .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
-                    .clickable { MotionPref.on = !MotionPref.on },
+                    .clickable { if (pairToggle != null) pairToggle() else MotionPref.on = !MotionPref.on },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(if (motion) Icons.Filled.Image else Icons.Filled.Movie,
-                    if (motion) "Ver sólo la carátula" else "Ver el video", tint = Color.White)
+                // con pareja: en el video ofrece volver a la canción; en la canción ofrece ver el video
+                val showingMotion = if (pairToggle != null) video != null else motion
+                Icon(if (showingMotion) Icons.Filled.Image else Icons.Filled.Movie,
+                    if (showingMotion) "Ver sólo la carátula" else "Ver el video", tint = Color.White)
             }
         }
         // estrella diamante: esta canción tiene carátula animada

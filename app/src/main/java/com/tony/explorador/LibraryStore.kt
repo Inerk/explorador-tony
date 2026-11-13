@@ -196,6 +196,36 @@ object LibraryStore {
         save()
     }
 
+    // Parejas: la misma canción en audio y en video
+    private var pairsFor: List<Song>? = null
+    private var pairs: Map<String, String> = emptyMap()
+
+    /** Si esta canción tiene su gemela (el video de un audio, o el audio de un video), regresa su ruta. */
+    fun pairFor(path: String): String? {
+        val list = songs
+        if (pairsFor !== list) {
+            fun key(s: Song) = CoverScanner.norm(s.title)
+            val videos = list.filter { isVideoPath(it.path) }.groupBy { key(it) }
+            val m = HashMap<String, String>()
+            list.forEach { a ->
+                if (isVideoPath(a.path)) return@forEach
+                val k = key(a)
+                if (k.length < 2) return@forEach
+                val v = videos[k]?.firstOrNull { v ->
+                    a.artist == UNKNOWN_ARTIST || v.artist == UNKNOWN_ARTIST || CoverScanner.similar(a.artist, v.artist)
+                } ?: return@forEach
+                if (a.path !in m && v.path !in m) { m[a.path] = v.path; m[v.path] = a.path }
+            }
+            pairs = m; pairsFor = list
+        }
+        return pairs[path]
+    }
+
+    /** Dónde se ve la letra en el reproductor: false = debajo de la portada, true = encima de la portada. */
+    var lyricsOverCover by mutableStateOf(false)
+        private set
+    fun changeLyricsOverCover(v: Boolean) { lyricsOverCover = v; save() }
+
     /** Borra cuántas veces y cuándo se escuchó una canción. */
     fun resetStats(path: String) {
         playCounts.remove(path); lastPlayed.remove(path); save()
@@ -439,6 +469,7 @@ object LibraryStore {
             put("wallpaper", wallpaper)
             put("explorerView", explorerView)
             put("darkMode", darkMode)
+            put("lyricsOverCover", lyricsOverCover)
             put("songView", songView)
             put("galleryView", galleryView)
             put("videoView", videoView)
@@ -473,6 +504,7 @@ object LibraryStore {
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
         o.optString("darkMode").takeIf { it.isNotBlank() }?.let { darkMode = it }
+        lyricsOverCover = o.optBoolean("lyricsOverCover", false)
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }

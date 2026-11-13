@@ -232,7 +232,9 @@ fun LibraryScreen(
         }
     }
 
-    val songs = LibraryStore.songs
+    val allSongs = LibraryStore.songs
+    // si una canción está en audio y en video, en las listas sale una sola vez (el video queda en «Videos musicales»)
+    val songs = remember(allSongs) { allSongs.filterNot { isVideoPath(it.path) && LibraryStore.pairFor(it.path) != null } }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
 
     Box(
@@ -367,7 +369,7 @@ fun LibraryScreen(
                 }
                 LibPage.Folders -> FoldersPage()
                 LibPage.Covers -> CoversPage()
-                LibPage.MusicVideos -> SongList(songs.filter { isVideoPath(it.path) }, onPlay, onAdd = { addTo = it }, alphabet = true,
+                LibPage.MusicVideos -> SongList(allSongs.filter { isVideoPath(it.path) }, onPlay, onAdd = { addTo = it }, alphabet = true,
                     empty = "No hay videos musicales.\nPon tus videos dentro de alguna de tus “Carpetas de música”\ny toca ⟳ para volver a buscar.")
                 LibPage.AnimatedCoversP -> AnimatedCoversPage()
             }

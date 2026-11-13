@@ -116,7 +116,15 @@ suspend fun moveInto(sources: List<File>, destDir: File): Int = withContext(Disp
             val copied = if (src.isDirectory) src.copyRecursively(target) else { src.copyTo(target); true }
             copied && src.deleteRecursively()
         }.getOrDefault(false)
-        if (moved) ok++
+        if (moved) {
+            ok++
+            // lo que acompaña al archivo se va con él: etiquetas (.tony.json) y letra (.lrc)
+            if (target.isFile) runCatching {
+                File(src.absolutePath + ".tony.json").takeIf { it.isFile }?.renameTo(File(target.absolutePath + ".tony.json"))
+                File(src.parentFile, src.nameWithoutExtension + ".lrc").takeIf { it.isFile }
+                    ?.renameTo(File(target.parentFile, target.nameWithoutExtension + ".lrc"))
+            }
+        }
     }
     ok
 }
