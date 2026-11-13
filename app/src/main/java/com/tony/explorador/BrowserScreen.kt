@@ -152,6 +152,10 @@ fun BrowserScreen(
     var searchActive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<File>?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    var searchProgress by remember { mutableStateOf(0f) }
+    var searchWhere by remember { mutableStateOf("") }
+    var formatFilter by remember { mutableStateOf(setOf<String>()) }
 
     var showNewFolder by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<File?>(null) }
@@ -173,9 +177,15 @@ fun BrowserScreen(
 
     LaunchedEffect(query, searchActive, showHidden, currentDir) {
         if (!searchActive || query.isBlank()) { searchResults = null; return@LaunchedEffect }
-        delay(400)
+        delay(300)
         val base = currentDir ?: roots.first().file
-        searchResults = searchFiles(base, query, showHidden)
+        formatFilter = emptySet()
+        searchResults = emptyList(); searchProgress = 0f; searching = true
+        try {
+            searchFilesProgressive(base, query, showHidden) { found, p, where ->
+                searchResults = found; searchProgress = p; searchWhere = where
+            }
+        } finally { searching = false }
     }
 
     fun refresh() { refreshKey++ }
@@ -230,7 +240,8 @@ fun BrowserScreen(
         }
     }
 
-    val shownFiles = searchResults ?: files
+    val formatCounts = remember(searchResults) { searchResults?.let { formatGroups(it) }.orEmpty() }
+    val shownFiles = searchResults?.let { r -> if (formatFilter.isEmpty()) r else r.filter { formatKey(it) in formatFilter } } ?: files
 
     if (skin.isRetro && currentDir == null && !searchActive) {
         XpDesktop(
@@ -449,10 +460,14 @@ fun BrowserScreen(
                         if (searchResults == null && dir != null) {
                             PathBar(dir, roots, onNavigate = { goTo(it) })
                         }
+                        if (searchResults != null) {
+                            SearchStatusBar(searching, searchProgress, searchWhere, searchResults?.size ?: 0)
+                            FormatChips(formatCounts, searchResults?.size ?: 0, formatFilter) { formatFilter = it }
+                        }
                         if (shownFiles.isEmpty()) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text(
-                                    if (searchResults != null) "Sin resultados" else "Carpeta vacía",
+                                    if (searchResults != null) (if (searching) "Buscando…" else "Sin resultados") else "Carpeta vacía",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }

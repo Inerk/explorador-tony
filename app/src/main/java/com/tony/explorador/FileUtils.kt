@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -153,6 +154,48 @@ suspend fun searchFiles(root: File, query: String, showHidden: Boolean, limit: I
             }
         results
     }
+
+/**
+ * Búsqueda por nombre en segundo plano, como Windows: va entregando lo que encuentra
+ * poco a poco, con cuánto lleva (0..1) y en qué carpeta anda.
+ */
+suspend fun searchFilesProgressive(
+    root: File, query: String, showHidden: Boolean, limit: Int = 3000,
+    onUpdate: (results: List<File>, progress: Float, where: String) -> Unit,
+) = withContext(Dispatchers.IO) {
+    val q = query.trim().lowercase(Locale.ROOT)
+    if (q.isEmpty()) return@withContext
+    val results = ArrayList<File>()
+    var lastPost = 0L
+    fun visible(f: File) = showHidden || !f.name.startsWith(".")
+    suspend fun post(p: Float, where: String, force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (force || now - lastPost > 120) {
+            lastPost = now
+            val snap = results.toList()
+            withContext(Dispatchers.Main) { onUpdate(snap, p, where) }
+        }
+    }
+    val top = root.listFiles()?.filter { visible(it) }.orEmpty()
+    top.filter { it.name.lowercase(Locale.ROOT).contains(q) }.let { results.addAll(it) }
+    val dirs = top.filter { it.isDirectory }.sortedBy { it.name.lowercase(Locale.ROOT) }
+    post(0f, root.name, force = true)
+    for ((i, d) in dirs.withIndex()) {
+        ensureActive()
+        if (results.size >= limit) break
+        val base = i.toFloat() / dirs.size.coerceAtLeast(1)
+        d.walkTopDown().onEnter { visible(it) }.forEach { f ->
+            if (results.size >= limit) return@forEach
+            if (f != d && visible(f) && f.name.lowercase(Locale.ROOT).contains(q)) results.add(f)
+            if (f.isDirectory) {
+                ensureActive()
+                post(base, f.name)
+            }
+        }
+        post((i + 1f) / dirs.size, d.name)
+    }
+    post(1f, "", force = true)
+}
 
 fun folderItemCount(dir: File, showHidden: Boolean): Int =
     dir.list()?.count { showHidden || !it.startsWith(".") } ?: 0
