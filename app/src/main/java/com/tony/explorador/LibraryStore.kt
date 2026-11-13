@@ -356,7 +356,7 @@ object LibraryStore {
                     val path = c.getString(0) ?: continue
                     if (prefixes.none { path.startsWith(it) }) continue
                     val f = File(path)
-                    if (!f.isFile || f.kind() != FileKind.VIDEO) continue
+                    if (!f.isFile || f.kind() != FileKind.VIDEO || f.name.contains(".animada.", true)) continue
                     byPath[path] = Song(
                         path = path,
                         title = c.getString(1)?.takeIf { it.isNotBlank() } ?: f.nameWithoutExtension,
@@ -377,7 +377,8 @@ object LibraryStore {
                 if (!f.isFile) return@forEach
                 val ext = f.extension.lowercase(Locale.ROOT)
                 if (ext == "m3u" || ext == "m3u8") lists.add(f)
-                else if ((f.kind() == FileKind.AUDIO || f.kind() == FileKind.VIDEO) && !byPath.containsKey(f.absolutePath)) {
+                else if ((f.kind() == FileKind.AUDIO || f.kind() == FileKind.VIDEO) && !byPath.containsKey(f.absolutePath) &&
+                    !f.name.contains(".animada.", true)) {
                     byPath[f.absolutePath] = Song(f.absolutePath, f.nameWithoutExtension, UNKNOWN_ARTIST, UNKNOWN_ALBUM, 0L)
                 }
             }

@@ -436,6 +436,7 @@ fun MusicPlayerScreen(
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
                                     animated = animatedCover,
+                                    syncPlayer = player,
                                     pairToggle = pairPath?.let { other -> {
                                         // cambia entre la canción (carátula) y su video, en el mismo segundo
                                         val i = player.currentMediaItemIndex
@@ -650,6 +651,7 @@ private fun CoverArt(
     video: Player?,
     animated: java.io.File? = null,
     pairToggle: (() -> Unit)? = null,
+    syncPlayer: Player? = null,
     overlayLyric: String? = null,
     playing: Boolean,
     accent: Color,
@@ -760,7 +762,7 @@ private fun CoverArt(
         else if (animated != null && motion) Box(Modifier.fillMaxSize()) {
             // carátula animada encima de la normal (así no se ve negro mientras arranca)
             cover?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-            AnimatedCoverView(animated, playing, Modifier.fillMaxSize())
+            AnimatedCoverView(animated, playing, Modifier.fillMaxSize(), sync = syncPlayer)
         }
         else Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
             if (bmp != null) {
@@ -785,7 +787,7 @@ private fun CoverArt(
                     .padding(start = 54.dp, end = 54.dp, top = 34.dp, bottom = 16.dp)
             )
         }
-        if ((video != null || animated != null || pairToggle != null) && collapse < 0.3f) {
+        if ((video != null || pairToggle != null) && collapse < 0.3f) {
             Box(
                 Modifier.align(Alignment.BottomStart).padding(10.dp).size(38.dp)
                     .graphicsLayer { alpha = 1f - collapse / 0.3f }
@@ -800,8 +802,11 @@ private fun CoverArt(
             }
         }
         // estrella diamante: esta canción tiene carátula animada
-        if (animated != null && collapse < 0.3f) {
-            DiamondStar(30.dp, Modifier.align(Alignment.TopEnd).padding(10.dp).graphicsLayer { alpha = 1f - collapse / 0.3f }, backdrop = true)
+        // el diamante es también el botón: carátula animada ↔ carátula fija
+        if (animated != null && video == null && collapse < 0.3f) {
+            DiamondStar(34.dp, Modifier.align(Alignment.TopEnd).padding(10.dp)
+                .graphicsLayer { alpha = (1f - collapse / 0.3f) * (if (MotionPref.on) 1f else 0.45f) }
+                .clip(CircleShape).clickable { MotionPref.on = !MotionPref.on }, backdrop = true)
         }
         // ⋮ abajo a la derecha de la portada (se esconde al encogerse)
         if (collapse < 0.3f) {

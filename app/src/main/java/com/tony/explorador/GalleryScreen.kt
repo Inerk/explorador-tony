@@ -120,6 +120,7 @@ private suspend fun loadMediaStore(context: Context, videos: Boolean): List<Gall
             val iDur = if (videos) c.getColumnIndex(MediaStore.MediaColumns.DURATION) else -1
             while (c.moveToNext()) {
                 val path = c.getString(iData) ?: continue
+                if (path.contains(".animada.", true)) continue   // carátulas animadas: van con la música, no aquí
                 val taken = c.getLong(iTaken)
                 out.add(
                     GalleryItem(

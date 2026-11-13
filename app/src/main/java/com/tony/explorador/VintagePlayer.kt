@@ -224,6 +224,7 @@ fun VintagePlayerScreen(
                         video = if (isVideoPath(path)) player else null,
                         animated = animatedCover,
                         playing = player.isPlaying,
+                        syncPlayer = player,
                     )
                     RecordCrate(
                         player = player, total = remainingCount(player),
@@ -867,6 +868,7 @@ private fun JacketAndNote(
     video: androidx.media3.common.Player? = null,
     animated: java.io.File? = null,
     playing: Boolean = true,
+    syncPlayer: androidx.media3.common.Player? = null,
 ) {
     val noteOut = remember { Animatable(1f) }
     var shownTitle by remember { mutableStateOf(title) }
@@ -895,7 +897,7 @@ private fun JacketAndNote(
                 // un video se ve en la funda como a través de un cristal
                 VideoGlass(video, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
             } else if (animated != null) {
-                AnimatedCoverView(animated, playing, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)))
+                AnimatedCoverView(animated, playing, Modifier.fillMaxSize().clip(RoundedCornerShape(2.dp)), sync = syncPlayer)
                 Image(androidx.compose.ui.res.painterResource(R.drawable.vt_jacket), null,
                     modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.18f })
             } else if (cover != null) {
