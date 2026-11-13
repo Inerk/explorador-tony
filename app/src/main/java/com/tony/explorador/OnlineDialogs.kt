@@ -289,6 +289,13 @@ fun LyricsSearchDialog(path: String, accent: Color, onDismiss: () -> Unit) {
     var picked by remember { mutableStateOf<LyricsResult?>(null) }
     var saving by remember { mutableStateOf(false) }
     var filled by remember { mutableStateOf(false) }
+    val lrcPicker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            val msg = LyricsLocal.importFrom(context, uri, path)
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            if (msg.startsWith("Letra puesta")) onDismiss()
+        }
+    }
 
     fun search() {
         if (track.isBlank() && artist.isBlank()) return
@@ -359,6 +366,9 @@ fun LyricsSearchDialog(path: String, accent: Color, onDismiss: () -> Unit) {
                             }
                         }
                     }
+                    Text("📂 Usar un archivo .lrc de mi teléfono", color = accent, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                        modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(50))
+                            .clickable { lrcPicker.launch("*/*") }.padding(horizontal = 14.dp, vertical = 8.dp))
                     Text("Letras de LRCLIB (lrclib.net)", color = Color.White.copy(alpha = 0.35f), fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(6.dp))
                 }

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -171,6 +172,7 @@ private sealed interface LibPage {
     data object MusicVideos : LibPage
     data object Nas : LibPage
     data object AnimatedCoversP : LibPage
+    data object LyricsP : LibPage
 }
 
 @Composable
@@ -225,6 +227,7 @@ fun LibraryScreen(
         LibraryStore.scan()
         if (CoverScanner.auto) CoverScanner.start()
         if (AnimatedScanner.auto) AnimatedScanner.start()
+        if (LyricsLocal.auto) LyricsLocal.start()
     }
     val libGoTo: (String, String) -> Unit = { kind, value ->
         when (kind) {
@@ -375,6 +378,7 @@ fun LibraryScreen(
                 LibPage.MusicVideos -> SongList(allSongs.filter { isVideoPath(it.path) }, onPlay, onAdd = { addTo = it }, alphabet = true,
                     empty = "No hay videos musicales.\nPon tus videos dentro de alguna de tus “Carpetas de música”\ny toca ⟳ para volver a buscar.")
                 LibPage.AnimatedCoversP -> AnimatedCoversPage()
+                LibPage.LyricsP -> LyricsLocalPage()
             }
             }
             }
@@ -445,6 +449,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.MusicVideos -> "Videos musicales"
     LibPage.Nas -> "Sincronizar con NAS"
     LibPage.AnimatedCoversP -> "Carátulas animadas"
+    LibPage.LyricsP -> "Letras"
 }
 
 // ───────── Menú principal ─────────
@@ -466,6 +471,7 @@ private fun MainMenu(songCount: Int, onOpen: (LibPage) -> Unit, current: LibPage
         Entry("Carátulas en internet", if (CoverScanner.running) "…" else CoverScanner.found.size.takeIf { it > 0 }?.toString() ?: "",
             Icons.Filled.ImageSearch, Retro.Red, LibPage.Covers),
         Entry("Carátulas animadas", if (AnimatedScanner.running) "…" else "", Icons.Filled.AutoAwesome, Retro.Teal, LibPage.AnimatedCoversP),
+        Entry("Letras", if (LyricsLocal.running) "…" else "", Icons.Filled.Lyrics, Retro.Pink, LibPage.LyricsP),
         Entry("Sincronizar con NAS", if (NasSync.running) "…" else "", Icons.Filled.CloudSync, Retro.Blue, LibPage.Nas),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, Retro.Purple, LibPage.Menu),
     )
@@ -1516,5 +1522,40 @@ private fun NasPage() {
     }
     if (picking) FolderWindow("Carpeta de música en el teléfono", "Usar esta carpeta", java.io.File(NasSync.localFolder), { picking = false }) {
         NasSync.localFolder = it.absolutePath; NasSync.saveSettings(); picking = false
+    }
+}
+
+
+/** Letras sueltas en el teléfono: se buscan y se mueven junto a su canción. */
+@Composable
+private fun LyricsLocalPage() {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Retro.Panel).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Búsqueda automática", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Busca archivos .lrc en Descargas, Documentos, Música y tus carpetas de música, ve de qué canción son " +
+                            "y los mueve junto a ella con su mismo nombre. Si la canción ya tenía la misma letra, la copia repetida va a la Papelera.",
+                            color = Retro.SubText, fontSize = 13.sp)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = LyricsLocal.auto, onCheckedChange = { LyricsLocal.changeAuto(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Retro.Orange, checkedThumbColor = Retro.OnAccent)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                if (LyricsLocal.running) LinearProgressIndicator(Modifier.fillMaxWidth(), color = Retro.Orange, trackColor = Retro.Bg)
+                else RetroButton("Buscar letras en mi teléfono", Icons.Filled.Lyrics, Modifier.fillMaxWidth()) { LyricsLocal.start() }
+                if (LyricsLocal.status.isNotBlank()) Text(LyricsLocal.status, color = Retro.SubText, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                Text("Cómo reconoce de qué canción es: el mismo nombre que el archivo de la canción, «Título Artista», o lo que diga dentro del .lrc ([ti:] y [ar:]). " +
+                    "Si la canción tenía una letra sin tiempos y la nueva sí trae tiempos, se queda la nueva.",
+                    color = Retro.SubText, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
+            }
+        }
+        items(LyricsLocal.moved.toList()) { (song, file) ->
+            Text("🎤 $song  ←  $file", color = Retro.Text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 6.dp))
+        }
     }
 }

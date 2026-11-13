@@ -285,6 +285,7 @@ fun AppRoot() {
         kotlinx.coroutines.delay(20_000)
         if (CoverScanner.auto && LibraryStore.songs.isNotEmpty()) CoverScanner.start()
         if (AnimatedScanner.auto && LibraryStore.songs.isNotEmpty()) AnimatedScanner.start()
+        if (LyricsLocal.auto && LibraryStore.songs.isNotEmpty()) LyricsLocal.start()
     }
 
     Box(Modifier.fillMaxSize()) {

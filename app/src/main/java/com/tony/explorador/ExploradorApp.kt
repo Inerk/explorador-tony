@@ -22,6 +22,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         LibraryStore.init(this)
         Trash.init(this)
         NasSync.init(this)
+        LyricsLocal.init(this)
         PhotoText.init(this)
         AnimatedCovers.init(this)
         CoverScanner.init(this)

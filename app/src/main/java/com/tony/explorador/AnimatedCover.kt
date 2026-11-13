@@ -387,7 +387,12 @@ object AnimatedScanner {
                     ?: byTitle.entries.firstOrNull { (k, _) -> k.isNotBlank() && (k.contains(base) || base.contains(k)) }?.value?.firstOrNull()
                     ?: return@forEach
                 val dest = AnimatedCovers.besideSong(song.path)
-                if (dest.absolutePath == v.absolutePath || dest.exists()) return@forEach
+                if (dest.absolutePath == v.absolutePath) return@forEach
+                if (dest.exists()) {
+                    // ya la tenía: si es el mismo archivo, la copia sobra
+                    if (dest.length() == v.length()) Trash.moveToTrash(listOf(v))
+                    return@forEach
+                }
                 AnimatedCovers.hiddenDir(song.path)
                 val ok = v.renameTo(dest) || runCatching { v.copyTo(dest); v.delete(); true }.getOrDefault(false)
                 if (ok) {
