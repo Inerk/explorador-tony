@@ -77,7 +77,7 @@ fun ExploradorTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     androidx.compose.runtime.SideEffect { XpColors.systemDark = dark }
-    val C = androidx.compose.ui.graphics.Color
+    fun C(v: Long) = androidx.compose.ui.graphics.Color(v)
     val scheme = when {
         LibraryStore.theme == AppTheme.XP && XpColors.dark -> darkColorScheme(
             primary = C(0xFFB99CFF), onPrimary = C(0xFF1A1145),
