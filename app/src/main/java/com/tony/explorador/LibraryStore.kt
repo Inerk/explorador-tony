@@ -164,6 +164,11 @@ object LibraryStore {
         } finally { metaLoading = false }
     }
 
+    /** Panel del explorador: "" apagado, "preview" vista previa, "details" detalles. */
+    var previewPane by mutableStateOf("")
+        private set
+    fun changePreviewPane(v: String) { previewPane = v; save() }
+
     /** Listas que se esconden del menú de la Biblioteca. */
     var hiddenLists by mutableStateOf(setOf<String>())
         private set
@@ -555,6 +560,7 @@ object LibraryStore {
             put("songView", songView)
             put("seekStyle", seekStyle)
             put("hiddenLists", hiddenLists.joinToString(","))
+            put("previewPane", previewPane)
             put("galleryView", galleryView)
             put("videoView", videoView)
             put("galleryFolders", JSONArray(galleryFolders.toList()))
@@ -593,6 +599,7 @@ object LibraryStore {
         lyricsPlace = o.optString("lyricsPlace", if (o.optBoolean("lyricsOverCover", false)) "over" else "below")
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("seekStyle").takeIf { it.isNotBlank() }?.let { seekStyle = it }
+        previewPane = o.optString("previewPane", "")
         hiddenLists = o.optString("hiddenLists").split(',').filter { it.isNotBlank() }.toSet()
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }

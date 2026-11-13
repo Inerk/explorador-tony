@@ -113,7 +113,7 @@ fun FilePreview(file: File, kind: FileKind, iconSize: Dp, modifier: Modifier = M
                 val thumb by produceState<android.graphics.Bitmap?>(null, file) { value = loadThumb(file.absolutePath) }
                 val t = thumb
                 if (t != null) Image(remember(t) { t.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                else Icon(fileIcon(file, kind), null, tint = fileColor(file, kind), modifier = Modifier.size(iconSize))
+                else FriendlyIcon(file, kind, iconSize)
             }
             richPdf && file.isPdf() -> {
                 val page by produceState<android.graphics.Bitmap?>(null, file) { value = loadPdfThumb(file) }
@@ -123,9 +123,9 @@ fun FilePreview(file: File, kind: FileKind, iconSize: Dp, modifier: Modifier = M
                         alignment = Alignment.TopCenter, modifier = Modifier.fillMaxSize().background(Color.White))
                     Icon(Icons.Filled.PictureAsPdf, null, tint = Color(0xFFD32F2F),
                         modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp).size(22.dp))
-                } else Icon(fileIcon(file, kind), null, tint = fileColor(file, kind), modifier = Modifier.size(iconSize))
+                } else FriendlyIcon(file, kind, iconSize)
             }
-            else -> Icon(fileIcon(file, kind), null, tint = fileColor(file, kind), modifier = Modifier.size(iconSize))
+            else -> FriendlyIcon(file, kind, iconSize)
         }
     }
 }
@@ -143,7 +143,7 @@ private fun SelectedMark(selected: Boolean) {
 @Composable
 fun CompactFileList(
     files: List<File>, selection: Set<File>, state: LazyListState,
-    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {},
+    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {}, focused: File? = null,
 ) {
     LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
         items(files, key = { it.absolutePath }) { file ->
@@ -151,13 +151,13 @@ fun CompactFileList(
             val selected = file in selection
             Row(
                 Modifier.fillMaxWidth()
-                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else if (file == focused) ExpTheme.crumbBg else Color.Transparent)
                     .combinedClickable(onClick = { onClick(file) }, onLongClick = { onLongClick(file) })
                     .padding(horizontal = 14.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(if (selected) Icons.Filled.CheckCircle else fileIcon(file, kind), null,
-                    tint = if (selected) MaterialTheme.colorScheme.primary else fileColor(file, kind), modifier = Modifier.size(22.dp))
+                if (selected) Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+                else FriendlyIcon(file, kind, 28.dp)
                 Spacer(Modifier.width(12.dp))
                 Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 val info by produceState("", file) {
@@ -176,7 +176,7 @@ fun CompactFileList(
 @Composable
 fun FileGrid(
     files: List<File>, selection: Set<File>, big: Boolean, showHidden: Boolean, state: LazyGridState,
-    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {},
+    onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {}, focused: File? = null,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(if (big) 160.dp else 92.dp),
@@ -191,7 +191,7 @@ fun FileGrid(
             val selected = file in selection
             Column(
                 Modifier.clip(RoundedCornerShape(12.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else if (file == focused) ExpTheme.crumbBg else Color.Transparent)
                     .combinedClickable(onClick = { onClick(file) }, onLongClick = { onLongClick(file) })
                     .padding(if (big) 6.dp else 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally

@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.SdStorage
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -154,6 +155,8 @@ fun BrowserScreen(
     var query by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<File>?>(null) }
     var archiveFile by remember { mutableStateOf<File?>(null) }
+    var focused by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
+    var paneFrac by remember { mutableStateOf(0.42f) }
     var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var searchProgress by remember { mutableStateOf(0f) }
@@ -194,6 +197,7 @@ fun BrowserScreen(
     fun refresh() { refreshKey++ }
     fun goTo(dir: File?) {
         currentDir = dir
+        focused = null
         selection = emptySet()
         searchActive = false
         query = ""
@@ -335,13 +339,13 @@ fun BrowserScreen(
                         )
                     }
                 )
-                else -> Box(if (skin.titleBar != null) Modifier.background(skin.titleBar) else Modifier) { TopAppBar(
-                    colors = if (skin.titleBar != null) TopAppBarDefaults.topAppBarColors(
+                else -> Box(Modifier.background(ExpTheme.bar)) { TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White,
-                        actionIconContentColor = Color.White,
-                    ) else TopAppBarDefaults.topAppBarColors(),
+                        titleContentColor = ExpTheme.onBar,
+                        navigationIconContentColor = ExpTheme.onBar,
+                        actionIconContentColor = ExpTheme.onBar,
+                    ),
                     navigationIcon = {
                         if (currentDir != null) {
                             IconButton(onClick = { if (isRoot) goTo(null) else goTo(currentDir?.parentFile) }) {
@@ -350,21 +354,30 @@ fun BrowserScreen(
                         }
                     },
                     title = {
-                        Text(
-                            when {
-                                currentDir == null -> "Explorador Tony"
-                                isRoot -> roots.first { it.file.absolutePath == currentDir?.absolutePath }.name
-                                else -> currentDir!!.name
-                            },
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
+                        // dentro de una carpeta, dónde estás ya lo dice la cinta de abajo
+                        if (currentDir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
                     },
                     actions = {
-                        if (currentDir != null) {
-                            IconButton(onClick = { goTo(null) }) { Icon(Icons.Filled.Home, "Inicio") }
-                        }
                         IconButton(onClick = { searchActive = true }) { Icon(Icons.Filled.Search, "Buscar") }
                         if (currentDir != null) {
+                            // vista previa / detalles, como el panel de Windows
+                            var paneMenu by remember { mutableStateOf(false) }
+                            val paneOn = LibraryStore.previewPane.isNotEmpty()
+                            Box {
+                                Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (paneOn) ExpTheme.onBar else ExpTheme.crumbBg)
+                                    .clickable { paneMenu = true }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.VerticalSplit, null, tint = if (paneOn) Color.White else ExpTheme.onBar, modifier = Modifier.size(18.dp))
+                                    Text(" Vista previa", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (paneOn) Color.White else ExpTheme.onBar)
+                                }
+                                DropdownMenu(expanded = paneMenu, onDismissRequest = { paneMenu = false }) {
+                                    listOf("preview" to "Panel de vista previa", "details" to "Panel de detalles", "" to "Sin panel").forEach { (id, label) ->
+                                        DropdownMenuItem(text = { Text(label, fontWeight = if (LibraryStore.previewPane == id) FontWeight.Bold else null) },
+                                            onClick = { LibraryStore.changePreviewPane(id); paneMenu = false })
+                                    }
+                                }
+                            }
                             var viewMenu by remember { mutableStateOf(false) }
                             val view = ExplorerView.of(LibraryStore.explorerView)
                             IconButton(onClick = { viewMenu = true }) { Icon(view.icon, "Vista") }
@@ -475,7 +488,7 @@ fun BrowserScreen(
                     Column(Modifier.fillMaxSize()) {
                         val dir = currentDir
                         if (searchResults == null && dir != null) {
-                            PathBar(dir, roots, onNavigate = { goTo(it) })
+                            ExplorerCrumbs(dir, roots, onNavigate = { goTo(it) })
                         }
                         if (searchResults != null) {
                             SearchStatusBar(searching, searchProgress, searchWhere, searchResults?.size ?: 0)
@@ -492,8 +505,11 @@ fun BrowserScreen(
                             val listState = rememberLazyListState()
                             val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
                             LaunchedEffect(currentDir) { listState.scrollToItem(0); gridState.scrollToItem(0) }
+                            val paneOn = LibraryStore.previewPane.isNotEmpty() && searchResults == null
                             val clickFile: (File) -> Unit = { file ->
                                 if (selection.isNotEmpty()) toggleSelect(file)
+                                // con el panel: el primer toque lo muestra, el segundo lo abre (como doble clic)
+                                else if (paneOn && !file.isDirectory && focused != file) focused = file
                                 else if (searchResults != null) {
                                     // leer la carpeta del resultado en segundo plano (en el hilo principal congelaba la app)
                                     scope.launch {
@@ -504,15 +520,16 @@ fun BrowserScreen(
                                     }
                                 } else openFile(file, shownFiles)
                             }
+                            val filesView: @Composable () -> Unit = {
                             when (ExplorerView.of(LibraryStore.explorerView)) {
-                                ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
-                                ExplorerView.GRID -> FileGrid(shownFiles, selection, big = false, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
-                                ExplorerView.BIG -> FileGrid(shownFiles, selection, big = true, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it })
+                                ExplorerView.COMPACT -> CompactFileList(shownFiles, selection, listState, clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it }, focused = if (paneOn) focused else null)
+                                ExplorerView.GRID -> FileGrid(shownFiles, selection, big = false, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it }, focused = if (paneOn) focused else null)
+                                ExplorerView.BIG -> FileGrid(shownFiles, selection, big = true, showHidden = showHidden, state = gridState, onClick = clickFile, onLongClick = { toggleSelect(it) }, onMenu = { menuFile = it }, focused = if (paneOn) focused else null)
                                 ExplorerView.LIST -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                                 items(shownFiles, key = { it.absolutePath }) { file ->
                                     FileRow(
                                         file = file,
-                                        selected = file in selection,
+                                        selected = file in selection || (paneOn && file == focused),
                                         showPath = searchResults != null,
                                         showHidden = showHidden,
                                         onClick = { clickFile(file) },
@@ -520,6 +537,25 @@ fun BrowserScreen(
                                         onMenu = { menuFile = file }
                                     )
                                 }
+                                }
+                            }
+                            }
+                            if (!paneOn) filesView()
+                            else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                                val wide = maxWidth > maxHeight
+                                val totalPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (wide) maxWidth else maxHeight).toPx() }
+                                val pane: @Composable (Modifier) -> Unit = { m ->
+                                    PreviewPane(focused, currentDir, LibraryStore.previewPane, onMode = { LibraryStore.changePreviewPane(it) },
+                                        onOpen = { f -> openFile(f, shownFiles) }, onClose = { LibraryStore.changePreviewPane("") }, modifier = m)
+                                }
+                                if (wide) Row(Modifier.fillMaxSize()) {
+                                    Box(Modifier.weight(1f - paneFrac).fillMaxHeight()) { filesView() }
+                                    PaneHandle(false) { d -> paneFrac = (paneFrac - d / totalPx).coerceIn(0.25f, 0.7f) }
+                                    pane(Modifier.weight(paneFrac).fillMaxHeight())
+                                } else Column(Modifier.fillMaxSize()) {
+                                    Box(Modifier.weight(1f - paneFrac).fillMaxWidth()) { filesView() }
+                                    PaneHandle(true) { d -> paneFrac = (paneFrac - d / totalPx).coerceIn(0.2f, 0.75f) }
+                                    pane(Modifier.weight(paneFrac).fillMaxWidth())
                                 }
                             }
                         }
@@ -831,7 +867,7 @@ private fun FileRow(
                 }
                 FileKind.AUDIO -> FilePreview(file, kind, 32.dp, Modifier.fillMaxSize())
                 else -> if (file.isPdf()) FilePreview(file, kind, 32.dp, Modifier.fillMaxSize(), richPdf = true)
-                    else Icon(fileIcon(file, kind), null, modifier = Modifier.size(32.dp), tint = fileColor(file, kind))
+                    else FriendlyIcon(file, kind, 40.dp)
             }
             if (selected) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)))
