@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -47,6 +47,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.PLAYER -> drawPlayer()
             XpIconKind.GALLERY -> drawGallery()
             XpIconKind.VIDEO_PLAYER -> drawVideoPlayer()
+            XpIconKind.TRASH -> drawTrash()
         }
     }
 }
@@ -358,4 +359,35 @@ private fun DrawScope.drawVideoPlayer() {
     drawPath(tri, Color.White)
     drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent), startY = c.y - r, endY = c.y),
         Offset(c.x - r * 0.62f, c.y - r * 0.92f), Size(r * 1.24f, r * 0.8f))
+}
+
+/** Papelera: bote translúcido con tapa y papeles adentro. */
+private fun DrawScope.drawTrash() {
+    val w = size.width
+    val h = size.height
+    // papeles arrugados asomando
+    drawCircle(Color(0xFFFDFDFD), w * 0.13f, Offset(w * 0.4f, h * 0.3f))
+    drawCircle(Color(0xFFE8ECF5), w * 0.11f, Offset(w * 0.58f, h * 0.27f))
+    drawCircle(Color(0xFFD6DCEB), w * 0.09f, Offset(w * 0.5f, h * 0.36f))
+    // cuerpo del bote (más angosto abajo)
+    val body = Path().apply {
+        moveTo(w * 0.2f, h * 0.34f); lineTo(w * 0.8f, h * 0.34f)
+        lineTo(w * 0.7f, h * 0.88f); lineTo(w * 0.3f, h * 0.88f); close()
+    }
+    drawPath(body, Brush.horizontalGradient(listOf(Color(0xFF8FA2C8), Color(0xFFDDE6FA), Color(0xFF9FB0D6), Color(0xFF6F82AD)),
+        startX = w * 0.2f, endX = w * 0.8f))
+    drawPath(body, Color(0xFF4A5A85), style = Stroke(w * 0.02f))
+    // costillas
+    for (i in 0..3) {
+        val t = 0.3f + i * 0.133f
+        drawLine(Color(0xFF4A5A85).copy(alpha = 0.55f), Offset(w * (0.2f + t * 0.6f) + (0.5f - t) * w * 0.05f, h * 0.4f),
+            Offset(w * (0.3f + t * 0.4f), h * 0.84f), w * 0.02f)
+    }
+    // aro de arriba
+    drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFF2F6FF), Color(0xFF8FA2C8)), startY = h * 0.3f, endY = h * 0.39f),
+        Offset(w * 0.16f, h * 0.3f), Size(w * 0.68f, h * 0.085f), CornerRadius(w * 0.04f))
+    drawRoundRect(Color(0xFF4A5A85), Offset(w * 0.16f, h * 0.3f), Size(w * 0.68f, h * 0.085f), CornerRadius(w * 0.04f), style = Stroke(w * 0.015f))
+    // flechitas de reciclaje (un triángulo verde)
+    val tri = Path().apply { moveTo(w * 0.5f, h * 0.52f); lineTo(w * 0.59f, h * 0.68f); lineTo(w * 0.41f, h * 0.68f); close() }
+    drawPath(tri, Color(0xFF3FAE5A), style = Stroke(w * 0.035f))
 }

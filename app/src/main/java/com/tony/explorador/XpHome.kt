@@ -134,11 +134,14 @@ fun XpDesktop(
         add(DeskApp("panel", "Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
         add(DeskApp("explorer", "Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) })
         add(DeskApp("updates", "Actualizar", XpIconKind.DRIVE) { onCheckUpdates() })
+        add(DeskApp("trash", "Papelera", XpIconKind.TRASH) { AppNav.openTrash() })
     }
     LaunchedEffect(Unit) {
         LibraryStore.ensureDesktopDefaults(
-            listOf("mypc", "sd", "docs", "music", "pictures", "camera", "videos", "downloads", "panel").filter { it in apps }
+            listOf("mypc", "sd", "docs", "music", "pictures", "camera", "videos", "downloads", "panel", "trash").filter { it in apps }
         )
+        // a quien ya tenía la app se le agrega el icono de la Papelera una sola vez
+        if (!Trash.iconAdded) { LibraryStore.setDesktopVisible("trash", true); Trash.markIconAdded() }
     }
 
     // Botones de la barra de tareas (uno por ventana abierta)

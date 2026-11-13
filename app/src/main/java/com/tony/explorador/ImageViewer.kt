@@ -52,7 +52,7 @@ fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
-            ZoomableImage(files[page], onTap = { showBar = !showBar }, onSwipeUp = { infoOpen = true })
+            ZoomableImage(files[page], onTap = { showBar = !showBar }, onSwipeUp = { infoOpen = true }, onSwipeDown = onClose)
         }
         if (showBar) {
             Row(
@@ -86,7 +86,9 @@ fun ImageViewerScreen(files: List<File>, startIndex: Int, onClose: () -> Unit, o
 }
 
 @Composable
-private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit = {}) {
+private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit = {}, onSwipeDown: () -> Unit = {}) {
+    // mientras jalas la foto hacia abajo te sigue el dedo y se va encogiendo
+    var pull by remember { mutableFloatStateOf(0f) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
@@ -108,7 +110,10 @@ private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit =
                         val event = awaitPointerEvent()
                         val multiTouch = event.changes.count { it.pressed } > 1
                         if (multiTouch || scale > 1f) single = false
-                        else event.changes.firstOrNull()?.let { c -> val p = c.position - c.previousPosition; dx += p.x; dy += p.y }
+                        else event.changes.firstOrNull()?.let { c ->
+                            val p = c.position - c.previousPosition; dx += p.x; dy += p.y
+                            pull = if (dy > 0f && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.2f) dy else 0f
+                        }
                         if (multiTouch || scale > 1f) {
                             val zoom = event.calculateZoom()
                             val pan = event.calculatePan()
@@ -126,6 +131,8 @@ private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit =
                     } while (event.changes.any { it.pressed })
                     // un dedo, hacia arriba y casi vertical → información
                     if (single && dy < -140f && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.5f) onSwipeUp()
+                    // hacia abajo → cerrar y volver a la galería
+                    if (single && dy > 170f && kotlin.math.abs(dy) > kotlin.math.abs(dx) * 1.2f) onSwipeDown() else pull = 0f
                 }
             },
         contentAlignment = Alignment.Center
@@ -138,7 +145,12 @@ private fun ZoomableImage(file: File, onTap: () -> Unit, onSwipeUp: () -> Unit =
                 scaleX = scale
                 scaleY = scale
                 translationX = offset.x
-                translationY = offset.y
+                translationY = offset.y + pull
+                if (pull > 0f) {
+                    val k = (1f - pull / (size.height * 1.6f)).coerceIn(0.6f, 1f)
+                    scaleX = scale * k; scaleY = scale * k
+                    alpha = (1f - pull / size.height).coerceIn(0.3f, 1f)
+                }
             }
         )
     }

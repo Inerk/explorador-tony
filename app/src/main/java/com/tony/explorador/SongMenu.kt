@@ -211,17 +211,17 @@ fun SongMenuWindow(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("¿Eliminar canción?") },
-            text = { Text("Se borrará el archivo \"${File(path).name}\" del teléfono. No se puede deshacer.") },
+            text = { Text("\"${File(path).name}\" se va a la Papelera. Desde ahí la puedes restaurar.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     scope.launch {
-                        val ok = withContext(Dispatchers.IO) { runCatching { File(path).delete() }.getOrDefault(false) }
+                        val ok = Trash.moveToTrash(listOf(File(path))) == 1
                         if (ok) {
                             LibraryStore.removeSong(path)
                             onDeleted()
                         }
-                        Toast.makeText(context, if (ok) "Canción eliminada" else "No se pudo eliminar", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, if (ok) "Canción enviada a la papelera" else "No se pudo eliminar", Toast.LENGTH_SHORT).show()
                     }
                 }) { Text("Eliminar", color = Color(0xFFFF6B5E)) }
             },

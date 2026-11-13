@@ -555,15 +555,15 @@ fun BrowserScreen(
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("¿Eliminar ${toDelete.size} elemento(s)?") },
-            text = { Text("Se borran para siempre, no van a una papelera.") },
+            text = { Text("Se van a la Papelera. Desde ahí los puedes restaurar o borrar para siempre.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     scope.launch {
-                        val n = deleteAll(toDelete)
+                        val n = Trash.moveToTrash(toDelete)
                         selection = emptySet()
                         refresh()
-                        snackbar.showSnackbar(if (n == toDelete.size) "Eliminados: $n" else "Se eliminaron $n de ${toDelete.size}")
+                        snackbar.showSnackbar(if (n == toDelete.size) "Enviados a la papelera: $n" else "Se enviaron $n de ${toDelete.size} a la papelera")
                     }
                 }) { Text("Eliminar", color = MaterialTheme.colorScheme.error) }
             },

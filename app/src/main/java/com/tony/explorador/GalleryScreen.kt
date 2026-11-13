@@ -30,9 +30,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.PlayCircle
@@ -183,9 +187,13 @@ private fun MediaGalleryScreen(
     onPlayAsMusic: ((List<File>, Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    var longPressed by remember { mutableStateOf<Pair<List<GalleryItem>, GalleryItem>?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val selected = remember { mutableStateListOf<String>() }
+    var reload by remember { mutableIntStateOf(0) }
+    var pickFor by remember { mutableStateOf<String?>(null) }   // "copy" o "move"
+    var confirmTrash by remember { mutableStateOf(false) }
     val folders = (if (videos) LibraryStore.videoFolders else LibraryStore.galleryFolders).toList()
-    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(null, folders) {
+    val data by produceState<Pair<List<GalleryItem>, List<GalleryItem>>?>(null, folders, reload) {
         value = loadMedia(context, videos, folders)
     }
     var tab by remember { mutableIntStateOf(0) }
@@ -194,7 +202,9 @@ private fun MediaGalleryScreen(
     val listView = (if (videos) LibraryStore.videoView else LibraryStore.galleryView) == "list"
     val appName = if (videos) "Videos" else "Galería"
 
-    BackHandler { if (album != null) album = null else onClose() }
+    BackHandler { if (selected.isNotEmpty()) selected.clear() else if (album != null) album = null else onClose() }
+    fun toggle(item: GalleryItem) { if (item.path in selected) selected.remove(item.path) else selected.add(item.path) }
+    fun chosenFiles() = selected.map { File(it) }
 
     fun open(list: List<GalleryItem>, item: GalleryItem) {
         if (item.isVideo) {
@@ -210,7 +220,16 @@ private fun MediaGalleryScreen(
         Column(Modifier.fillMaxSize()) {
             Surface(tonalElevation = 3.dp) {
                 Column(Modifier.statusBarsPadding()) {
-                    Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { selected.clear() }) { Icon(Icons.Filled.Close, "Cancelar") }
+                        Text("${selected.size}", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        if (videos && onPlayAsMusic != null) IconButton(onClick = { val f = chosenFiles(); selected.clear(); onPlayAsMusic(f, 0) }) {
+                            Icon(Icons.Filled.LibraryMusic, "Reproducir como música") }
+                        IconButton(onClick = { shareFiles(context, chosenFiles()) }) { Icon(Icons.Filled.Share, "Compartir") }
+                        IconButton(onClick = { pickFor = "copy" }) { Icon(Icons.Filled.ContentCopy, "Copiar") }
+                        IconButton(onClick = { pickFor = "move" }) { Icon(Icons.AutoMirrored.Filled.DriveFileMove, "Mover") }
+                        IconButton(onClick = { confirmTrash = true }) { Icon(Icons.Filled.Delete, "Eliminar", tint = MaterialTheme.colorScheme.error) }
+                    } else Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { if (album != null) album = null else onClose() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás")
                         }
@@ -249,42 +268,36 @@ private fun MediaGalleryScreen(
                 }
                 album != null -> {
                     val list = items.filter { it.album == album }
-                    MediaItems(list, videos, listView, onClick = { open(list, it) }, onLongClick = { longPressed = list to it })
+                    MediaItems(list, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(list, it) }, onLongClick = { toggle(it) })
                 }
-                tab == 0 -> MediaItems(items, videos, listView, onClick = { open(items, it) }, onLongClick = { longPressed = items to it })
+                tab == 0 -> MediaItems(items, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(items, it) }, onLongClick = { toggle(it) })
                 else -> AlbumGrid(items, listView, onOpen = { album = it })
             }
         }
     }
 
-    longPressed?.let { (list, item) ->
-        AlertDialog(
-            onDismissRequest = { longPressed = null },
-            title = { Text(item.file.nameWithoutExtension, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            text = {
-                Column {
-                    if (videos && onPlayAsMusic != null) {
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                            longPressed = null
-                            onPlayAsMusic(list.map { it.file }, list.indexOf(item).coerceAtLeast(0))
-                        }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.LibraryMusic, null); Spacer(Modifier.width(12.dp)); Text("Reproducir como música")
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                        longPressed = null; open(list, item)
-                    }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.PlayCircle, null); Spacer(Modifier.width(12.dp)); Text(if (videos) "Ver video" else "Ver foto")
-                    }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
-                        longPressed = null; shareFiles(context, listOf(item.file))
-                    }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Share, null); Spacer(Modifier.width(12.dp)); Text("Compartir")
-                    }
+    pickFor?.let { mode ->
+        FolderPickerDialog(onDismiss = { pickFor = null }, onPick = { dest ->
+            val files = chosenFiles(); pickFor = null; selected.clear()
+            scope.launch {
+                val n = if (mode == "move") moveInto(files, dest) else copyInto(files, dest)
+                android.widget.Toast.makeText(context, "${if (mode == "move") "Movidos" else "Copiados"}: $n de ${files.size}", android.widget.Toast.LENGTH_SHORT).show()
+                reload++
+            }
+        })
+    }
+    if (confirmTrash) {
+        val files = chosenFiles()
+        ThemedDialog("¿Eliminar ${files.size} elemento(s)?", { confirmTrash = false }, listOf(
+            DialogButton("Cancelar") { confirmTrash = false },
+            DialogButton("Eliminar", true) {
+                confirmTrash = false; selected.clear()
+                scope.launch {
+                    val n = Trash.moveToTrash(files)
+                    android.widget.Toast.makeText(context, "Enviados a la papelera: $n", android.widget.Toast.LENGTH_SHORT).show()
+                    reload++
                 }
-            },
-            confirmButton = { TextButton(onClick = { longPressed = null }) { Text("Cerrar") } }
-        )
+            })) { Text("Se van a la Papelera. Desde ahí los puedes restaurar.") }
     }
 
     if (settingsOpen) {
@@ -298,7 +311,7 @@ private fun MediaGalleryScreen(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Boolean, onClick: (GalleryItem) -> Unit, onLongClick: (GalleryItem) -> Unit) {
+private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Boolean, selected: List<String>, onClick: (GalleryItem) -> Unit, onLongClick: (GalleryItem) -> Unit) {
     val groups = remember(items) {
         items.groupBy { monthFormat.format(Date(it.date)).replaceFirstChar { c -> c.uppercase() } }
     }
@@ -306,7 +319,7 @@ private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Bool
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
             groups.forEach { (month, list) ->
                 item(key = "h-$month") { MonthHeader(month) }
-                items(list, key = { it.path }) { item -> MediaRow(item, Modifier.combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) }
+                items(list, key = { it.path }) { item -> MediaRow(item, Modifier.selectionOverlay(item.path in selected).combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) }
             }
         }
         return
@@ -322,12 +335,12 @@ private fun MediaItems(items: List<GalleryItem>, videos: Boolean, listView: Bool
             item(span = { GridItemSpan(maxLineSpan) }, key = "h-$month") { MonthHeader(month) }
             items(list, key = { it.path }) { item ->
                 if (videos) {
-                    Column(Modifier.clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) {
+                    Column(Modifier.clip(RoundedCornerShape(10.dp)).selectionOverlay(item.path in selected).combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })) {
                         Thumb(item, Modifier.clip(RoundedCornerShape(10.dp)), ratio = 16f / 10f)
                         Text(item.file.nameWithoutExtension, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 4.dp, start = 2.dp, end = 2.dp))
                     }
-                } else Thumb(item, Modifier.combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }))
+                } else Thumb(item, Modifier.selectionOverlay(item.path in selected).combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) }))
             }
         }
     }
