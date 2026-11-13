@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- nota musical blanca centrada (zona segura del icono) -->
-    <path android:fillColor="#FFFFFF"
-        android:pathData="M46,34 L74,28 L74,62 A9,9 0 1,1 68,53.5 L68,39 L52,42.5 L52,68 A9,9 0 1,1 46,59.5 Z" />
-    <path android:fillColor="#66FFFFFF" android:pathData="M30,36 l2,5 l5,2 l-5,2 l-2,5 l-2,-5 l-5,-2 l5,-2 Z" />
-</vector>

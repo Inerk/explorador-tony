@@ -22,6 +22,18 @@ enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DO
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
+    // las apps principales usan los íconos de gatito
+    val art = when (kind) {
+        XpIconKind.COMPUTER -> R.drawable.ic_cat_files
+        XpIconKind.GALLERY -> R.drawable.ic_cat_gallery
+        XpIconKind.PLAYER -> R.drawable.ic_cat_music
+        XpIconKind.VIDEO_PLAYER -> R.drawable.ic_cat_videos
+        else -> null
+    }
+    if (art != null) {
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(art), null, modifier.size(size))
+        return
+    }
     Canvas(modifier.size(size)) {
         // sombra en el piso para que se vea con volumen
         drawOval(

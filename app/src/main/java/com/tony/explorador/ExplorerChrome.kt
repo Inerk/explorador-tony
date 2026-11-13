@@ -36,6 +36,17 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.Unarchive
+import androidx.compose.material.icons.outlined.AddToHomeScreen
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
@@ -226,6 +237,13 @@ fun PreviewPane(
     modifier: Modifier = Modifier, controller: Player? = null, onExpandVideo: () -> Unit = {},
 ) {
     val target = file ?: dir
+    // al cambiar de archivo o cerrar el panel se pausa el video del panel (cambiar de pestaña no lo pausa)
+    androidx.compose.runtime.DisposableEffect(file) {
+        onDispose {
+            val pl = VideoSession.player
+            if (pl != null && file != null && VideoSession.files.size == 1 && VideoSession.files.first() == file && !VideoSession.floating) pl.pause()
+        }
+    }
     Column(modifier.background(ExpTheme.paneBg)) {
         // pestañas
         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -247,7 +265,10 @@ fun PreviewPane(
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Toca un archivo para verlo aquí.\nTócalo otra vez para abrirlo.", color = ExpTheme.sub, fontSize = 13.sp)
             }
-        } else if (mode == "details") DetailsBody(target, isCurrentDir = file == null)
+        } else if (mode == "details") Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f)) { DetailsBody(target, isCurrentDir = file == null) }
+            if (file != null) NowPlayingStrip(file, controller)
+        }
         else PreviewBody(target, onOpen, controller, onExpandVideo)
     }
 }
@@ -262,20 +283,23 @@ private fun PreviewBody(f: File, onOpen: (File) -> Unit, controller: Player?, on
             kind == FileKind.VIDEO -> PaneVideo(f, controller, onExpandVideo)
             kind == FileKind.AUDIO -> {
                 val info by rememberTrackInfo(f.absolutePath)
-                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).clip(RoundedCornerShape(12.dp))
-                        .background(ExpTheme.crumbBg), contentAlignment = Alignment.Center) {
-                        val c = info?.cover
-                        if (c != null) Image(remember(c) { c.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        else FriendlyIcon(f, kind, 56.dp)
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.fillMaxHeight().aspectRatio(1f, matchHeightConstraintsFirst = true).clip(RoundedCornerShape(12.dp))
+                            .background(ExpTheme.crumbBg), contentAlignment = Alignment.Center) {
+                            val c = info?.cover
+                            if (c != null) Image(remember(c) { c.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                            else FriendlyIcon(f, kind, 48.dp)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(info?.title ?: f.nameWithoutExtension.replace('_', ' '), color = ExpTheme.text, fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            info?.artist?.let { Text(it, color = ExpTheme.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            info?.album?.let { Text(it, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(info?.title ?: f.nameWithoutExtension, color = ExpTheme.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(info?.artist ?: "", color = ExpTheme.sub, fontSize = 13.sp, maxLines = 1)
-                        Text(info?.album ?: "", color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
-                        PaneAudioControls(f, controller) { onOpen(f) }
-                    }
+                    PaneAudioControls(f, controller) { onOpen(f) }
                 }
             }
             ext == "pdf" -> {
@@ -429,25 +453,23 @@ private fun PaneAudioControls(f: File, controller: Player?, onStart: () -> Unit)
     p!!
     val pos = p.currentPosition + tick * 0L
     val dur = p.duration.coerceAtLeast(1L)
-    Column(Modifier.padding(top = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { if (p.isPlaying) p.pause() else p.play() },
-                contentAlignment = Alignment.Center) {
-                Icon(if (p.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
-            }
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = p.hasNextMediaItem()) { p.seekToNextMediaItem() },
-                contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.SkipNext, "Siguiente", tint = ExpTheme.onBar, modifier = Modifier.size(22.dp))
-            }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { if (p.isPlaying) p.pause() else p.play() },
+            contentAlignment = Alignment.Center) {
+            Icon(if (p.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
+        Box(Modifier.size(32.dp).clip(CircleShape).clickable(enabled = p.hasNextMediaItem()) { p.seekToNextMediaItem() },
+            contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.SkipNext, "Siguiente", tint = ExpTheme.onBar, modifier = Modifier.size(20.dp))
+        }
+        Text(fmtTime(pos), color = ExpTheme.sub, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
         androidx.compose.material3.Slider(
             value = (pos.toFloat() / dur).coerceIn(0f, 1f), onValueChange = { p.seekTo((it * dur).toLong()) },
             colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = ExpTheme.onBar, activeTrackColor = ExpTheme.onBar,
                 inactiveTrackColor = ExpTheme.line),
-            modifier = Modifier.height(28.dp)
+            modifier = Modifier.weight(1f).height(30.dp).padding(horizontal = 6.dp)
         )
-        Text("${fmtTime(pos)} / ${fmtTime(p.duration)}", color = ExpTheme.sub, fontSize = 11.sp)
+        Text(fmtTime(p.duration), color = ExpTheme.sub, fontSize = 11.sp)
     }
 }
 
@@ -457,13 +479,6 @@ private fun PaneVideo(f: File, controller: Player?, onExpand: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val vp = VideoSession.player
     val active = vp != null && VideoSession.files.size == 1 && VideoSession.files.first() == f
-    // al cambiar de archivo o cerrar el panel, se pausa el video del panel
-    androidx.compose.runtime.DisposableEffect(f) {
-        onDispose {
-            val pl = VideoSession.player
-            if (pl != null && VideoSession.files.size == 1 && VideoSession.files.first() == f && !VideoSession.floating) pl.pause()
-        }
-    }
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color.Black), contentAlignment = Alignment.Center) {
         if (!active) {
             AsyncImage(f, null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
@@ -498,5 +513,74 @@ private fun PaneVideo(f: File, controller: Player?, onExpand: () -> Unit) {
                 Icon(Icons.Filled.OpenInFull, "Agrandar", tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
+    }
+}
+
+/** Menú ⋮ de un archivo: hoja que sube desde abajo, con el ícono, nombre y opciones con íconos. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun FileMenuSheet(f: File, options: List<Pair<String, () -> Unit>>, onDismiss: () -> Unit) {
+    val kind = remember(f) { f.kind() }
+    val info by produceState("", f) {
+        value = withContext(Dispatchers.IO) {
+            (if (f.isDirectory) "${f.listFiles()?.size ?: 0} elementos" else formatSize(f.length())) + " · " + formatDate(f.lastModified())
+        }
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ExpTheme.bar,
+        dragHandle = { Box(Modifier.padding(top = 10.dp, bottom = 4.dp).width(40.dp).height(4.dp).clip(CircleShape).background(ExpTheme.line)) }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FriendlyIcon(f, kind, 46.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(f.name, color = ExpTheme.text, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(info, color = ExpTheme.sub, fontSize = 12.sp)
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).height(1.dp).background(ExpTheme.line))
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 18.dp)) {
+            options.forEach { (label, action) ->
+                val danger = label.startsWith("Eliminar")
+                val icon = when {
+                    label == "Abrir" -> Icons.AutoMirrored.Outlined.OpenInNew
+                    label.startsWith("Copiar") -> Icons.Outlined.ContentCopy
+                    label.startsWith("Mover") -> Icons.Outlined.DriveFileMove
+                    label == "Renombrar" -> Icons.Outlined.Edit
+                    label == "Compartir" -> Icons.Outlined.Share
+                    label.startsWith("Comprimir") -> Icons.Outlined.Archive
+                    label.startsWith("Ver contenido") -> Icons.Outlined.Unarchive
+                    label.startsWith("Acceso directo") -> Icons.Outlined.AddToHomeScreen
+                    label == "Seleccionar" -> Icons.Outlined.CheckCircle
+                    danger -> Icons.Outlined.Delete
+                    else -> Icons.Outlined.MoreHoriz
+                }
+                val tint = if (danger) Color(0xFFD93A3A) else ExpTheme.onBar
+                Row(Modifier.fillMaxWidth().clickable { onDismiss(); action() }.padding(horizontal = 24.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = tint, modifier = Modifier.size(21.dp))
+                    Spacer(Modifier.width(18.dp))
+                    Text(label, color = if (danger) tint else ExpTheme.text, fontSize = 15.sp)
+                }
+            }
+        }
+    }
+}
+
+
+/** En la pestaña Detalles: lo que está sonando sigue con su botón de pausa. */
+@Composable
+private fun NowPlayingStrip(f: File, controller: Player?) {
+    val vp = VideoSession.player
+    val videoHere = vp != null && VideoSession.files.size == 1 && VideoSession.files.first() == f
+    val tick = observePlayer(if (videoHere) vp else controller, 400)
+    val p: Player = (if (videoHere) vp else controller?.takeIf { it.currentMediaItem?.mediaId == f.absolutePath }) ?: return
+    @Suppress("UNUSED_EXPRESSION") tick
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(CircleShape).background(ExpTheme.crumbBg)
+        .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { if (p.isPlaying) p.pause() else p.play() },
+            contentAlignment = Alignment.Center) {
+            Icon(if (p.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        }
+        Text("  ${if (p.isPlaying) "Reproduciendo" else "En pausa"} · ${fmtTime(p.currentPosition)} / ${fmtTime(p.duration)}",
+            color = ExpTheme.onBar, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }

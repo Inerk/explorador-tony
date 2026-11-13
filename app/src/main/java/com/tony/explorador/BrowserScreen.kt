@@ -61,6 +61,11 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -290,22 +295,34 @@ fun BrowserScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             when {
-                selection.isNotEmpty() -> TopAppBar(
+                selection.isNotEmpty() -> Box(Modifier.background(ExpTheme.bar)) { TopAppBar(
+                    expandedHeight = 50.dp,
                     navigationIcon = {
-                        IconButton(onClick = { selection = emptySet() }) { Icon(Icons.Filled.Close, "Cancelar") }
+                        IconButton(onClick = { selection = emptySet() }) { Icon(Icons.Outlined.Close, "Cancelar", modifier = Modifier.size(22.dp)) }
                     },
-                    title = { Text("${selection.size} seleccionados") },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${selection.size}", fontWeight = FontWeight.Black, fontSize = 15.sp, color = Color.White,
+                                modifier = Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(ExpTheme.onBar)
+                                    .padding(horizontal = 9.dp, vertical = 2.dp))
+                            Text(if (selection.size == 1) "  seleccionado" else "  seleccionados", fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = ExpTheme.onBar,
+                        navigationIconContentColor = ExpTheme.onBar, actionIconContentColor = ExpTheme.onBar),
                     actions = {
-                        IconButton(onClick = { selection = shownFiles.toSet() }) { Icon(Icons.Filled.SelectAll, "Seleccionar todo") }
+                        val ib = Modifier.size(40.dp); val isz = Modifier.size(21.dp)
+                        IconButton(onClick = { selection = shownFiles.toSet() }, modifier = ib) { Icon(Icons.Outlined.SelectAll, "Seleccionar todo", isz) }
                         IconButton(onClick = {
                             transferFiles = selection.toList(); transferMove = false; selection = emptySet()
-                        }) { Icon(Icons.Filled.ContentCopy, "Copiar") }
+                        }, modifier = ib) { Icon(Icons.Outlined.ContentCopy, "Copiar", isz) }
                         IconButton(onClick = {
                             transferFiles = selection.toList(); transferMove = true; selection = emptySet()
-                        }) { Icon(Icons.Filled.ContentCut, "Mover") }
+                        }, modifier = ib) { Icon(Icons.Outlined.ContentCut, "Mover", isz) }
+                        IconButton(onClick = { confirmDelete = true }, modifier = ib) { Icon(Icons.Outlined.Delete, "Eliminar", isz) }
                         var more by remember { mutableStateOf(false) }
-                        IconButton(onClick = { more = true }) { Icon(Icons.Filled.MoreVert, "Más") }
+                        IconButton(onClick = { more = true }, modifier = ib) { Icon(Icons.Outlined.MoreVert, "Más", isz) }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             if (selection.size == 1) {
                                 DropdownMenuItem(text = { Text("Renombrar") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },
@@ -325,7 +342,7 @@ fun BrowserScreen(
                                 onClick = { more = false; confirmDelete = true })
                         }
                     }
-                )
+                ) }
                 searchActive -> TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = { searchActive = false; query = "" }) {
@@ -680,15 +697,7 @@ fun BrowserScreen(
                 }
             },
         ).filter { f.isFile || it.first != "Compartir" }
-        ThemedDialog(f.name, { menuFile = null }, listOf(DialogButton("Cerrar", true) { menuFile = null })) {
-            Column {
-                options.forEach { (label, action) ->
-                    Text(label, fontWeight = FontWeight.Medium,
-                        color = if (label.startsWith("Eliminar")) MaterialTheme.colorScheme.error else LocalContentColor.current,
-                        modifier = Modifier.fillMaxWidth().clickable { menuFile = null; action() }.padding(vertical = 12.dp))
-                }
-            }
-        }
+        FileMenuSheet(f, options, onDismiss = { menuFile = null })
     }
 
     renameTarget?.let { target ->
