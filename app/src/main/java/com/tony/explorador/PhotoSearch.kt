@@ -75,6 +75,8 @@ object PhotoText {
         if (running) return
         job = scope.launch {
             running = true
+            // prioridad baja: que leer fotos no le quite fuerza a la pantalla
+            runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) }
             val pending = synchronized(texts) { paths.filter { it !in texts } }
             total = pending.size; done = 0
             val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -99,7 +101,8 @@ object PhotoText {
                 }.getOrDefault("")
                 synchronized(texts) { texts[p] = text }
                 done++
-                if (done % 25 == 0) { save(); version++ }
+                if (done % 60 == 0) { save(); version++ }
+                kotlinx.coroutines.delay(40)   // respiro para que la app no se sienta trabada mientras lee
             }
             runCatching { recognizer.close() }
             save(); version++

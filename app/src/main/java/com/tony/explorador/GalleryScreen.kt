@@ -309,16 +309,18 @@ private fun MediaGalleryScreen(
                 }
                 !query.isNullOrBlank() -> {
                     // buscar: palabras dentro de la foto, nombre, álbum o fecha («noviembre 2026», «2025»)
-                    val q = PhotoText.norm(query!!.trim())
-                    val found = remember(q, items, PhotoText.version) {
-                        items.filter { it ->
-                            PhotoText.norm(it.file.name).contains(q) || PhotoText.norm(it.album).contains(q) ||
-                                PhotoText.norm(monthFormat.format(Date(it.date))).contains(q) ||
-                                PhotoText.norm(dayFormat.format(Date(it.date))).contains(q) ||
-                                (!videos && PhotoText.matches(it.path, q))
+                    // se busca en segundo plano y hasta que dejas de escribir, para que no se trabe
+                    val typed = query!!.trim()
+                    val result by produceState<List<GalleryItem>?>(null, typed, items, PhotoText.version) {
+                        kotlinx.coroutines.delay(350)
+                        value = withContext(Dispatchers.Default) {
+                            val q = PhotoText.norm(typed)
+                            items.filter { searchKey(it).contains(q) || (!videos && PhotoText.matches(it.path, q)) }
                         }
                     }
-                    if (found.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                    val found = result
+                    if (found == null) Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    else if (found.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                         Text("Sin resultados para «${query}»", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else Box(Modifier.weight(1f)) {
                         MediaItems(found, videos, listView, selected, onClick = { if (selected.isNotEmpty()) toggle(it) else open(found, it) }, onLongClick = { toggle(it) })
@@ -657,4 +659,14 @@ private fun DatesView(
             }
         }
     }
+}
+
+
+private val searchKeys = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+/** Nombre, álbum y fecha de una foto ya «limpios» para buscar (se calcula una sola vez por foto). */
+private fun searchKey(it: GalleryItem): String = searchKeys.getOrPut(it.path) {
+    val d = Date(it.date)
+    PhotoText.norm(it.file.name + " " + it.album + " " + synchronized(monthFormat) { monthFormat.format(d) } + " " +
+        synchronized(dayFormat) { dayFormat.format(d) })
 }
