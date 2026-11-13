@@ -457,6 +457,13 @@ fun AppRoot() {
             )
         }
 
+        // letra en ventana flotante (ajustes de música → "En una ventana flotante")
+        controller?.let { c ->
+            if (LibraryStore.lyricsPlace == "float") FloatingLyricsWindow(c, Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = 56.dp))
+            MusicUi.syncLyricsFor?.let { p -> LyricsSyncEditor(p, c) { MusicUi.syncLyricsFor = null } }
+        }
+        if (MusicUi.settingsOpen) MusicSettingsDialog { MusicUi.settingsOpen = false }
+
         UpdateDialog(
             state = updateState,
             currentName = versionName,

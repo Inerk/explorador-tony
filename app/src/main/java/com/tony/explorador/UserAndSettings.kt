@@ -227,13 +227,6 @@ fun ControlPanelContent(
                 else -> "Automático (según el teléfono) · toca para cambiar"
             }) { LibraryStore.changeDarkMode(when (mode) { "auto" -> "light"; "light" -> "dark"; else -> "auto" }) }
         }
-        item {
-            val over = LibraryStore.lyricsOverCover
-            PanelItem(XpIconKind.MUSIC, "Letra en el reproductor",
-                (if (over) "Encima de la carátula" else "Debajo de la carátula") + " · toca para cambiar") {
-                LibraryStore.changeLyricsOverCover(!over)
-            }
-        }
         item { PanelItem(XpIconKind.DOWNLOADS, "Buscar actualizaciones", "Versión instalada: $versionName (beta)") { onUpdates() } }
         item { PanelItem(XpIconKind.DOCUMENTS, "Historial de versiones", "Qué cambió en cada versión") { historyOpen = true } }
         item {

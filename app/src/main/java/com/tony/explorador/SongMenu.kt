@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
@@ -99,6 +100,7 @@ fun SongMenuWindow(
         MenuOption("Carát. animada", Icons.Filled.Animation, Color(0xFFFFB0E0)) { animatedCover = true },
         MenuOption("Info./Etiq.", Icons.Filled.Info) { onInfo() },
         MenuOption("Letra", Icons.Filled.Lyrics) { onLyrics() },
+        MenuOption("Sincronizar letra", Icons.Filled.Timer, Color(0xFFFFB0E0)) { MusicUi.syncLyricsFor = path; onDismiss() },
         MenuOption("Etiquetar web", Icons.Filled.TravelExplore, Color(0xFF8FD3FF)) { tagOnline = true },
         MenuOption("Buscar letra", Icons.Filled.Search, Color(0xFF8FD3FF)) { lyricsOnline = true },
         MenuOption("Compartir", Icons.Filled.Share) { shareFiles(context, listOf(File(path))) },

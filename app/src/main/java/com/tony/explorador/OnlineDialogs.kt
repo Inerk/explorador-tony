@@ -430,6 +430,7 @@ fun NoLyricsPrompt(path: String?, textColor: Color, accent: Color, serif: Boolea
         Spacer(Modifier.height(14.dp))
         if (path != null) {
             BigButton("Buscar letra en internet", accent) { open = true }
+            if (path != null) BigButton("Escribir y sincronizar a mano", accent) { MusicUi.syncLyricsFor = path }
         }
     }
     if (open && path != null) LyricsSearchDialog(path, accent, onDismiss = { open = false })

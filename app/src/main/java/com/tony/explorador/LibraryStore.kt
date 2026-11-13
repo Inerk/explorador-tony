@@ -221,10 +221,11 @@ object LibraryStore {
         return pairs[path]
     }
 
-    /** Dónde se ve la letra en el reproductor: false = debajo de la portada, true = encima de la portada. */
-    var lyricsOverCover by mutableStateOf(false)
+    /** Dónde se ve la letra: "below" debajo, "big" debajo y grande, "over" encima de la portada, "float" ventana flotante. */
+    var lyricsPlace by mutableStateOf("below")
         private set
-    fun changeLyricsOverCover(v: Boolean) { lyricsOverCover = v; save() }
+    fun changeLyricsPlace(v: String) { lyricsPlace = v; save() }
+    val lyricsOverCover: Boolean get() = lyricsPlace == "over"
 
     /** Borra cuántas veces y cuándo se escuchó una canción. */
     fun resetStats(path: String) {
@@ -486,7 +487,7 @@ object LibraryStore {
             put("wallpaper", wallpaper)
             put("explorerView", explorerView)
             put("darkMode", darkMode)
-            put("lyricsOverCover", lyricsOverCover)
+            put("lyricsPlace", lyricsPlace)
             put("songView", songView)
             put("galleryView", galleryView)
             put("videoView", videoView)
@@ -521,7 +522,7 @@ object LibraryStore {
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }
         o.optString("darkMode").takeIf { it.isNotBlank() }?.let { darkMode = it }
-        lyricsOverCover = o.optBoolean("lyricsOverCover", false)
+        lyricsPlace = o.optString("lyricsPlace", if (o.optBoolean("lyricsOverCover", false)) "over" else "below")
         o.optString("songView").takeIf { it.isNotBlank() }?.let { songView = it }
         o.optString("galleryView").takeIf { it.isNotBlank() }?.let { galleryView = it }
         o.optString("videoView").takeIf { it.isNotBlank() }?.let { videoView = it }

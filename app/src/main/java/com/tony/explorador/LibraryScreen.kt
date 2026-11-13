@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
@@ -307,6 +308,9 @@ fun LibraryScreen(
                 HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
                     Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.HeaderIcon)
+                }
+                IconButton(onClick = { MusicUi.settingsOpen = true }) {
+                    Icon(Icons.Filled.Settings, "Ajustes de música", tint = Retro.HeaderIcon)
                 }
             }
         }

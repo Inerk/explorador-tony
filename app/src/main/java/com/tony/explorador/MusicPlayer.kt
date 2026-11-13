@@ -67,6 +67,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Movie
@@ -390,6 +391,9 @@ fun MusicPlayerScreen(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
+                    IconButton(onClick = { MusicUi.settingsOpen = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Ajustes de música", tint = Color.White)
+                    }
                     IconButton(onClick = { lyricsMode = !lyricsMode }) {
                         Icon(Icons.Filled.Lyrics, contentDescription = "Letra",
                             tint = if (lyricsMode) accent else Color.White)
@@ -513,13 +517,31 @@ fun MusicPlayerScreen(
                     }
                 }
                 // Vistazo de la letra bajo la portada
-                if (!lyricsMode && lyrics.isNotEmpty() && !LibraryStore.lyricsOverCover) {
+                if (!lyricsMode && lyrics.isNotEmpty() && LibraryStore.lyricsPlace == "below") {
                     val line = lyrics.getOrNull(lyricIndex)?.text?.ifBlank { "♪" } ?: "♪"
                     Text(
                         line, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = accent, textAlign = TextAlign.Start,
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { lyricsMode = true }
                     )
+                }
+                // Letra grande justo debajo de la portada: línea actual y la que sigue
+                if (!lyricsMode && lyrics.isNotEmpty() && LibraryStore.lyricsPlace == "big") {
+                    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { lyricsMode = true }) {
+                        androidx.compose.animation.AnimatedContent(lyricIndex, label = "bigLyric", transitionSpec = {
+                            (androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith
+                                (androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 })
+                        }) { idx ->
+                            Column {
+                                Text(lyrics.getOrNull(idx)?.text?.ifBlank { "♪" } ?: "♪", fontSize = 26.sp, lineHeight = 31.sp,
+                                    fontWeight = FontWeight.Bold, color = accent, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                lyrics.getOrNull(idx + 1)?.let {
+                                    Text(it.text.ifBlank { "♪" }, fontSize = 17.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.55f),
+                                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Barra de avance
@@ -936,6 +958,12 @@ private fun LyricsPanel(path: String?, lines: List<LyricLine>, current: Int, acc
             if (active) {
                 Box(Modifier.width(36.dp).height(3.dp).clip(CircleShape).background(accent))
             }
+        }
+        if (path != null) item {
+            Text(if (lines.first().timeMs < 0) "⏱ Esta letra no tiene tiempos · Sincronizar" else "⏱ Ajustar tiempos de la letra",
+                color = accent, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                modifier = Modifier.padding(top = 18.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.12f))
+                    .clickable { MusicUi.syncLyricsFor = path }.padding(horizontal = 16.dp, vertical = 10.dp))
         }
     }
 }
