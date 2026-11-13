@@ -104,7 +104,7 @@ object Archives {
         var anyEncrypted = false
         val cb = object : IArchiveExtractCallback, ICryptoGetTextPassword {
             var out: OutputStream? = null
-            var total = 0L
+            var totalBytes = 0L
             var current: File? = null
             fun closeOut() { runCatching { out?.close() }; out = null }
             override fun getStream(index: Int, mode: ExtractAskMode): ISequentialOutStream? {
@@ -144,8 +144,8 @@ object Archives {
                 }
                 current = null
             }
-            override fun setTotal(t: Long) { total = t }
-            override fun setCompleted(c: Long) { progress(c, total) }
+            override fun setTotal(t: Long) { totalBytes = t }
+            override fun setCompleted(c: Long) { progress(c, totalBytes) }
             override fun cryptoGetTextPassword(): String {
                 anyEncrypted = true
                 return password ?: throw SevenZipException("password")
