@@ -119,6 +119,10 @@ fun XpMediaWindow(
             VintageWindowContent(player, onOpen)
             return@XpWindowFrame
         }
+        if (LibraryStore.windowSkin == WindowSkin.MODERNO) {
+            ModernWindowContent(player, onOpen)
+            return@XpWindowFrame
+        }
         if (LibraryStore.windowSkin == WindowSkin.AMP) {
             AmpSkin(player, title, artist, position, duration, progress, onOpen)
             return@XpWindowFrame

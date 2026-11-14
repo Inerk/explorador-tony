@@ -106,6 +106,7 @@ enum class MusicSkin(val label: String) {
 /** Aspecto de la ventanita del reproductor en el escritorio. */
 enum class WindowSkin(val label: String) {
     MEDIA("Media (azul cristal)"),
+    MODERNO("Moderno (azul marino y naranja)"),
     AMP("Clásico (amplificador gris con pantalla verde)"),
     VINTAGE("Vintage (tocadiscos de madera)"),
 }
