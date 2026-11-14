@@ -168,7 +168,8 @@ fun BrowserScreen(
     var searchResults by remember { mutableStateOf<List<File>?>(null) }
     var archiveFile by remember { mutableStateOf<File?>(null) }
     var focused by remember { mutableStateOf<File?>(null) }
-    var castFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
+    var castFile by remember { mutableStateOf<File?>(null) }
+    var docFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
     var paneFrac by remember { mutableStateOf(0.42f) }
     var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -237,7 +238,11 @@ fun BrowserScreen(
                 when (ext) {
                     "m3u8", "m3u" -> importCandidate = file
                     "pdf" -> onOpenPdf(file)
-                    else -> if (Archives.isArchive(file)) archiveFile = file else openExternally(context, file)
+                    else -> when {
+                        Archives.isArchive(file) -> archiveFile = file
+                        isDocViewable(file) -> docFile = file   // texto, Word, Excel, PowerPoint, HTML, XML
+                        else -> openExternally(context, file)
+                    }
                 }
             }
         }
@@ -643,6 +648,9 @@ fun BrowserScreen(
         }
         CastPickerSheet(cf, sibs) { castFile = null }
     }
+
+    // documentos: texto, Word, Excel, PowerPoint, HTML y XML
+    docFile?.let { df -> DocumentViewer(df) { docFile = null } }
 
     // comprimidos
     archiveFile?.let { af ->

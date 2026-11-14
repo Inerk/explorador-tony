@@ -131,9 +131,9 @@ fun XpDesktop(
         add(DeskApp("camera", "Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
         add(DeskApp("videos", "Videos", XpIconKind.VIDEO_PLAYER) { onOpenVideos() })
         add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
-        add(DeskApp("panel", "Panel de control", XpIconKind.SETTINGS) { showWindow(settings) })
-        add(DeskApp("explorer", "Explorador de archivos", XpIconKind.FOLDER) { onOpenFolder(internal) })
-        add(DeskApp("updates", "Actualizar", XpIconKind.DRIVE) { onCheckUpdates() })
+        add(DeskApp("panel", "Ajustes", XpIconKind.SETTINGS) { settings.open = true; settings.minimized = false })
+        add(DeskApp("explorer", "Explorador de archivos", XpIconKind.EXPLORER) { onOpenFolder(internal) })
+        add(DeskApp("updates", "Actualizar", XpIconKind.UPDATE) { onCheckUpdates() })
         add(DeskApp("trash", "Papelera", XpIconKind.TRASH) { AppNav.openTrash() })
         add(DeskApp("web", "Internet", XpIconKind.INTERNET) { AppNav.openWeb() })
         // accesos directos a archivos y carpetas
@@ -164,7 +164,6 @@ fun XpDesktop(
     // Botones de la barra de tareas (uno por ventana abierta)
     val tasks = buildList {
         if (myPc.open) add(TaskButton("Mi PC", XpIconKind.COMPUTER, !myPc.minimized) { myPc.minimized = !myPc.minimized })
-        if (settings.open) add(TaskButton("Panel de control", XpIconKind.SETTINGS, !settings.minimized) { settings.minimized = !settings.minimized })
         if (hasMusic) add(TaskButton(player?.mediaMetadata?.title?.toString() ?: "Música", XpIconKind.PLAYER, !DesktopState.player.minimized) {
             DesktopState.player.minimized = !DesktopState.player.minimized
         })
@@ -201,24 +200,6 @@ fun XpDesktop(
                     MyComputerContent(
                         onOpenFolder = { f -> myPc.minimized = true; onOpenFolder(f) },
                         onOpenMusic = { myPc.minimized = true; onOpenMusic() },
-                    )
-                }
-            }
-            if (settings.open && !settings.minimized) {
-                XpWindowFrame(
-                    state = settings,
-                    title = "Panel de control",
-                    icon = { XpIcon(XpIconKind.SETTINGS, 18.dp) },
-                    onClose = { settings.open = false; settings.maximized = false },
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = if (settings.maximized) 0.dp else 60.dp),
-                ) {
-                    ControlPanelContent(
-                        versionName = versionName,
-                        onTheme = onChooseTheme,
-                        onAccount = { accountOpen = true },
-                        onMusicFolders = onOpenMusic,
-                        onUpdates = onCheckUpdates,
-                        onWallpaper = { wallpaperOpen = true },
                     )
                 }
             }
@@ -274,6 +255,21 @@ fun XpDesktop(
                 entries = listOf("explorer", "music", "pictures", "videos", "camera").mapNotNull { apps[it] },
                 places = listOf("mypc", "docs", "downloads", "panel", "updates").mapNotNull { apps[it] },
                 onPicked = { startOpen = false }
+            )
+        }
+
+        // Ajustes: pantalla completa (ya no es ventana)
+        androidx.compose.animation.AnimatedVisibility(settings.open,
+            enter = androidx.compose.animation.slideInVertically { it / 3 } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it / 3 } + androidx.compose.animation.fadeOut()) {
+            SettingsScreen(
+                versionName = versionName,
+                onClose = { settings.open = false },
+                onTheme = onChooseTheme,
+                onAccount = { accountOpen = true },
+                onMusicFolders = onOpenMusic,
+                onUpdates = onCheckUpdates,
+                onWallpaper = { wallpaperOpen = true },
             )
         }
 

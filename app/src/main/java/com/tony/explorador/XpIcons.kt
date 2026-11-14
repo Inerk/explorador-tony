@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET, EXPLORER, UPDATE }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -28,6 +28,11 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
         XpIconKind.GALLERY -> R.drawable.ic_cat_gallery
         XpIconKind.PLAYER -> R.drawable.ic_cat_music
         XpIconKind.VIDEO_PLAYER -> R.drawable.ic_cat_videos
+        XpIconKind.TRASH -> R.drawable.ic_cat_trash
+        XpIconKind.DOWNLOADS -> R.drawable.ic_cat_downloads
+        XpIconKind.SETTINGS -> R.drawable.ic_cat_settings
+        XpIconKind.EXPLORER -> R.drawable.ic_cat_explorer
+        XpIconKind.UPDATE -> R.drawable.ic_cat_update
         else -> null
     }
     if (art != null) {
@@ -61,6 +66,8 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.VIDEO_PLAYER -> drawVideoPlayer()
             XpIconKind.TRASH -> drawTrash()
             XpIconKind.INTERNET -> drawInternet()
+            XpIconKind.EXPLORER -> drawFolder()
+            XpIconKind.UPDATE -> drawDrive(Color(0xFFDADDE3), Color(0xFF8F96A3))
         }
     }
 }
