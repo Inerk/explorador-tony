@@ -224,7 +224,8 @@ fun AppRoot() {
     var libMenuOpen by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var libMenuClose by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     fun peekMusicMenu() {
-        libMenuOpen++
+        // ya no abre el menú de categorías: debajo queda la lista donde suena la canción
+        MusicUi.revealTick++
         if (Overlay.Library !in overlays) {
             val i = overlays.indexOf(Overlay.Music).coerceAtLeast(0)
             overlays.add(i, Overlay.Library)
@@ -234,7 +235,6 @@ fun AppRoot() {
     }
     fun cancelMusicMenu() {
         if (peekedLibrary) { overlays.remove(Overlay.Library); overlayStates.remove(Overlay.Library) }
-        else libMenuClose++
         peekedLibrary = false
     }
     /** El reproductor ya salió de la pantalla deslizándose: se quita sin otra animación. */
@@ -354,7 +354,16 @@ fun AppRoot() {
                             onMenuCancel = { cancelMusicMenu() },
                             onMenuDone = { finishMusicMenu() },
                             onGoTo = { k, v -> goTo(k, v) },
-                            flyToMini = Overlay.Library in overlays)
+                            flyToMini = true,
+                            onBeforeFlyClose = {
+                                // que debajo esté la biblioteca en la lista de la canción
+                                MusicUi.revealTick++
+                                if (Overlay.Library !in overlays) {
+                                    val i = overlays.indexOf(Overlay.Music).coerceAtLeast(0)
+                                    overlays.add(i, Overlay.Library)
+                                    overlayStates[Overlay.Library] = androidx.compose.animation.core.MutableTransitionState(true)
+                                }
+                            })
                     }
                     Overlay.CoverFlow -> CoverFlowScreen(
                         startPath = controller?.currentMediaItem?.mediaId,

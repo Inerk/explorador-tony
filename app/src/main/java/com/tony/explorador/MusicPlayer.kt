@@ -266,6 +266,7 @@ fun MusicPlayerScreen(
     onMenuCancel: () -> Unit = {},
     onMenuDone: () -> Unit = {},
     flyToMini: Boolean = false,
+    onBeforeFlyClose: () -> Unit = {},
 ) {
     if (LibraryStore.musicSkin == MusicSkin.VINTAGE) {
         VintagePlayerScreen(player, onClose, onOpenCoverFlow, onHome, onGoTo)
@@ -293,10 +294,11 @@ fun MusicPlayerScreen(
     val screenH = with(androidx.compose.ui.platform.LocalDensity.current) {
         androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx()
     }
-    fun closeAnimated() {
-        if (flyToMini && coverRect != null && closeFly.value == 0f) asideScope.launch {
+    fun closeAnimated(velocity: Float = 0f) {
+        if (flyToMini && coverRect != null) asideScope.launch {
+            if (closeFly.value == 0f) onBeforeFlyClose()
             MusicUi.flyClose = true
-            closeFly.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 320f))
+            closeFly.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 320f), initialVelocity = velocity)
             onClose()
         } else onClose()
     }
@@ -503,12 +505,16 @@ fun MusicPlayerScreen(
                                     onNext = { player.seekToNextMediaItem() },
                                     onPrev = { player.seekToPreviousMediaItem() },
                                     onLongPress = onOpenCoverFlow,
+                                    // jalar la portada hacia abajo: te lleva a la lista donde suena (sin lista aparte)
                                     onPull = { dy ->
-                                        qScope.launch { q.snapTo((q.value + dy / (screenH * 0.5f)).coerceIn(0f, 1f)) }
+                                        asideScope.launch {
+                                            if (closeFly.value == 0f && dy > 0f) onBeforeFlyClose()
+                                            closeFly.snapTo((closeFly.value + dy / (screenH * 0.6f)).coerceIn(0f, 1f))
+                                        }
                                     },
                                     onPullEnd = { vy ->
-                                        val goList = if (vy > 900f) true else if (vy < -900f) false else q.value > 0.35f
-                                        if (goList) toQueue() else toCover()
+                                        if (vy > 900f || closeFly.value > 0.3f) closeAnimated(vy / screenH)
+                                        else asideScope.launch { closeFly.animateTo(0f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
                                     },
                                     onMenu = { menuOpen = true },
                                 )
@@ -639,7 +645,7 @@ fun MusicPlayerScreen(
                         ),
                         onSelect = { i ->
                             when (i) {
-                                0 -> { lyricsMode = false; toQueue() }
+                                0 -> { lyricsMode = false; closeAnimated() }
                                 1 -> { lyricsMode = false; toCover() }
                                 2 -> MusicUi.settingsOpen = true
                                 3 -> onHome()

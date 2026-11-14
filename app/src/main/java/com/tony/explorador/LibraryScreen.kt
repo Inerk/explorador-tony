@@ -269,6 +269,10 @@ fun LibraryScreen(
     val songs = remember(allSongs) { allSongs.filterNot { isVideoPath(it.path) && LibraryStore.pairFor(it.path) != null } }
     var addTo by remember { mutableStateOf<List<Song>?>(null) }
     var menuQuery by remember { mutableStateOf("") }
+    // venimos del reproductor: si estás en el menú, abre la lista de canciones
+    LaunchedEffect(MusicUi.revealTick) {
+        if (MusicUi.revealTick > 0 && page == LibPage.Menu) { setDrawer(false); push(LibPage.Songs) }
+    }
     // Ajustes → «Carpetas donde buscar música»
     LaunchedEffect(MusicUi.openScanFolders) {
         if (MusicUi.openScanFolders) { MusicUi.openScanFolders = false; setDrawer(false); push(LibPage.Folders) }
@@ -830,6 +834,15 @@ private fun SongListInner(
     LaunchedEffect(view) {
         if (view.startsWith("grid")) gridState.scrollToItem(anchor) else listState.scrollToItem(anchor)
     }
+    // al regresar del reproductor: la lista baja hasta la canción que suena
+    LaunchedEffect(MusicUi.revealTick) {
+        if (MusicUi.revealTick == 0) return@LaunchedEffect
+        val i = songs.indexOfFirst { it.path == NowPlaying.path }
+        if (i >= 0) {
+            val target = (i + 1 - 3).coerceAtLeast(0) // +1 por el encabezado; deja 3 arriba para que se vea en medio
+            if (isGrid) gridState.scrollToItem(target) else listState.scrollToItem(target)
+        }
+    }
     // pellizcar con dos dedos: abrir = íconos más grandes, cerrar = más chicos
     val pinch = remember { androidx.compose.animation.core.Animatable(1f) }
     Column(Modifier.fillMaxSize()) {
@@ -980,8 +993,8 @@ private fun SongRow(
                 val b = thumb
                 if (b != null) Image(remember(b) { b.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else Icon(Icons.Filled.MusicNote, null, tint = Retro.Orange.copy(alpha = 0.7f), modifier = Modifier.size(size * 0.45f))
-                if (playing) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.GraphicEq, null, tint = Retro.Orange, modifier = Modifier.size(size * 0.45f))
+                if (playing) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)), contentAlignment = Alignment.Center) {
+                    BeatRing(Retro.Orange, Modifier.fillMaxSize(0.62f))
                 }
             }
             if (hasAnimated) DiamondStar(if (size > 60.dp) 24.dp else 18.dp,
@@ -1940,4 +1953,38 @@ private fun FolderBrowser(path: String?, songs: List<Song>, onOpen: (String) -> 
             }
         }
     })
+}
+
+
+/** Círculo que late con la música: marca la canción que suena (elegante, sin barras). */
+@Composable
+private fun BeatRing(color: Color, modifier: Modifier = Modifier) {
+    val beat = remember { floatArrayOf(0f, 0f) } // [bajo suavizado, nivel]
+    var frame by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var t by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) androidx.compose.runtime.withFrameNanos { now ->
+            val d = SpectrumAnalyzer.peek()
+            val b = if (d != null) (d[0] + d[1] + d[2]) / 3f else 0f
+            beat[0] = if (b > beat[0]) beat[0] + (b - beat[0]) * 0.55f else beat[0] * 0.9f + b * 0.1f
+            t += 0.016f
+            frame = now
+        }
+    }
+    androidx.compose.foundation.Canvas(modifier) {
+        @Suppress("UNUSED_EXPRESSION") frame
+        val r = size.minDimension / 2f
+        val c = center
+        val pulse = beat[0].coerceIn(0f, 1f)
+        // halo que se expande con cada golpe
+        drawCircle(color.copy(alpha = 0.18f + 0.25f * pulse), r * (0.78f + 0.22f * pulse), c)
+        // aro principal
+        drawCircle(color, r * (0.62f + 0.12f * pulse), c, style = androidx.compose.ui.graphics.drawscope.Stroke(r * 0.12f))
+        // punto de luz que gira alrededor
+        val a = t * 3.2f
+        val rr = r * (0.62f + 0.12f * pulse)
+        drawCircle(Color.White, r * 0.1f, androidx.compose.ui.geometry.Offset(c.x + rr * kotlin.math.cos(a), c.y + rr * kotlin.math.sin(a)))
+        // centro
+        drawCircle(Color.White.copy(alpha = 0.9f), r * (0.16f + 0.08f * pulse), c)
+    }
 }

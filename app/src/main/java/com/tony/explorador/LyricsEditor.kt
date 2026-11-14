@@ -90,6 +90,8 @@ object MusicUi {
     var settingsOpen by mutableStateOf(false)
     /** El reproductor se cierra con la portada volando a la miniatura (la pantalla ya se desvaneció). */
     var flyClose by mutableStateOf(false)
+    /** Cada vez que sube: la biblioteca muestra la lista donde suena la canción y baja hasta ella. */
+    var revealTick by mutableStateOf(0)
     /** Abrir la página de carpetas donde se busca música (desde Ajustes). */
     var openScanFolders by mutableStateOf(false)
     /** La ventana flotante de letra se escondió (vuelve con la siguiente canción). */
