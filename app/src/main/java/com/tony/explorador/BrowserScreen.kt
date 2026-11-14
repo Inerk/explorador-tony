@@ -134,7 +134,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun BrowserScreen(
     controller: Player?,
