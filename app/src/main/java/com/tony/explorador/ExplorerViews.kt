@@ -105,14 +105,16 @@ fun fileColor(file: File, kind: FileKind): Color = when {
 fun FilePreview(file: File, kind: FileKind, iconSize: Dp, modifier: Modifier = Modifier, richPdf: Boolean = false) {
     Box(modifier, contentAlignment = Alignment.Center) {
         when {
-            kind == FileKind.IMAGE || kind == FileKind.VIDEO -> {
+            kind == FileKind.VIDEO -> {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+                // se reproduce ahí mismo con su botón (como la música)
+                VideoTile(file, iconSize, Modifier.fillMaxSize())
+            }
+            kind == FileKind.IMAGE -> {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
                 AsyncImage(model = file, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                if (kind == FileKind.VIDEO) {
-                    Icon(Icons.Filled.PlayCircle, null, tint = Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.size((iconSize.value * 0.45f).coerceAtLeast(16f).dp))
-                }
             }
+            is3dModel(file) -> Model3DThumb(file, iconSize, Modifier.fillMaxSize())
             kind == FileKind.AUDIO -> {
                 val thumb by produceState<android.graphics.Bitmap?>(null, file) { value = loadThumb(file.absolutePath) }
                 val t = thumb
@@ -206,7 +208,7 @@ fun FileGrid(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val thumbShape = RoundedCornerShape(if (big) 12.dp else 10.dp)
-                val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || file.isPdf() || (big && kind == FileKind.AUDIO)
+                val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || file.isPdf() || (big && kind == FileKind.AUDIO) || is3dModel(file)
                 Box(
                     Modifier.fillMaxWidth().aspectRatio(if (big && kind == FileKind.VIDEO) 16f / 10f else 1f).clip(thumbShape)
                         .then(if (media) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thumbShape) else Modifier),

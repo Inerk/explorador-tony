@@ -169,7 +169,8 @@ fun BrowserScreen(
     var archiveFile by remember { mutableStateOf<File?>(null) }
     var focused by remember { mutableStateOf<File?>(null) }
     var castFile by remember { mutableStateOf<File?>(null) }
-    var docFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
+    var docFile by remember { mutableStateOf<File?>(null) }
+    var modelFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
     var paneFrac by remember { mutableStateOf(0.42f) }
     var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
@@ -241,6 +242,7 @@ fun BrowserScreen(
                     else -> when {
                         Archives.isArchive(file) -> archiveFile = file
                         isDocViewable(file) -> docFile = file   // texto, Word, Excel, PowerPoint, HTML, XML
+                        is3dModel(file) -> modelFile = file       // STL / 3MF
                         else -> openExternally(context, file)
                     }
                 }
@@ -511,7 +513,10 @@ fun BrowserScreen(
             // cuadrito flotante de música (en lugar de la barra de abajo)
             // con el panel de vista previa abierto, la música se controla desde el panel (sin cuadrito flotante)
             val paneShowing = LibraryStore.previewPane.isNotEmpty() && currentDir != null && searchResults == null
-            androidx.compose.runtime.SideEffect { ExplorerAudio.controller = controller }
+            androidx.compose.runtime.SideEffect {
+                ExplorerAudio.controller = controller
+                ExplorerVideo.onExpand = { onExpandVideo() }
+            }
             @Suppress("UNUSED_VARIABLE") val unusedPane = paneShowing
             when {
                 currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary, onOpenGallery = onOpenGallery, onOpenVideos = onOpenVideos)
@@ -651,6 +656,7 @@ fun BrowserScreen(
 
     // documentos: texto, Word, Excel, PowerPoint, HTML y XML
     docFile?.let { df -> DocumentViewer(df) { docFile = null } }
+    modelFile?.let { mf -> Model3DViewer(mf) { modelFile = null } }
 
     // comprimidos
     archiveFile?.let { af ->
@@ -899,17 +905,13 @@ private fun FileRow(
     ) {
         Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
             when (kind) {
-                FileKind.IMAGE, FileKind.VIDEO -> {
+                FileKind.IMAGE -> {
                     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
                     AsyncImage(model = file, contentDescription = null, contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize())
-                    if (kind == FileKind.VIDEO) {
-                        Icon(Icons.Filled.VideoFile, null, tint = Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(18.dp).align(Alignment.BottomEnd))
-                    }
                 }
-                FileKind.AUDIO -> FilePreview(file, kind, 32.dp, Modifier.fillMaxSize())
-                else -> if (file.isPdf()) FilePreview(file, kind, 32.dp, Modifier.fillMaxSize(), richPdf = true)
+                FileKind.VIDEO, FileKind.AUDIO -> FilePreview(file, kind, 32.dp, Modifier.fillMaxSize())
+                else -> if (file.isPdf() || is3dModel(file)) FilePreview(file, kind, 32.dp, Modifier.fillMaxSize(), richPdf = true)
                     else FriendlyIcon(file, kind, 40.dp)
             }
             if (selected) {

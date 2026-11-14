@@ -327,6 +327,7 @@ private fun PreviewBody(f: File, onOpen: (File) -> Unit, controller: Player?, on
                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(ExpTheme.bar)
                         .border(1.dp, ExpTheme.line, RoundedCornerShape(10.dp)).verticalScroll(rememberScrollState()).padding(10.dp))
             }
+            is3dModel(f) -> Model3DView(f, Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)))
             kind == FileKind.FOLDER || (Archives.isArchive(f) && f.isFile) -> {
                 // lo que hay adentro (de una carpeta o de un comprimido, sin extraer)
                 val items by produceState<List<Pair<String, Boolean>>?>(null, f) {
@@ -631,5 +632,64 @@ fun AudioPlayBadge(f: File, size: Dp, modifier: Modifier = Modifier) {
         }
         Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pausar" else "Reproducir",
             tint = Color.White, modifier = Modifier.size(size * 0.55f))
+    }
+}
+
+/** Videos en el explorador: se reproducen dentro de su propio cuadrito, como la música. */
+object ExplorerVideo {
+    var current by androidx.compose.runtime.mutableStateOf<File?>(null)
+    var onExpand: () -> Unit = {}
+
+    fun isActive(f: File): Boolean {
+        val p = VideoSession.player ?: return false
+        return current == f && VideoSession.files.size == 1 && VideoSession.files.first() == f && !VideoSession.floating
+    }
+
+    fun toggle(context: android.content.Context, f: File) {
+        if (isActive(f)) { VideoSession.player?.let { if (it.isPlaying) it.pause() else it.play() }; return }
+        ExplorerAudio.controller?.pause()
+        current = f
+        VideoSession.obtain(context, listOf(f), 0, resume = false).play()
+    }
+}
+
+/** Botón de play del video (con aro de avance) y, mientras suena, botón para pasar a pantalla completa. */
+@Composable
+fun VideoPlayBadge(f: File, size: Dp, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val active = ExplorerVideo.isActive(f)
+    val p = if (active) VideoSession.player else null
+    val tick = observePlayer(p, 250)
+    val playing = p?.isPlaying == true
+    val prog = if (p != null && p.duration > 0) (p.currentPosition + tick * 0L).toFloat() / p.duration else 0f
+    Box(
+        modifier.size(size).shadow(6.dp, CircleShape).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))
+            .clickable { ExplorerVideo.toggle(context, f) },
+        contentAlignment = Alignment.Center
+    ) {
+        if (active) Canvas(Modifier.fillMaxSize()) {
+            val sw = this.size.minDimension * 0.09f
+            drawArc(Color.White.copy(alpha = 0.25f), 0f, 360f, false, Offset(sw / 2, sw / 2), Size(this.size.width - sw, this.size.height - sw), style = Stroke(sw))
+            drawArc(Color.White, -90f, 360f * prog.coerceIn(0f, 1f), false, Offset(sw / 2, sw / 2),
+                Size(this.size.width - sw, this.size.height - sw), style = Stroke(sw, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        }
+        Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pausar" else "Reproducir aquí",
+            tint = Color.White, modifier = Modifier.size(size * 0.55f))
+    }
+}
+
+/** El video sonando dentro del cuadrito (o su miniatura si no). */
+@Composable
+fun VideoTile(f: File, iconSize: Dp, modifier: Modifier = Modifier) {
+    val active = ExplorerVideo.isActive(f)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val vp = VideoSession.player
+        if (active && vp != null) VideoView(vp, Modifier.fillMaxSize(), crop = true)
+        else AsyncImage(f, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        VideoPlayBadge(f, (iconSize.value * 0.55f).coerceIn(22f, 44f).dp)
+        if (active) Box(Modifier.align(Alignment.TopStart).padding(4.dp).size(26.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.5f))
+            .clickable { ExplorerVideo.onExpand() }, contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.OpenInFull, "Pantalla completa", tint = Color.White, modifier = Modifier.size(14.dp))
+        }
     }
 }
