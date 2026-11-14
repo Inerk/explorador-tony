@@ -134,32 +134,36 @@ private object Retro {
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
     private val lav get() = LibraryStore.musicSkin == MusicSkin.LAVANDA
+    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA
+    val isNebula get() = neb
     val isWmp get() = wmp
     val isVintage get() = vin
     val isOriginal get() = org
     val isLavanda get() = lav
     private val now get() = NowPlaying.colors
-    private fun pick(walkman: Color, media: Color, vintage: Color, original: Color = walkman, lavanda: Color = walkman) =
-        if (lav) lavanda else if (org) original else if (vin) vintage else if (wmp) media else walkman
-    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D), now.bottom, Color(0xFFF7F4FD))
+    private fun pick(walkman: Color, media: Color, vintage: Color, original: Color = walkman, lavanda: Color = walkman, nebula: Color = original) =
+        if (neb) nebula else if (lav) lavanda else if (org) original else if (vin) vintage else if (wmp) media else walkman
+    val Bg get() = pick(Color(0xFF111114), Color(0xFF0B1630), Color(0xFF1E140D), now.bottom, Color(0xFFF7F4FD), Nebula.Night)
     /** Fondo: en Original es el degradado de la portada que suena, como en el reproductor. */
     val bgBrush: Brush get() = when {
         org -> Brush.verticalGradient(listOf(now.top, now.bottom, Color(0xFF07080B)))
         lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
+        neb -> Brush.verticalGradient(listOf(Color(0xFF1E1240), Nebula.Night, Nebula.Deep))
         else -> Brush.verticalGradient(listOf(Bg, Bg))
     }
-    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f), Color.White)
-    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass, now.accent, Color(0xFF7C4DDB))
-    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight, now.accent.copy(alpha = 0.7f), Color(0xFFB79BF2))
-    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E), now.onAccent, Color.White)
-    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream, Color.White, Color(0xFF221B33))
-    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim, Color.White.copy(alpha = 0.6f), Color(0xFF7D7394))
-    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream, Color.White, Color(0xFF221B33))
-    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight, Color.White, Color(0xFF6A3FD0))
+    val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f), Color.White, Color.White.copy(alpha = 0.07f))
+    val Orange get() = pick(Color(0xFFFF7A00), Color(0xFF3FA9F5), Vintage.Brass, now.accent, Color(0xFF7C4DDB), Nebula.Pink)
+    val OrangeLight get() = pick(Color(0xFFFFA347), Color(0xFF9CDBFF), Vintage.BrassLight, now.accent.copy(alpha = 0.7f), Color(0xFFB79BF2), Nebula.Violet)
+    val OnAccent get() = pick(Color.Black, Color.White, Color(0xFF2A1A0E), now.onAccent, Color.White, Color.White)
+    val Text get() = pick(Color(0xFFF2F2F2), Color(0xFFF2F2F2), Vintage.Cream, Color.White, Color(0xFF221B33), Color.White)
+    val SubText get() = pick(Color(0xFF9A9AA5), Color(0xFF8FA6CC), Vintage.CreamDim, Color.White.copy(alpha = 0.6f), Color(0xFF7D7394), Nebula.Sub)
+    val HeaderText get() = pick(Color(0xFF1E1E24), Color.White, Vintage.Cream, Color.White, Color(0xFF221B33), Color.White)
+    val HeaderIcon get() = pick(Color(0xFF2B2B33), Color(0xFFCFE3FF), Vintage.BrassLight, Color.White, Color(0xFF6A3FD0), Nebula.PinkLight)
     /** Resalte de la canción que suena / tocado. */
-    val Highlight get() = if (lav) Color(0xFF7C4DDB).copy(alpha = 0.10f) else Color.White.copy(alpha = 0.10f)
+    val Highlight get() = if (lav) Color(0xFF7C4DDB).copy(alpha = 0.10f) else if (neb) Nebula.Pink.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.10f)
     val metal: Brush get() = when {
         lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
+        neb -> Brush.verticalGradient(listOf(Color(0xFF241550), Color(0xFF1A1038)))
         org -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent))
         vin -> Brush.verticalGradient(listOf(Color(0xFF8B5A2B), Color(0xFF5A3517), Color(0xFF3A2212)))
         wmp -> Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
@@ -311,7 +315,7 @@ fun LibraryScreen(
                 shape = RoundedCornerShape((26 * d).dp)
                 clip = d > 0f
             }
-            .background(Retro.bgBrush)
+            .background(Retro.bgBrush).nebulaSky(Retro.isNebula)
     ) {
         // Encabezado: en el menú principal es limpio (el título grande va abajo); en las listas, el metálico
         val clean = page == LibPage.Menu
@@ -454,7 +458,7 @@ fun LibraryScreen(
                     shape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp)
                     clip = true
                 }
-                .background(Retro.bgBrush)
+                .background(Retro.bgBrush).nebulaSky(Retro.isNebula)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
         ) {
             Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {

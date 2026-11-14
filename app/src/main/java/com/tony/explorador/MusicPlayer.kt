@@ -64,6 +64,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
@@ -295,10 +297,13 @@ fun MusicPlayerScreen(
 
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
     val colors = info?.colors ?: DefaultCoverColors
-    val top by animateColorAsState(colors.top, tween(900), label = "top")
-    val bottom by animateColorAsState(colors.bottom, tween(900), label = "bottom")
-    val accent by animateColorAsState(colors.accent, tween(900), label = "accent")
-    val onAccent by animateColorAsState(colors.onAccent, tween(900), label = "onAccent")
+    val nebula = isNebulaSkin
+    val top by animateColorAsState(if (nebula) Nebula.Night else colors.top, tween(900), label = "top")
+    val bottom by animateColorAsState(if (nebula) Nebula.Deep else colors.bottom, tween(900), label = "bottom")
+    val accent by animateColorAsState(if (nebula) Nebula.Pink else colors.accent, tween(900), label = "accent")
+    val onAccent by animateColorAsState(if (nebula) Color.White else colors.onAccent, tween(900), label = "onAccent")
+    val twinkle by androidx.compose.animation.core.rememberInfiniteTransition(label = "tw").animateFloat(0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "twv")
 
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
@@ -365,9 +370,10 @@ fun MusicPlayerScreen(
             }
             .background(Brush.verticalGradient(listOf(top, bottom)))
     ) {
-        // Fondo: la misma portada, muy difuminada
+        // Fondo: la misma portada, muy difuminada (en Nebula: cielo nocturno con estrellas)
         val cover = info?.cover
-        if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (nebula) NebulaBackground()
+        else if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Crossfade(targetState = cover, animationSpec = tween(900), label = "bg") { bmp ->
                 Image(
                     remember(bmp) { bmp.asImageBitmap() }, null,
@@ -388,7 +394,16 @@ fun MusicPlayerScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Barra superior
-                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (nebula) Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
+                    }
+                    NebulaCatLogo(46.dp)
+                    Text("REPRODUCIENDO", fontSize = 13.sp, letterSpacing = 3.sp, color = Color.White.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(46.dp))
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
+                } else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onClose) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
                     }
@@ -433,7 +448,12 @@ fun MusicPlayerScreen(
                                     QueuePanel(player, accent, title, artist, thumbSpace = QueueThumb + QueueThumbX)
                                 }
                                 // la portada viaja de su lugar grande a la esquina de la lista
-                                val side = minOf(maxWidth, maxHeight)
+                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else minOf(maxWidth, maxHeight)
+                                val topGap = if (nebula) side * 0.16f else 0.dp
+                                val decoAlpha = if (nebula) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                if (decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
+                                    nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
+                                }
                                 CoverArt(
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
@@ -455,7 +475,7 @@ fun MusicPlayerScreen(
                                     accent = accent,
                                     size = lerpDp(side, QueueThumb, p),
                                     x = lerpDp((maxWidth - side) / 2, QueueThumbX, p),
-                                    y = lerpDp(0.dp, QueueThumbY, p),
+                                    y = lerpDp(topGap, QueueThumbY, p),
                                     collapse = p,
                                     onTap = {
                                         if (q.value > 0.5f) toCover() else if (lyrics.isNotEmpty()) lyricsMode = true
@@ -474,6 +494,9 @@ fun MusicPlayerScreen(
                                     },
                                     onMenu = { menuOpen = true },
                                 )
+                                if (decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
+                                    nebulaCoverFront(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha, twinkle)
+                                }
                             }
                         }
                     }
@@ -570,7 +593,43 @@ fun MusicPlayerScreen(
                 }
 
                 // Controles
-                Row(
+                if (nebula) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        NebulaGlassButton(Icons.Filled.Shuffle, "Aleatorio", if (player.shuffleModeEnabled) Nebula.PinkLight else Color.White, 50.dp) {
+                            player.shuffleModeEnabled = !player.shuffleModeEnabled }
+                        NebulaGlassButton(Icons.Filled.SkipPrevious, "Anterior", size = 56.dp) { player.seekToPrevious() }
+                        NebulaPlayButton(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, 84.dp) {
+                            if (player.isPlaying) player.pause() else player.play() }
+                        NebulaGlassButton(Icons.Filled.SkipNext, "Siguiente", size = 56.dp, enabled = player.hasNextMediaItem()) { player.seekToNextMediaItem() }
+                        NebulaGlassButton(if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, "Repetir",
+                            if (player.repeatMode != Player.REPEAT_MODE_OFF) Nebula.PinkLight else Color.White, 50.dp) {
+                            player.repeatMode = when (player.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                        }
+                    }
+                    NebulaBottomNav(
+                        selected = if (lyricsMode) 1 else 1,
+                        icons = listOf(
+                            Icons.AutoMirrored.Filled.QueueMusic to "Lista",
+                            Icons.Filled.MusicNote to "Reproductor",
+                            Icons.Filled.Tune to "Ajustes",
+                            Icons.Filled.CropSquare to "Escritorio",
+                        ),
+                        onSelect = { i ->
+                            when (i) {
+                                0 -> { lyricsMode = false; toQueue() }
+                                1 -> { lyricsMode = false; toCover() }
+                                2 -> MusicUi.settingsOpen = true
+                                3 -> onHome()
+                            }
+                        },
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically

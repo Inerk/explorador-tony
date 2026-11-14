@@ -100,6 +100,7 @@ enum class MusicSkin(val label: String) {
     MEDIA_PLAYER("Media Player (azul cristal)"),
     VINTAGE("Vintage (tocadiscos y madera)"),
     LAVANDA("Lavanda (claro, íconos morados)"),
+    NEBULA("Nebula (noche morada y rosa neón)"),
 }
 
 /** Aspecto de la ventanita del reproductor en el escritorio. */
