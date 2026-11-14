@@ -61,6 +61,13 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material.icons.outlined.VerticalSplit
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.ViewList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.outlined.ArrowBackIos
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -370,76 +377,42 @@ fun BrowserScreen(
                     }
                 )
                 else -> Box(Modifier.background(ExpTheme.bar)) { TopAppBar(
-                    expandedHeight = 50.dp,
+                    expandedHeight = 62.dp,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
-                        titleContentColor = ExpTheme.onBar,
-                        navigationIconContentColor = ExpTheme.onBar,
-                        actionIconContentColor = ExpTheme.onBar,
+                        titleContentColor = ExpTheme.text,
+                        navigationIconContentColor = ExpTheme.text,
+                        actionIconContentColor = ExpTheme.text,
                     ),
                     navigationIcon = {
                         if (currentDir != null) {
                             IconButton(onClick = { if (isRoot) goTo(null) else goTo(currentDir?.parentFile) }) {
-                                Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Atrás", modifier = Modifier.size(22.dp))
+                                Icon(Icons.AutoMirrored.Outlined.ArrowBackIos, "Atrás", modifier = Modifier.size(20.dp))
                             }
                         }
                     },
                     title = {
-                        // dentro de una carpeta, dónde estás ya lo dice la cinta de abajo
-                        if (currentDir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
+                        val dir = currentDir
+                        if (dir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
+                        else {
+                            // nombre de la carpeta y cuánto hay adentro
+                            val stats by produceState("", dir, files) {
+                                value = withContext(Dispatchers.IO) {
+                                    val sz = files.sumOf { if (it.isFile) it.length() else 0L }
+                                    "${files.size} elementos" + if (sz > 0) " • ${formatSize(sz)}" else ""
+                                }
+                            }
+                            Column {
+                                Text(if (isRoot) (roots.firstOrNull { it.file.absolutePath == dir.absolutePath }?.name ?: dir.name) else dir.name,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                if (stats.isNotEmpty()) Text(stats, fontSize = 13.sp, color = ExpTheme.sub, maxLines = 1)
+                            }
+                        }
                     },
                     actions = {
-                        IconButton(onClick = { searchActive = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.Search, "Buscar", modifier = Modifier.size(21.dp)) }
-                        if (currentDir != null) {
-                            // vista previa / detalles, como el panel de Windows
-                            var paneMenu by remember { mutableStateOf(false) }
-                            val paneOn = LibraryStore.previewPane.isNotEmpty()
-                            Box {
-                                Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape)
-                                    .background(if (paneOn) ExpTheme.onBar else ExpTheme.crumbBg)
-                                    .clickable { paneMenu = true }.padding(horizontal = 9.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Outlined.VerticalSplit, null, tint = if (paneOn) Color.White else ExpTheme.onBar, modifier = Modifier.size(15.dp))
-                                    Text(" Vista previa", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (paneOn) Color.White else ExpTheme.onBar)
-                                }
-                                DropdownMenu(expanded = paneMenu, onDismissRequest = { paneMenu = false }) {
-                                    listOf("preview" to "Panel de vista previa", "details" to "Panel de detalles", "" to "Sin panel").forEach { (id, label) ->
-                                        DropdownMenuItem(text = { Text(label, fontWeight = if (LibraryStore.previewPane == id) FontWeight.Bold else null) },
-                                            onClick = { LibraryStore.changePreviewPane(id); paneMenu = false })
-                                    }
-                                }
-                            }
-                            var viewMenu by remember { mutableStateOf(false) }
-                            val view = ExplorerView.of(LibraryStore.explorerView)
-                            IconButton(onClick = { viewMenu = true }, modifier = Modifier.size(40.dp)) { Icon(view.icon, "Vista", modifier = Modifier.size(21.dp)) }
-                            DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
-                                ExplorerView.entries.forEach { v ->
-                                    DropdownMenuItem(
-                                        text = { Text(v.label, fontWeight = if (v == view) FontWeight.Bold else null) },
-                                        leadingIcon = { Icon(v.icon, null, tint = if (v == view) MaterialTheme.colorScheme.primary else LocalContentColor.current) },
-                                        onClick = { LibraryStore.changeExplorerView(v.id); viewMenu = false }
-                                    )
-                                }
-                            }
-                        }
-                        if (currentDir != null) {
-                            var sortMenu by remember { mutableStateOf(false) }
-                            IconButton(onClick = { sortMenu = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.AutoMirrored.Outlined.Sort, "Ordenar", modifier = Modifier.size(21.dp)) }
-                            DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                                SortMode.entries.forEach { mode ->
-                                    DropdownMenuItem(
-                                        text = { Text(mode.label + if (mode == sortMode) (if (ascending) "  ↑" else "  ↓") else "") },
-                                        onClick = {
-                                            if (mode == sortMode) ascending = !ascending
-                                            else { sortMode = mode; ascending = mode == SortMode.NAME }
-                                            sortMenu = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
+                        IconButton(onClick = { searchActive = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Outlined.Search, "Buscar", modifier = Modifier.size(24.dp)) }
                         var more by remember { mutableStateOf(false) }
-                        IconButton(onClick = { more = true }, modifier = Modifier.size(40.dp)) { Icon(Icons.Outlined.MoreVert, "Más", modifier = Modifier.size(21.dp)) }
+                        IconButton(onClick = { more = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Filled.MoreHoriz, "Más", modifier = Modifier.size(24.dp)) }
                         DropdownMenu(expanded = more, onDismissRequest = { more = false }) {
                             if (currentDir != null) {
                                 DropdownMenuItem(text = { Text("Nueva carpeta") }, leadingIcon = { Icon(Icons.Filled.CreateNewFolder, null) },
@@ -525,6 +498,79 @@ fun BrowserScreen(
                         val dir = currentDir
                         if (searchResults == null && dir != null) {
                             ExplorerCrumbs(dir, roots, onNavigate = { goTo(it) })
+                            // fila de orden y vista (cuadrícula / lista) y panel de vista previa
+                            Row(Modifier.fillMaxWidth().background(ExpTheme.bar).padding(start = 8.dp, end = 12.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                var sortMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    Row(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).clickable { sortMenu = true }
+                                        .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.Tune, null, tint = ExpTheme.text, modifier = Modifier.size(22.dp))
+                                        Text("   ${sortMode.label}", color = ExpTheme.text, fontSize = 15.sp)
+                                        Icon(if (ascending) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp, null, tint = ExpTheme.text,
+                                            modifier = Modifier.size(22.dp))
+                                    }
+                                    DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                                        SortMode.entries.forEach { mode ->
+                                            DropdownMenuItem(
+                                                text = { Text(mode.label + if (mode == sortMode) (if (ascending) "  ↑" else "  ↓") else "",
+                                                    fontWeight = if (mode == sortMode) FontWeight.Bold else null) },
+                                                onClick = {
+                                                    if (mode == sortMode) ascending = !ascending
+                                                    else { sortMode = mode; ascending = mode == SortMode.NAME }
+                                                    sortMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.weight(1f))
+                                // panel de vista previa
+                                var paneMenu by remember { mutableStateOf(false) }
+                                val paneOn2 = LibraryStore.previewPane.isNotEmpty()
+                                Box {
+                                    Box(Modifier.padding(end = 8.dp).size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(if (paneOn2) ExpTheme.pill else ExpTheme.chipBg).clickable { paneMenu = true },
+                                        contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Outlined.VerticalSplit, "Vista previa", tint = if (paneOn2) Color.White else ExpTheme.chipText, modifier = Modifier.size(19.dp))
+                                    }
+                                    DropdownMenu(expanded = paneMenu, onDismissRequest = { paneMenu = false }) {
+                                        listOf("preview" to "Panel de vista previa", "details" to "Panel de detalles", "" to "Sin panel").forEach { (id, label) ->
+                                            DropdownMenuItem(text = { Text(label, fontWeight = if (LibraryStore.previewPane == id) FontWeight.Bold else null) },
+                                                onClick = { LibraryStore.changePreviewPane(id); paneMenu = false })
+                                        }
+                                    }
+                                }
+                                // cuadrícula / lista (mantén presionado para más vistas)
+                                val view = ExplorerView.of(LibraryStore.explorerView)
+                                val isGrid = view == ExplorerView.GRID || view == ExplorerView.BIG
+                                var viewMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(ExpTheme.chipBg).padding(3.dp)) {
+                                        listOf(true to Icons.Filled.GridView, false to Icons.Outlined.ViewList).forEach { (g, ic) ->
+                                            val on = g == isGrid
+                                            Box(Modifier.size(width = 52.dp, height = 38.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                                .background(if (on) ExpTheme.pill else Color.Transparent)
+                                                .combinedClickable(onClick = {
+                                                    if (g != isGrid) LibraryStore.changeExplorerView(if (g) ExplorerView.GRID.id else ExplorerView.LIST.id)
+                                                    else viewMenu = true
+                                                }, onLongClick = { viewMenu = true }),
+                                                contentAlignment = Alignment.Center) {
+                                                Icon(ic, if (g) "Cuadrícula" else "Lista", tint = if (on) Color.White else ExpTheme.chipText, modifier = Modifier.size(22.dp))
+                                            }
+                                        }
+                                    }
+                                    DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
+                                        ExplorerView.entries.forEach { v ->
+                                            DropdownMenuItem(
+                                                text = { Text(v.label, fontWeight = if (v == view) FontWeight.Bold else null) },
+                                                leadingIcon = { Icon(v.icon, null) },
+                                                onClick = { LibraryStore.changeExplorerView(v.id); viewMenu = false }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                         if (searchResults != null) {
                             SearchStatusBar(searching, searchProgress, searchWhere, searchResults?.size ?: 0)

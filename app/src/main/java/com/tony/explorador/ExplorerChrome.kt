@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -108,6 +110,65 @@ object ExpTheme {
     val crumbBg get() = if (d) Color(0xFF2A2440) else Color(0xFFF1ECFB)
     val paneBg get() = if (d) Color(0xFF171320) else Color(0xFFFAF8FE)
     val line get() = if (d) Color(0xFF332C4A) else Color(0xFFE6DEF7)
+    /** Pastilla/botón activo (morado fuerte en los dos modos). */
+    val pill get() = if (d) Color(0xFF7E5BE6) else Color(0xFF6A3FD0)
+    val chipBg get() = if (d) Color(0xFF252136) else Color(0xFFF1ECFB)
+    val chipText get() = if (d) Color(0xFFD9CCFF) else Color(0xFF6A3FD0)
+    val card get() = if (d) Color(0xFF16141F) else Color.White
+    val cardLine get() = if (d) Color(0xFF26233A) else Color(0xFFECE6F7)
+}
+
+fun typeColorOf(file: File, kind: FileKind): Color = typeStyle(file, kind).second
+
+/** Hoja de documento con la esquina doblada y una etiqueta de color con la extensión (como en la Mac). */
+@Composable
+fun DocGlyph(file: File, kind: FileKind, size: Dp, modifier: Modifier = Modifier) {
+    val color = typeColorOf(file, kind)
+    val ext = file.extension.uppercase(Locale.ROOT).take(4).ifBlank { "?" }
+    Box(modifier.size(size * 0.8f, size), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = this.size.width; val h = this.size.height; val fold = w * 0.28f; val r = w * 0.1f
+            val page = Path().apply {
+                moveTo(r, 0f); lineTo(w - fold, 0f); lineTo(w, fold); lineTo(w, h - r)
+                quadraticBezierTo(w, h, w - r, h); lineTo(r, h); quadraticBezierTo(0f, h, 0f, h - r); lineTo(0f, r)
+                quadraticBezierTo(0f, 0f, r, 0f); close()
+            }
+            drawPath(page, Color.Black.copy(alpha = 0.12f), style = Stroke(w * 0.03f))
+            drawPath(page, Brush.verticalGradient(listOf(Color.White, Color(0xFFF1EEF7))))
+            val corner = Path().apply { moveTo(w - fold, 0f); lineTo(w - fold, fold * 0.75f); quadraticBezierTo(w - fold, fold, w - fold * 0.75f, fold); lineTo(w, fold); close() }
+            drawPath(corner, Color(0xFFD9D3E6))
+        }
+        Text(ext, color = Color.White, fontSize = (size.value * 0.17f).sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.2f).clip(RoundedCornerShape(size * 0.07f))
+                .background(color).padding(horizontal = size * 0.07f, vertical = size * 0.015f))
+    }
+}
+
+/** Duración de audios y videos (con caché, se calcula en segundo plano). */
+object MediaDuration {
+    private val cache = android.util.LruCache<String, Long>(800)
+    fun peek(f: File): Long? = cache.get(f.absolutePath)
+    fun get(f: File): Long {
+        cache.get(f.absolutePath)?.let { return it }
+        val ms = runCatching {
+            val r = MediaMetadataRetriever()
+            try { r.setDataSource(f.absolutePath); r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L }
+            finally { r.release() }
+        }.getOrDefault(0L)
+        cache.put(f.absolutePath, ms)
+        return ms
+    }
+}
+
+@Composable
+fun DurationBadge(f: File, modifier: Modifier = Modifier) {
+    val ms by produceState(MediaDuration.peek(f) ?: 0L, f) { if (value == 0L) value = withContext(Dispatchers.IO) { MediaDuration.get(f) } }
+    if (ms > 0) {
+        val t = ms / 1000
+        Text(if (t >= 3600) "%d:%02d:%02d".format(t / 3600, (t / 60) % 60, t % 60) else "%d:%02d".format(t / 60, t % 60),
+            color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+            modifier = modifier.clip(CircleShape).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 7.dp, vertical = 2.dp))
+    }
 }
 
 /** Carpeta "semi relieve": pestaña de atrás, frente con luz arriba y sombra sólida abajo (plana, sin difuminar). */
@@ -200,19 +261,20 @@ fun ExplorerCrumbs(dir: File, roots: List<StorageRoot>, onNavigate: (File) -> Un
             crumbs.forEachIndexed { i, (name, file) ->
                 val last = i == crumbs.lastIndex
                 if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ExpTheme.sub, modifier = Modifier.size(15.dp))
-                Row(Modifier.clip(CircleShape).background(if (last) ExpTheme.onBar else ExpTheme.crumbBg)
-                    .clickable { onNavigate(file) }.padding(horizontal = 10.dp, vertical = 4.dp),
+                Row(Modifier.clip(CircleShape).background(if (last) ExpTheme.pill else ExpTheme.chipBg)
+                    .clickable { onNavigate(file) }.padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     if (i == 0) {
-                        Icon(Icons.Outlined.Home, null, tint = if (last) Color.White else ExpTheme.onBar, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
+                        Icon(if (name.contains("SD", true) || name.contains("tarjeta", true)) Icons.Outlined.SdCard else Icons.Outlined.Storage, null,
+                            tint = if (last) Color.White else ExpTheme.chipText, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
                     }
-                    Text(name, fontSize = 12.sp, fontWeight = if (last) FontWeight.Bold else FontWeight.Medium,
-                        color = if (last) Color.White else ExpTheme.onBar, maxLines = 1)
+                    Text(if (i == 0 && name.startsWith("Almacenamiento interno")) "Interno" else name, fontSize = 13.sp,
+                        fontWeight = if (last) FontWeight.Bold else FontWeight.Medium,
+                        color = if (last) Color.White else ExpTheme.chipText, maxLines = 1)
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(ExpTheme.line))
     }
 }
 

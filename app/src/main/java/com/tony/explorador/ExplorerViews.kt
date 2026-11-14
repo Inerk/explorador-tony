@@ -26,6 +26,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.outlined.TableRows
 import androidx.compose.material.icons.outlined.ViewHeadline
 import androidx.compose.material.icons.outlined.GridView
@@ -190,46 +193,53 @@ fun FileGrid(
     onClick: (File) -> Unit, onLongClick: (File) -> Unit, onMenu: (File) -> Unit = {}, focused: File? = null,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(if (big) 160.dp else 92.dp),
+        columns = if (big) GridCells.Adaptive(160.dp) else GridCells.Adaptive(104.dp),
         state = state,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(if (big) 10.dp else 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(if (big) 10.dp else 4.dp),
-        verticalArrangement = Arrangement.spacedBy(if (big) 12.dp else 6.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         items(files, key = { it.absolutePath }) { file ->
             val kind = remember(file) { file.kind() }
             val selected = file in selection
+            val shape = RoundedCornerShape(18.dp)
+            val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || kind == FileKind.AUDIO || file.isPdf() || is3dModel(file)
             Column(
-                Modifier.clip(RoundedCornerShape(12.dp))
-                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else if (file == focused) ExpTheme.crumbBg else Color.Transparent)
+                Modifier.clip(shape)
+                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else if (file == focused) ExpTheme.chipBg else ExpTheme.card)
+                    .border(1.dp, if (selected) ExpTheme.pill else ExpTheme.cardLine, shape)
                     .combinedClickable(onClick = { onClick(file) }, onLongClick = { onLongClick(file) })
-                    .padding(if (big) 6.dp else 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(8.dp)
             ) {
-                val thumbShape = RoundedCornerShape(if (big) 12.dp else 10.dp)
-                val media = kind == FileKind.IMAGE || kind == FileKind.VIDEO || file.isPdf() || (big && kind == FileKind.AUDIO) || is3dModel(file)
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(if (big && kind == FileKind.VIDEO) 16f / 10f else 1f).clip(thumbShape)
-                        .then(if (media) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), thumbShape) else Modifier),
-                    contentAlignment = Alignment.Center
-                ) {
-                    FilePreview(file, kind, if (big) 72.dp else 48.dp, Modifier.fillMaxSize(), richPdf = true)
-                    SelectedMark(selected)
-                    MoreDots(Modifier.align(Alignment.TopEnd), onImage = media) { onMenu(file) }
-                }
-                Text(
-                    file.name, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
-                    fontSize = if (big) 14.sp else 12.sp, lineHeight = if (big) 17.sp else 14.sp,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                )
-                if (big) {
-                    val info by produceState("", file, showHidden) {
-                        value = withContext(Dispatchers.IO) {
-                            if (file.isDirectory) "${folderItemCount(file, showHidden)} elementos" else formatSize(file.length())
+                Box(Modifier.fillMaxWidth().aspectRatio(if (big) 1.25f else 1.15f), contentAlignment = Alignment.Center) {
+                    if (media) {
+                        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                            FilePreview(file, kind, if (big) 72.dp else 48.dp, Modifier.fillMaxSize(), richPdf = true)
+                            if (kind == FileKind.AUDIO || kind == FileKind.VIDEO) DurationBadge(file, Modifier.align(Alignment.BottomEnd).padding(5.dp))
+                        }
+                    } else {
+                        if (kind == FileKind.FOLDER) FolderGlyph(if (big) 84.dp else 62.dp)
+                        else DocGlyph(file, kind, if (big) 76.dp else 58.dp)
+                        Box(Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-6).dp)) {
+                            MoreDots(horizontal = true) { onMenu(file) }
                         }
                     }
-                    Text(info, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SelectedMark(selected)
+                }
+                Text(
+                    file.name, maxLines = 2, overflow = TextOverflow.Ellipsis, color = ExpTheme.text,
+                    fontSize = if (big) 15.sp else 13.sp, lineHeight = if (big) 18.sp else 16.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, start = 2.dp)
+                )
+                val info by produceState("", file, showHidden) {
+                    value = withContext(Dispatchers.IO) {
+                        if (file.isDirectory) "${folderItemCount(file, showHidden)} elementos" else formatSize(file.length())
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 2.dp, top = 2.dp)) {
+                    Text(info, fontSize = 12.sp, color = ExpTheme.sub, modifier = Modifier.weight(1f))
+                    if (media) MoreDots(Modifier.size(22.dp), horizontal = true) { onMenu(file) }
                 }
             }
         }
@@ -239,14 +249,14 @@ fun FileGrid(
 
 /** Los tres puntos de cada archivo. */
 @Composable
-fun MoreDots(modifier: Modifier = Modifier, onImage: Boolean = false, onClick: () -> Unit) {
+fun MoreDots(modifier: Modifier = Modifier, onImage: Boolean = false, horizontal: Boolean = false, onClick: () -> Unit) {
     Box(
-        modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
+        Modifier.size(30.dp).then(modifier).clip(androidx.compose.foundation.shape.CircleShape)
             .then(if (onImage) Modifier.background(Color.Black.copy(alpha = 0.35f)) else Modifier)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Filled.MoreVert, "Opciones", tint = if (onImage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        Icon(if (horizontal) Icons.Filled.MoreHoriz else Icons.Filled.MoreVert, "Opciones", tint = if (onImage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp))
     }
 }
