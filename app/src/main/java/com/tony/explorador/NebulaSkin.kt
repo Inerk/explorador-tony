@@ -45,22 +45,29 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Colores del tema Nebula: noche morada con rosa neón. */
+/**
+ * Colores de los temas neón: Nebula (noche morada con rosa) y Retro naranja (negro con naranja y morado).
+ * "Pink" es el color principal de cada tema.
+ */
 object Nebula {
-    val Pink = Color(0xFFFF4F9A)
-    val PinkLight = Color(0xFFFF8CC6)
-    val Purple = Color(0xFF8B5CF6)
-    val Violet = Color(0xFFB57BFF)
-    val Blue = Color(0xFF5B7CFF)
-    val Night = Color(0xFF120B26)
-    val Deep = Color(0xFF080512)
+    private val orange get() = LibraryStore.musicSkin == MusicSkin.WALKMAN
+    val Pink get() = if (orange) Color(0xFFFF8A1F) else Color(0xFFFF4F9A)
+    val PinkLight get() = if (orange) Color(0xFFFFB45C) else Color(0xFFFF8CC6)
+    val Purple get() = if (orange) Color(0xFF7B2FF7) else Color(0xFF8B5CF6)
+    val Violet get() = if (orange) Color(0xFFA855F7) else Color(0xFFB57BFF)
+    val Blue get() = if (orange) Color(0xFFFF6A00) else Color(0xFF5B7CFF)
+    val Night get() = if (orange) Color(0xFF120A1C) else Color(0xFF120B26)
+    val Deep get() = if (orange) Color(0xFF050307) else Color(0xFF080512)
+    val Top get() = if (orange) Color(0xFF1A0E26) else Color(0xFF1B1038)
+    /** Retro naranja: play con aro naranja y centro oscuro. */
+    val ringPlay get() = orange
     val Glass = Color.White.copy(alpha = 0.07f)
     val GlassLine = Color.White.copy(alpha = 0.12f)
     val Text = Color.White
     val Sub = Color(0xFFB9ABDA)
 }
 
-val isNebulaSkin get() = LibraryStore.musicSkin == MusicSkin.NEBULA
+val isNebulaSkin get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN
 
 /** Fondo: degradado nocturno, nubes de color suaves y estrellitas que titilan. */
 @Composable
@@ -68,7 +75,7 @@ fun NebulaBackground(modifier: Modifier = Modifier) {
     val stars = remember { List(70) { Triple(Random.nextFloat(), Random.nextFloat(), Random.nextFloat()) } }
     val t by rememberInfiniteTransition(label = "neb").animateFloat(0f, 1f, infiniteRepeatable(tween(9000, easing = LinearEasing)), label = "t")
     Canvas(modifier.fillMaxSize()) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF1B1038), Nebula.Night, Nebula.Deep)))
+        drawRect(Brush.verticalGradient(listOf(Nebula.Top, Nebula.Night, Nebula.Deep)))
         val w = size.width; val h = size.height
         fun blob(cx: Float, cy: Float, r: Float, c: Color) =
             drawCircle(Brush.radialGradient(listOf(c, Color.Transparent), Offset(cx, cy), r), r, Offset(cx, cy))
@@ -175,6 +182,17 @@ fun NebulaGlassButton(icon: ImageVector, description: String, tint: Color = Colo
 /** Botón grande de play/pausa rosa con brillo. */
 @Composable
 fun NebulaPlayButton(icon: ImageVector, size: Dp = 84.dp, onClick: () -> Unit) {
+    if (Nebula.ringPlay) {
+        // aro naranja brillante con centro oscuro
+        Box(
+            Modifier.size(size).shadow(26.dp, CircleShape, ambientColor = Nebula.Pink, spotColor = Nebula.Pink).clip(CircleShape)
+                .background(Brush.radialGradient(listOf(Color(0xFF2A1408), Color(0xFF160A04))))
+                .border(size * 0.07f, Brush.sweepGradient(listOf(Nebula.PinkLight, Nebula.Pink, Color(0xFFFF5A00), Nebula.PinkLight)), CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.46f)) }
+        return
+    }
     Box(
         Modifier.size(size).shadow(24.dp, CircleShape, ambientColor = Nebula.Pink, spotColor = Nebula.Pink).clip(CircleShape)
             .background(Brush.radialGradient(listOf(Nebula.PinkLight, Nebula.Pink, Color(0xFFD9327C))))

@@ -96,7 +96,7 @@ fun skinFor(theme: AppTheme): Skin = when (theme) {
 /** Temas de la sección de música (solo cambian colores e íconos). */
 enum class MusicSkin(val label: String) {
     ORIGINAL("Original (como el reproductor, con los colores de la portada)"),
-    WALKMAN("Walkman (negro y naranja)"),
+    WALKMAN("Retro naranja (negro, naranja y morado)"),
     MEDIA_PLAYER("Media Player (azul cristal)"),
     VINTAGE("Vintage (tocadiscos y madera)"),
     LAVANDA("Lavanda (claro, íconos morados)"),

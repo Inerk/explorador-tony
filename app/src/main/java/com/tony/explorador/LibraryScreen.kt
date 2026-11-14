@@ -134,7 +134,7 @@ private object Retro {
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
     private val lav get() = LibraryStore.musicSkin == MusicSkin.LAVANDA
-    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA
+    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN
     val isNebula get() = neb
     val isWmp get() = wmp
     val isVintage get() = vin
@@ -148,7 +148,7 @@ private object Retro {
     val bgBrush: Brush get() = when {
         org -> Brush.verticalGradient(listOf(now.top, now.bottom, Color(0xFF07080B)))
         lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
-        neb -> Brush.verticalGradient(listOf(Color(0xFF1E1240), Nebula.Night, Nebula.Deep))
+        neb -> Brush.verticalGradient(listOf(Nebula.Top, Nebula.Night, Nebula.Deep))
         else -> Brush.verticalGradient(listOf(Bg, Bg))
     }
     val Panel get() = pick(Color(0xFF1C1C22), Color(0xFF14284F), Color(0xFF34231A), Color.White.copy(alpha = 0.07f), Color.White, Color.White.copy(alpha = 0.07f))
@@ -163,7 +163,7 @@ private object Retro {
     val Highlight get() = if (lav) Color(0xFF7C4DDB).copy(alpha = 0.10f) else if (neb) Nebula.Pink.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.10f)
     val metal: Brush get() = when {
         lav -> Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF3EEFC)))
-        neb -> Brush.verticalGradient(listOf(Color(0xFF241550), Color(0xFF1A1038)))
+        neb -> Brush.verticalGradient(listOf(Nebula.Top, Nebula.Night))
         org -> Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent))
         vin -> Brush.verticalGradient(listOf(Color(0xFF8B5A2B), Color(0xFF5A3517), Color(0xFF3A2212)))
         wmp -> Brush.verticalGradient(listOf(Color(0xFF4F76B5), Color(0xFF1C3463), Color(0xFF0A1630)))
