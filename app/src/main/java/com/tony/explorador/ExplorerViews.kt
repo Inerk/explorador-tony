@@ -118,6 +118,8 @@ fun FilePreview(file: File, kind: FileKind, iconSize: Dp, modifier: Modifier = M
                 val t = thumb
                 if (t != null) Image(remember(t) { t.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 else FriendlyIcon(file, kind, iconSize)
+                // botón de play como en la Mac
+                AudioPlayBadge(file, (iconSize.value * 0.55f).coerceIn(22f, 44f).dp)
             }
             richPdf && file.isPdf() -> {
                 val page by produceState<android.graphics.Bitmap?>(null, file) { value = loadPdfThumb(file) }
@@ -161,7 +163,10 @@ fun CompactFileList(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (selected) Icon(Icons.Filled.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
-                else FriendlyIcon(file, kind, 28.dp)
+                else Box(contentAlignment = Alignment.Center) {
+                    FriendlyIcon(file, kind, 28.dp)
+                    if (kind == FileKind.AUDIO) AudioPlayBadge(file, 20.dp)
+                }
                 Spacer(Modifier.width(12.dp))
                 Text(file.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 val info by produceState("", file) {

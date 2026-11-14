@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.Edit
@@ -554,6 +555,7 @@ fun FileMenuSheet(f: File, options: List<Pair<String, () -> Unit>>, onDismiss: (
                     label.startsWith("Comprimir") -> Icons.Outlined.Archive
                     label.startsWith("Ver contenido") -> Icons.Outlined.Unarchive
                     label.startsWith("Mandar a la TV") -> Icons.Outlined.Cast
+                    label.startsWith("Abrir en el reproductor") -> Icons.Outlined.PlayCircle
                     label.startsWith("Acceso directo") -> Icons.Outlined.AddToHomeScreen
                     label == "Seleccionar" -> Icons.Outlined.CheckCircle
                     danger -> Icons.Outlined.Delete
@@ -588,5 +590,44 @@ private fun NowPlayingStrip(f: File, controller: Player?) {
         }
         Text("  ${if (p.isPlaying) "Reproduciendo" else "En pausa"} · ${fmtTime(p.currentPosition)} / ${fmtTime(p.duration)}",
             color = ExpTheme.onBar, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** Música en el explorador al estilo Mac: el ícono del archivo tiene su botón de play, sin ventanas aparte. */
+object ExplorerAudio {
+    var controller by androidx.compose.runtime.mutableStateOf<Player?>(null)
+
+    fun isCurrent(f: File) = controller?.currentMediaItem?.mediaId == f.absolutePath
+
+    /** Si ya es la que suena: pausa/sigue. Si no: suena solo esa canción. */
+    fun toggle(f: File) {
+        val p = controller ?: return
+        if (isCurrent(f)) { if (p.isPlaying) p.pause() else p.play() }
+        else { runCatching { VideoSession.player?.pause() }; playMusic(p, listOf(f), 0) }
+    }
+}
+
+@Composable
+fun AudioPlayBadge(f: File, size: Dp, modifier: Modifier = Modifier) {
+    val p = ExplorerAudio.controller
+    val tick = observePlayer(p, 250)
+    val isThis = p != null && p.currentMediaItem?.mediaId == f.absolutePath
+    val playing = isThis && p!!.isPlaying
+    val prog = if (isThis && p!!.duration > 0) (p.currentPosition + tick * 0L).toFloat() / p.duration else 0f
+    Box(
+        modifier.size(size).shadow(6.dp, CircleShape).clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.55f))
+            .clickable { ExplorerAudio.toggle(f) },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isThis) Canvas(Modifier.fillMaxSize()) {
+            val sw = this.size.minDimension * 0.09f
+            drawArc(Color.White.copy(alpha = 0.25f), 0f, 360f, false, Offset(sw / 2, sw / 2),
+                Size(this.size.width - sw, this.size.height - sw), style = Stroke(sw))
+            drawArc(Color.White, -90f, 360f * prog.coerceIn(0f, 1f), false, Offset(sw / 2, sw / 2),
+                Size(this.size.width - sw, this.size.height - sw), style = Stroke(sw, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+        }
+        Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, if (playing) "Pausar" else "Reproducir",
+            tint = Color.White, modifier = Modifier.size(size * 0.55f))
     }
 }

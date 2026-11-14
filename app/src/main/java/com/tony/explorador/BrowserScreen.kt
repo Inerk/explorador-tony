@@ -230,10 +230,8 @@ fun BrowserScreen(
                 val list = withContext(Dispatchers.IO) { siblings.filter { it.kind() == FileKind.VIDEO } }
                 onOpenVideo(list, list.indexOf(file).coerceAtLeast(0))
             }
-            FileKind.AUDIO -> scope.launch {
-                val list = withContext(Dispatchers.IO) { siblings.filter { it.kind() == FileKind.AUDIO } }
-                onPlayMusic(list, list.indexOf(file).coerceAtLeast(0))
-            }
+            // música: suena ahí mismo con el botón del ícono (como en la Mac), sin cuadrito flotante
+            FileKind.AUDIO -> ExplorerAudio.toggle(file)
             FileKind.OTHER -> {
                 val ext = file.extension.lowercase(Locale.ROOT)
                 when (ext) {
@@ -508,8 +506,8 @@ fun BrowserScreen(
             // cuadrito flotante de música (en lugar de la barra de abajo)
             // con el panel de vista previa abierto, la música se controla desde el panel (sin cuadrito flotante)
             val paneShowing = LibraryStore.previewPane.isNotEmpty() && currentDir != null && searchResults == null
-            if (controller != null && !paneShowing) MiniCoverPlayer(controller, onOpen = onOpenMusicPlayer,
-                modifier = Modifier.align(Alignment.BottomEnd).zIndex(10f))
+            androidx.compose.runtime.SideEffect { ExplorerAudio.controller = controller }
+            @Suppress("UNUSED_VARIABLE") val unusedPane = paneShowing
             when {
                 currentDir == null && searchResults == null -> HomeContent(roots, onOpen = { goTo(it) }, onOpenMusic = onOpenLibrary, onOpenGallery = onOpenGallery, onOpenVideos = onOpenVideos)
                 else -> {
@@ -695,6 +693,10 @@ fun BrowserScreen(
             "Compartir" to { shareFiles(context, listOf(f)) },
             *(if (f.isFile && Archives.isArchive(f)) arrayOf<Pair<String, () -> Unit>>("Ver contenido y extraer" to { archiveFile = f }) else emptyArray()),
             "Comprimir…" to { compressItems = listOf(f) },
+            *(if (f.isFile && f.kind() == FileKind.AUDIO) arrayOf<Pair<String, () -> Unit>>("Abrir en el reproductor" to {
+                if (!ExplorerAudio.isCurrent(f)) ExplorerAudio.toggle(f)
+                onOpenMusicPlayer()
+            }) else emptyArray()),
             *(if (f.isFile && (f.kind() == FileKind.VIDEO || f.kind() == FileKind.AUDIO || f.kind() == FileKind.IMAGE))
                 arrayOf<Pair<String, () -> Unit>>("Mandar a la TV" to { castFile = f }) else emptyArray()),
             "Acceso directo en el escritorio" to {
