@@ -88,6 +88,8 @@ object MusicUi {
     var syncLyricsFor by mutableStateOf<String?>(null)
     /** Ajustes de música abiertos. */
     var settingsOpen by mutableStateOf(false)
+    /** El reproductor se cierra con la portada volando a la miniatura (la pantalla ya se desvaneció). */
+    var flyClose by mutableStateOf(false)
     /** Abrir la página de carpetas donde se busca música (desde Ajustes). */
     var openScanFolders by mutableStateOf(false)
     /** La ventana flotante de letra se escondió (vuelve con la siguiente canción). */

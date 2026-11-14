@@ -353,7 +353,8 @@ fun AppRoot() {
                             onPeekMenu = { peekMusicMenu() },
                             onMenuCancel = { cancelMusicMenu() },
                             onMenuDone = { finishMusicMenu() },
-                            onGoTo = { k, v -> goTo(k, v) })
+                            onGoTo = { k, v -> goTo(k, v) },
+                            flyToMini = Overlay.Library in overlays)
                     }
                     Overlay.CoverFlow -> CoverFlowScreen(
                         startPath = controller?.currentMediaItem?.mediaId,
@@ -579,7 +580,8 @@ private fun enterFor(o: Overlay): androidx.compose.animation.EnterTransition = w
 }
 
 private fun exitFor(o: Overlay): androidx.compose.animation.ExitTransition = when (o) {
-    Overlay.Music -> androidx.compose.animation.slideOutVertically(smoothOffset) { it / 3 } +
+    // la portada ya voló a la miniatura: solo desaparece
+    Overlay.Music -> if (MusicUi.flyClose) androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(60)) else androidx.compose.animation.slideOutVertically(smoothOffset) { it / 3 } +
         androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200)) +
         androidx.compose.animation.scaleOut(smooth, targetScale = 0.86f,
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f))

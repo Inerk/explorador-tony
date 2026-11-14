@@ -64,6 +64,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -263,6 +265,7 @@ fun MusicPlayerScreen(
     onPeekMenu: () -> Unit = {},
     onMenuCancel: () -> Unit = {},
     onMenuDone: () -> Unit = {},
+    flyToMini: Boolean = false,
 ) {
     if (LibraryStore.musicSkin == MusicSkin.VINTAGE) {
         VintagePlayerScreen(player, onClose, onOpenCoverFlow, onHome, onGoTo)
@@ -273,6 +276,10 @@ fun MusicPlayerScreen(
     val menuDone by rememberUpdatedState(onMenuDone)
     // deslizar a la derecha: el reproductor se hace a un lado (como la portada) y deja ver la biblioteca
     val aside = remember { Animatable(0f) }
+    // la portada "vuela" a la miniatura del mini reproductor al cerrar o al deslizar al menú
+    val closeFly = remember { Animatable(0f) }
+    var coverRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    LaunchedEffect(Unit) { MusicUi.flyClose = false }
     val asideScope = rememberCoroutineScope()
     var lyricsMode by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
@@ -286,11 +293,18 @@ fun MusicPlayerScreen(
     val screenH = with(androidx.compose.ui.platform.LocalDensity.current) {
         androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx()
     }
+    fun closeAnimated() {
+        if (flyToMini && coverRect != null && closeFly.value == 0f) asideScope.launch {
+            MusicUi.flyClose = true
+            closeFly.animateTo(1f, spring(dampingRatio = 0.9f, stiffness = 320f))
+            onClose()
+        } else onClose()
+    }
     BackHandler {
         when {
             lyricsMode -> lyricsMode = false
             q.value > 0.5f -> toCover()
-            else -> onClose()
+            else -> closeAnimated()
         }
     }
     val tick = observePlayer(player, if (lyricsMode) 100L else 250L)
@@ -328,6 +342,10 @@ fun MusicPlayerScreen(
     val animatedCover by rememberAnimatedCover(player.currentMediaItem?.mediaId,
         player.currentMediaItem?.mediaId?.let { LibraryStore.songFor(it)?.album } ?: album)
 
+    val screenW = with(androidx.compose.ui.platform.LocalDensity.current) {
+        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+    Box(Modifier.fillMaxSize()) {
     Box(
         Modifier.fillMaxSize()
             .pointerInput(Unit) {
@@ -340,7 +358,8 @@ fun MusicPlayerScreen(
                         val w = size.width.toFloat()
                         asideScope.launch {
                             if (peeked && (v > 900f || aside.value > w * 0.33f)) {
-                                aside.animateTo(w * 1.15f, spring(dampingRatio = 0.9f, stiffness = 260f), initialVelocity = v)
+                                MusicUi.flyClose = true
+                                aside.animateTo(w, spring(dampingRatio = 0.9f, stiffness = 300f), initialVelocity = v)
                                 menuDone()
                             } else {
                                 aside.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
@@ -358,15 +377,11 @@ fun MusicPlayerScreen(
                 }
             }
             .graphicsLayer {
-                val frac = (aside.value / size.width).coerceIn(0f, 1.2f)
-                translationX = aside.value
-                rotationZ = frac * 6f
-                val sc = 1f - frac * 0.1f
+                // al irse: la pantalla se desvanece y la portada viaja sola a la miniatura de abajo
+                val frac = maxOf((aside.value / size.width).coerceIn(0f, 1f), closeFly.value)
+                alpha = (1f - frac * 1.6f).coerceIn(0f, 1f)
+                val sc = 1f - frac * 0.05f
                 scaleX = sc; scaleY = sc
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
-                shape = RoundedCornerShape((frac * 40f).dp)
-                clip = frac > 0f
-                shadowElevation = if (frac > 0f) 30f else 0f
             }
             .background(Brush.verticalGradient(listOf(top, bottom)))
     ) {
@@ -395,7 +410,7 @@ fun MusicPlayerScreen(
             ) {
                 // Barra superior
                 if (nebula) Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose) {
+                    IconButton(onClick = { closeAnimated() }) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
                     }
                     NebulaCatLogo(46.dp)
@@ -404,7 +419,7 @@ fun MusicPlayerScreen(
                     Spacer(Modifier.width(46.dp))
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
                 } else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onClose) {
+                    IconButton(onClick = { closeAnimated() }) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
                     }
                     HomeButton(onHome)
@@ -451,6 +466,9 @@ fun MusicPlayerScreen(
                                 val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else minOf(maxWidth, maxHeight)
                                 val topGap = if (nebula) side * 0.16f else 0.dp
                                 val decoAlpha = if (nebula) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                // dónde está la portada grande (para la animación de cerrar)
+                                if (p < 0.01f) Box(Modifier.offset((maxWidth - side) / 2, topGap).size(side)
+                                    .onGloballyPositioned { coverRect = it.boundsInRoot() })
                                 if (decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
@@ -708,6 +726,32 @@ fun MusicPlayerScreen(
             }
         }
     }
+    // portada volando hacia el mini reproductor
+    val flyF = maxOf(closeFly.value, if (screenW > 0f) (aside.value / screenW).coerceIn(0f, 1f) else 0f)
+    val from = coverRect
+    val flyCover = info?.cover
+    if (flyF > 0.001f && from != null && flyCover != null) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val t = androidx.compose.animation.core.FastOutSlowInEasing.transform((flyF / 0.85f).coerceIn(0f, 1f))
+        val toSize = with(density) { 42.dp.toPx() }
+        val toX = with(density) { 12.dp.toPx() }
+        val toY = screenH - with(density) { 48.dp.toPx() }
+        val sz = from.width + (toSize - from.width) * t
+        val fx = from.left + (toX - from.left) * t
+        // un arco suave: baja un poco más rápido al principio
+        val fy = from.top + (toY - from.top) * (t * (2f - t) * 0.35f + t * 0.65f)
+        val corner = with(density) { (22f + (8f - 22f) * t).dp }
+        Image(
+            remember(flyCover) { flyCover.asImageBitmap() }, null, contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .offset { androidx.compose.ui.unit.IntOffset(fx.toInt(), fy.toInt()) }
+                .size(with(density) { sz.toDp() })
+                .shadow((18f * (1f - t) + 4f).dp, RoundedCornerShape(corner))
+                .clip(RoundedCornerShape(corner))
+        )
+    }
+    }
+
     if (menuOpen) {
         player.currentMediaItem?.mediaId?.let { path ->
             SongMenuWindow(
