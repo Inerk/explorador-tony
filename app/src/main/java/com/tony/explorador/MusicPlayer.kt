@@ -64,6 +64,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.border
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material.icons.filled.CropSquare
@@ -535,6 +537,40 @@ fun MusicPlayerScreen(
                                 .blockTouches(p > 0.5f),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
+                // Letra arriba del nombre, en su cuadrito oscuro de alto fijo (así el nombre ya no sube y baja)
+                val place = LibraryStore.lyricsPlace
+                if (!lyricsMode && lyrics.isNotEmpty() && (place == "below" || place == "big")) {
+                    val bigL = place == "big"
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        Modifier.fillMaxWidth().height(if (bigL) 112.dp else 76.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.38f), Color.Black.copy(alpha = 0.26f))))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+                            .clickable { lyricsMode = true }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        // rayita de color a la izquierda
+                        Box(Modifier.align(Alignment.CenterStart).offset(x = (-8).dp).width(3.dp).fillMaxHeight(0.6f)
+                            .clip(RoundedCornerShape(2.dp)).background(accent))
+                        androidx.compose.animation.AnimatedContent(lyricIndex, label = "lyricCard", transitionSpec = {
+                            (androidx.compose.animation.fadeIn(tween(260)) + androidx.compose.animation.slideInVertically(tween(320)) { it / 3 }) togetherWith
+                                (androidx.compose.animation.fadeOut(tween(200)) + androidx.compose.animation.slideOutVertically(tween(260)) { -it / 3 })
+                        }) { idx ->
+                            val (first, second) = lyricPair(idx)
+                            Column(Modifier.fillMaxWidth().padding(start = 4.dp)) {
+                                Text(first, fontSize = if (bigL) 22.sp else 17.sp, lineHeight = if (bigL) 27.sp else 21.sp,
+                                    fontWeight = FontWeight.Bold, color = accent, maxLines = if (bigL) 2 else 2, overflow = TextOverflow.Ellipsis)
+                                val sub = second ?: if (bigL) lyrics.getOrNull(idx + 1)?.let { lyricPair(idx + 1).first } else null
+                                sub?.let {
+                                    Text(it, fontSize = if (bigL) 15.sp else 13.sp, lineHeight = if (bigL) 19.sp else 16.sp,
+                                        color = Color.White.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
                 // Título y artista
                 Spacer(Modifier.height(12.dp))
                 val path = player.currentMediaItem?.mediaId
@@ -561,43 +597,6 @@ fun MusicPlayerScreen(
                         )
                     }
                 }
-                // Vistazo de la letra bajo la portada
-                if (!lyricsMode && lyrics.isNotEmpty() && LibraryStore.lyricsPlace == "below") {
-                    val (line, second) = lyricPair(lyricIndex)
-                    Text(
-                        line, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = accent, textAlign = TextAlign.Start,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp).clickable { lyricsMode = true }
-                    )
-                    second?.let {
-                        Text(it, fontSize = 14.sp, lineHeight = 18.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 2,
-                            overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-                // Letra grande justo debajo de la portada: línea actual y la que sigue
-                if (!lyricsMode && lyrics.isNotEmpty() && LibraryStore.lyricsPlace == "big") {
-                    Column(Modifier.fillMaxWidth().padding(top = 8.dp).clickable { lyricsMode = true }) {
-                        androidx.compose.animation.AnimatedContent(lyricIndex, label = "bigLyric", transitionSpec = {
-                            (androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 }) togetherWith
-                                (androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it / 2 })
-                        }) { idx ->
-                            Column {
-                                val (first, second) = lyricPair(idx)
-                                Text(first, fontSize = 26.sp, lineHeight = 31.sp,
-                                    fontWeight = FontWeight.Bold, color = accent, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                                second?.let {
-                                    Text(it, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f),
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                                }
-                                lyrics.getOrNull(idx + 1)?.let {
-                                    Text(lyricPair(idx + 1).first, fontSize = 17.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.55f),
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
-                                }
-                            }
-                        }
-                    }
-                }
-
                 // Barra de avance
                 Spacer(Modifier.height(10.dp))
                 WaveSeekBar(
@@ -916,14 +915,24 @@ private fun CoverArt(
         // botón para ver el video / la animación, o sólo la carátula fija
         // letra encima de la carátula (si así se eligió en ajustes)
         if (overlayLyric != null && collapse < 0.3f) {
-            Text(
-                overlayLyric, color = Color.White, fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .graphicsLayer { alpha = 1f - collapse / 0.3f }
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
-                    .padding(start = 54.dp, end = 54.dp, top = 34.dp, bottom = 16.dp)
-            )
+            // franja que oscurece la parte de abajo de la portada para que la letra se lea bien
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(0.48f)
+                .graphicsLayer { alpha = 1f - collapse / 0.3f }
+                .background(Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Black.copy(alpha = 0.45f), 1f to Color.Black.copy(alpha = 0.88f))))
+            androidx.compose.animation.AnimatedContent(overlayLyric, label = "overLyric",
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().graphicsLayer { alpha = 1f - collapse / 0.3f },
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(tween(260)) + androidx.compose.animation.slideInVertically(tween(320)) { it / 3 }) togetherWith
+                        androidx.compose.animation.fadeOut(tween(200))
+                }) { line ->
+                Text(
+                    line, color = Color.White, fontSize = 21.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.85f),
+                        androidx.compose.ui.geometry.Offset(0f, 2f), 10f)),
+                    modifier = Modifier.fillMaxWidth().padding(start = 54.dp, end = 54.dp, top = 10.dp, bottom = 18.dp)
+                )
+            }
         }
         if ((video != null || pairToggle != null) && collapse < 0.3f) {
             Box(
