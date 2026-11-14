@@ -40,7 +40,7 @@ val SeekStyles = listOf(
     "eq" to "Ecualizador",
     "neon" to "Neón que late",
     "line" to "Línea sencilla",
-)
+) + NeonSeekStyles.map { it.first to it.second }
 
 /** Lo que mide la música en cada cuadro: golpe de bajos, volumen general y las bandas. */
 private class Beat {
@@ -147,7 +147,10 @@ fun WaveSeekBar(
             "eq" -> drawEqStyle(x, midY, accent, beat, amp, time)
             "neon" -> drawNeonStyle(x, midY, accent, beat, amp)
             "wave" -> drawClassicWave(x, midY, accent, amp, time)
-            else -> drawGalaxy(x, midY, accent, beat, amp, time, bubbles, isPlaying && !dragging)
+            "galaxy" -> drawGalaxy(x, midY, accent, beat, amp, time, bubbles, isPlaying && !dragging)
+            else -> if (NeonSeekStyles.any { it.first == style })
+                drawNeonStyle(style, x, NeonCtx(size.width, size.height, midY, time, beat.bass, beat.level, amp, beat.bands))
+            else drawGalaxy(x, midY, accent, beat, amp, time, bubbles, isPlaying && !dragging)
         }
         // círculo con brillo (más grande con los bajos)
         val pulse = if (style == "line") 1f else 1f + beat.bass * 0.35f * amp

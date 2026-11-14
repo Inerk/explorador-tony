@@ -372,12 +372,26 @@ fun MusicSettingsDialog(onDismiss: () -> Unit) {
                     .clickable { MusicUi.openScanFolders = true; onDismiss() }.padding(14.dp))
 
             Section("Barra de avance")
-            // vista previa en vivo (se mueve con la música si algo está sonando)
-            Box(Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 4.dp).clip(RoundedCornerShape(14.dp)).background(Card).padding(horizontal = 12.dp)) {
-                WaveSeekBar(progress = 0.62f, playing = true, accent = Accent, onSeekChange = {}, onSeekEnd = {},
-                    style = LibraryStore.seekStyle, interactive = false)
+            // cada estilo con su vista previa en vivo
+            SeekStyles.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    pair.forEach { (id, label) ->
+                        val on = LibraryStore.seekStyle == id
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                            .background(if (on) Accent.copy(alpha = 0.22f) else Card)
+                            .border(if (on) 1.5.dp else 0.dp, if (on) Accent else Color.Transparent, RoundedCornerShape(14.dp))
+                            .clickable { LibraryStore.changeSeekStyle(id) }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            Box(Modifier.fillMaxWidth().height(40.dp)) {
+                                WaveSeekBar(progress = 0.6f, playing = true, accent = Accent, onSeekChange = {}, onSeekEnd = {},
+                                    style = id, interactive = false)
+                            }
+                            Text(label, color = if (on) Color.White else Soft, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
-            SeekStyles.forEach { (id, label) -> Radio(label, LibraryStore.seekStyle == id) { LibraryStore.changeSeekStyle(id) } }
             Text("Se mueve al ritmo de la música que está sonando.", color = Soft, fontSize = 11.sp, modifier = Modifier.padding(start = 12.dp))
 
             Section("Portada")
