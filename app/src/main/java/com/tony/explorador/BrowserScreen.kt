@@ -177,6 +177,9 @@ fun BrowserScreen(
     var focused by remember { mutableStateOf<File?>(null) }
     var castFile by remember { mutableStateOf<File?>(null) }
     var docFile by remember { mutableStateOf<File?>(null) }
+    var recentMode by remember { mutableStateOf(false) }
+    var lastDir by remember { mutableStateOf<File?>(null) }
+    LaunchedEffect(currentDir) { currentDir?.let { lastDir = it } }
     var modelFile by remember { mutableStateOf<File?>(null) }   // archivo que se ve en el panel de vista previa
     var paneFrac by remember { mutableStateOf(0.42f) }
     var compressItems by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -204,7 +207,7 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(query, searchActive, showHidden, currentDir) {
-        if (!searchActive || query.isBlank()) { searchResults = null; return@LaunchedEffect }
+        if (!searchActive || query.isBlank()) { if (!recentMode) searchResults = null; return@LaunchedEffect }
         delay(300)
         val base = currentDir ?: roots.first().file
         formatFilter = emptySet()
@@ -218,6 +221,7 @@ fun BrowserScreen(
 
     fun refresh() { refreshKey++ }
     fun goTo(dir: File?) {
+        recentMode = false
         currentDir = dir
         focused = null
         selection = emptySet()
@@ -261,11 +265,20 @@ fun BrowserScreen(
         selection = if (file in selection) selection - file else selection + file
     }
 
+    // Recientes: lo último que se guardó o cambió en el teléfono
+    LaunchedEffect(recentMode, showHidden) {
+        if (!recentMode) { if (!searchActive) searchResults = null; return@LaunchedEffect }
+        formatFilter = emptySet(); searching = true; searchResults = emptyList()
+        searchResults = withContext(Dispatchers.IO) { recentFiles(context, showHidden) }
+        searching = false
+    }
+
     // Botón atrás: selección → búsqueda → carpeta anterior → salir
     val isRoot = currentDir != null && roots.any { it.file.absolutePath == currentDir?.absolutePath }
-    BackHandler(enabled = selection.isNotEmpty() || searchActive || currentDir != null) {
+    BackHandler(enabled = selection.isNotEmpty() || searchActive || currentDir != null || recentMode) {
         when {
             selection.isNotEmpty() -> selection = emptySet()
+            recentMode -> recentMode = false
             searchActive -> { searchActive = false; query = "" }
             isRoot -> goTo(null)
             else -> goTo(currentDir?.parentFile)
@@ -393,7 +406,11 @@ fun BrowserScreen(
                     },
                     title = {
                         val dir = currentDir
-                        if (dir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
+                        if (recentMode) Column {
+                            Text("Recientes", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text("Lo último que se guardó en tu teléfono", fontSize = 13.sp, color = ExpTheme.sub, maxLines = 1)
+                        }
+                        else if (dir == null) Text("Explorador Tony", maxLines = 1, fontWeight = FontWeight.Bold)
                         else {
                             // nombre de la carpeta y cuánto hay adentro
                             val stats by produceState("", dir, files) {
@@ -479,6 +496,16 @@ fun BrowserScreen(
                         }
                     }
                 }
+                // barra de abajo: Inicio · Archivos · Recientes
+                if (selection.isEmpty()) ExplorerBottomNav(
+                    selected = when { recentMode -> 2; currentDir == null -> 0; else -> 1 },
+                    onSelect = { i ->
+                        when (i) {
+                            0 -> { recentMode = false; searchActive = false; goTo(null) }
+                            1 -> { recentMode = false; searchActive = false; if (currentDir == null) goTo(lastDir ?: roots.first().file) }
+                            2 -> { searchActive = false; recentMode = true }
+                        }
+                    })
             }
         }
     ) { padding ->
@@ -499,16 +526,16 @@ fun BrowserScreen(
                         if (searchResults == null && dir != null) {
                             ExplorerCrumbs(dir, roots, onNavigate = { goTo(it) })
                             // fila de orden y vista (cuadrícula / lista) y panel de vista previa
-                            Row(Modifier.fillMaxWidth().background(ExpTheme.bar).padding(start = 8.dp, end = 12.dp, bottom = 8.dp),
+                            Row(Modifier.fillMaxWidth().background(ExpTheme.bar).padding(start = 8.dp, end = 12.dp, bottom = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 var sortMenu by remember { mutableStateOf(false) }
                                 Box {
                                     Row(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).clickable { sortMenu = true }
-                                        .padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Outlined.Tune, null, tint = ExpTheme.text, modifier = Modifier.size(22.dp))
-                                        Text("   ${sortMode.label}", color = ExpTheme.text, fontSize = 15.sp)
-                                        Icon(if (ascending) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp, null, tint = ExpTheme.text,
-                                            modifier = Modifier.size(22.dp))
+                                        .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Outlined.Tune, null, tint = ExpTheme.sub, modifier = Modifier.size(17.dp))
+                                        Text("  ${sortMode.label}", color = ExpTheme.text, fontSize = 13.sp)
+                                        Icon(if (ascending) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp, null, tint = ExpTheme.sub,
+                                            modifier = Modifier.size(18.dp))
                                     }
                                     DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                                         SortMode.entries.forEach { mode ->
@@ -529,10 +556,10 @@ fun BrowserScreen(
                                 var paneMenu by remember { mutableStateOf(false) }
                                 val paneOn2 = LibraryStore.previewPane.isNotEmpty()
                                 Box {
-                                    Box(Modifier.padding(end = 8.dp).size(40.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                    Box(Modifier.padding(end = 6.dp).size(30.dp).clip(androidx.compose.foundation.shape.CircleShape)
                                         .background(if (paneOn2) ExpTheme.pill else ExpTheme.chipBg).clickable { paneMenu = true },
                                         contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Outlined.VerticalSplit, "Vista previa", tint = if (paneOn2) Color.White else ExpTheme.chipText, modifier = Modifier.size(19.dp))
+                                        Icon(Icons.Outlined.VerticalSplit, "Vista previa", tint = if (paneOn2) Color.White else ExpTheme.chipText, modifier = Modifier.size(15.dp))
                                     }
                                     DropdownMenu(expanded = paneMenu, onDismissRequest = { paneMenu = false }) {
                                         listOf("preview" to "Panel de vista previa", "details" to "Panel de detalles", "" to "Sin panel").forEach { (id, label) ->
@@ -546,17 +573,17 @@ fun BrowserScreen(
                                 val isGrid = view == ExplorerView.GRID || view == ExplorerView.BIG
                                 var viewMenu by remember { mutableStateOf(false) }
                                 Box {
-                                    Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(ExpTheme.chipBg).padding(3.dp)) {
+                                    Row(Modifier.clip(androidx.compose.foundation.shape.CircleShape).background(ExpTheme.chipBg).padding(2.dp)) {
                                         listOf(true to Icons.Filled.GridView, false to Icons.Outlined.ViewList).forEach { (g, ic) ->
                                             val on = g == isGrid
-                                            Box(Modifier.size(width = 52.dp, height = 38.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                                            Box(Modifier.size(width = 38.dp, height = 28.dp).clip(androidx.compose.foundation.shape.CircleShape)
                                                 .background(if (on) ExpTheme.pill else Color.Transparent)
                                                 .combinedClickable(onClick = {
                                                     if (g != isGrid) LibraryStore.changeExplorerView(if (g) ExplorerView.GRID.id else ExplorerView.LIST.id)
                                                     else viewMenu = true
                                                 }, onLongClick = { viewMenu = true }),
                                                 contentAlignment = Alignment.Center) {
-                                                Icon(ic, if (g) "Cuadrícula" else "Lista", tint = if (on) Color.White else ExpTheme.chipText, modifier = Modifier.size(22.dp))
+                                                Icon(ic, if (g) "Cuadrícula" else "Lista", tint = if (on) Color.White else ExpTheme.chipText, modifier = Modifier.size(16.dp))
                                             }
                                         }
                                     }
@@ -573,7 +600,7 @@ fun BrowserScreen(
                             }
                         }
                         if (searchResults != null) {
-                            SearchStatusBar(searching, searchProgress, searchWhere, searchResults?.size ?: 0)
+                            if (!recentMode) SearchStatusBar(searching, searchProgress, searchWhere, searchResults?.size ?: 0)
                             FormatChips(formatCounts, searchResults?.size ?: 0, formatFilter) { formatFilter = it }
                         }
                         if (shownFiles.isEmpty()) {

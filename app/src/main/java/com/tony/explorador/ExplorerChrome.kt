@@ -36,6 +36,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.SdCard
 import androidx.compose.material.icons.outlined.Cast
@@ -256,20 +261,20 @@ fun ExplorerCrumbs(dir: File, roots: List<StorageRoot>, onNavigate: (File) -> Un
     val scroll = rememberScrollState()
     LaunchedEffect(dir) { scroll.scrollTo(scroll.maxValue) }
     Column(Modifier.fillMaxWidth().background(ExpTheme.bar)) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = 12.dp).padding(bottom = 8.dp),
+        Row(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(horizontal = 12.dp).padding(bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
             crumbs.forEachIndexed { i, (name, file) ->
                 val last = i == crumbs.lastIndex
-                if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ExpTheme.sub, modifier = Modifier.size(15.dp))
+                if (i > 0) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ExpTheme.sub, modifier = Modifier.size(13.dp))
                 Row(Modifier.clip(CircleShape).background(if (last) ExpTheme.pill else ExpTheme.chipBg)
-                    .clickable { onNavigate(file) }.padding(horizontal = 14.dp, vertical = 7.dp),
+                    .clickable { onNavigate(file) }.padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     if (i == 0) {
                         Icon(if (name.contains("SD", true) || name.contains("tarjeta", true)) Icons.Outlined.SdCard else Icons.Outlined.Storage, null,
-                            tint = if (last) Color.White else ExpTheme.chipText, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
+                            tint = if (last) Color.White else ExpTheme.chipText, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
                     }
-                    Text(if (i == 0 && name.startsWith("Almacenamiento interno")) "Interno" else name, fontSize = 13.sp,
+                    Text(if (i == 0 && name.startsWith("Almacenamiento interno")) "Interno" else name, fontSize = 12.sp,
                         fontWeight = if (last) FontWeight.Bold else FontWeight.Medium,
                         color = if (last) Color.White else ExpTheme.chipText, maxLines = 1)
                 }
@@ -754,4 +759,49 @@ fun VideoTile(f: File, iconSize: Dp, modifier: Modifier = Modifier) {
             Icon(Icons.Filled.OpenInFull, "Pantalla completa", tint = Color.White, modifier = Modifier.size(14.dp))
         }
     }
+}
+
+
+/** Barra chiquita de abajo del explorador: Inicio · Archivos · Recientes. */
+@Composable
+fun ExplorerBottomNav(selected: Int, onSelect: (Int) -> Unit) {
+    val items = listOf(
+        Triple("Inicio", Icons.Outlined.Home, Icons.Filled.Home),
+        Triple("Archivos", Icons.Outlined.Folder, Icons.Filled.Folder),
+        Triple("Recientes", Icons.Outlined.Schedule, Icons.Filled.Schedule),
+    )
+    Column(Modifier.fillMaxWidth().background(ExpTheme.bar)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(ExpTheme.line))
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+            items.forEachIndexed { i, (label, off, on) ->
+                val sel = i == selected
+                Column(Modifier.weight(1f).fillMaxHeight().clickable { onSelect(i) }, horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center) {
+                    Icon(if (sel) on else off, label, tint = if (sel) ExpTheme.pill else ExpTheme.sub, modifier = Modifier.size(21.dp))
+                    Text(label, fontSize = 11.sp, color = if (sel) ExpTheme.pill else ExpTheme.sub, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                    Box(Modifier.padding(top = 2.dp).width(26.dp).height(2.dp).clip(CircleShape).background(if (sel) ExpTheme.pill else Color.Transparent))
+                }
+            }
+        }
+    }
+}
+
+/** Los archivos más recientes del teléfono (por fecha de cambio), usando el índice de Android: rápido. */
+fun recentFiles(context: android.content.Context, showHidden: Boolean, limit: Int = 300): List<File> {
+    val out = ArrayList<File>()
+    val uri = android.provider.MediaStore.Files.getContentUri("external")
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.Files.FileColumns.DATA),
+            "${android.provider.MediaStore.Files.FileColumns.SIZE} > 0", null,
+            "${android.provider.MediaStore.Files.FileColumns.DATE_MODIFIED} DESC")?.use { c ->
+            while (c.moveToNext() && out.size < limit) {
+                val path = c.getString(0) ?: continue
+                if (!showHidden && path.contains("/.")) continue
+                if (path.contains("/Android/data/") || path.contains("/Android/obb/")) continue
+                val f = File(path)
+                if (f.isFile) out += f
+            }
+        }
+    }
+    return out
 }
