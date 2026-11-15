@@ -3,12 +3,18 @@ package com.tony.explorador
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
@@ -29,12 +35,29 @@ object AirPlayBridge {
         prefs(c).getString("host", null)?.let { hosts += it }
         runCatching { URI(NasSync.url.trim()).host }.getOrNull()?.takeIf { it.isNotBlank() }?.let { hosts += it }
         hosts += nsdHosts(c)
-        for (h in hosts) {
-            val outs = runCatching { outputs(h) }.getOrNull() ?: continue
-            prefs(c).edit().putString("host", h).apply()
-            return outs
-        }
+        for (h in hosts) tryHost(c, h)?.let { return it }
+        // último recurso: revisar toda la red de la casa buscando OwnTone (puerto 3689)
+        for (h in scanSubnet()) if (h !in hosts) tryHost(c, h)?.let { return it }
         return emptyList()
+    }
+
+    private fun tryHost(c: Context, h: String): List<CastTarget.AirPlay>? {
+        val outs = runCatching { outputs(h) }.getOrNull() ?: return null
+        prefs(c).edit().putString("host", h).apply()
+        return outs
+    }
+
+    private suspend fun scanSubnet(): List<String> = coroutineScope {
+        val ip = MediaServer.localIp() ?: return@coroutineScope emptyList()
+        val base = ip.substringBeforeLast('.')
+        (1..254).map { i ->
+            async(Dispatchers.IO) {
+                val h = "$base.$i"
+                if (h == ip) null else runCatching {
+                    Socket().use { s -> s.connect(InetSocketAddress(h, PORT), 400) }; h
+                }.getOrNull()
+            }
+        }.awaitAll().filterNotNull()
     }
 
     private suspend fun nsdHosts(c: Context): List<String> {
