@@ -182,6 +182,8 @@ object MediaServer {
 sealed class CastTarget(val name: String, val detail: String) {
     class Dlna(name: String, detail: String, val avControl: String, val rcControl: String?) : CastTarget(name, detail)
     class Chromecast(name: String, detail: String, val routeId: String) : CastTarget(name, detail)
+    /** Bocina AirPlay (HomePod…) a través de OwnTone en el NAS. Solo música. */
+    class AirPlay(name: String, detail: String, val host: String, val outputId: String) : CastTarget(name, detail)
 }
 
 object CastManager {
@@ -248,6 +250,11 @@ object CastManager {
             }
             searching = false
         }
+        // AirPlay (HomePod) a través del NAS
+        scope.launch {
+            val found = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.discover(app) }.getOrDefault(emptyList()) }
+            for (t in found) if (targets.none { it is CastTarget.AirPlay && it.outputId == t.outputId }) targets += t
+        }
     }
 
     fun stopDiscovery() {
@@ -269,9 +276,11 @@ object CastManager {
         scope.launch {
             try {
                 if (old is CastTarget.Dlna && old !== t) runCatching { withContext(Dispatchers.IO) { Dlna.stop(old) } }
+                if (old is CastTarget.AirPlay && old !== t) runCatching { withContext(Dispatchers.IO) { AirPlayBridge.stop(old) } }
                 when (t) {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { Dlna.play(t, f) }
                     is CastTarget.Chromecast -> castLoad(t, f)
+                    is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.play(t, f) }
                 }
                 status = null
                 startPolling()
@@ -295,6 +304,7 @@ object CastManager {
                 when (t) {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { if (playing) Dlna.action(t, "Pause") else Dlna.action(t, "Play", "<Speed>1</Speed>") }
                     is CastTarget.Chromecast -> currentCast()?.remoteMediaClient?.let { if (it.isPlaying) it.pause() else it.play() }
+                    is CastTarget.AirPlay -> withContext(Dispatchers.IO) { if (playing) AirPlayBridge.pause(t) else AirPlayBridge.resume(t) }
                 }
                 playing = !playing
             }
@@ -310,6 +320,7 @@ object CastManager {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { Dlna.seek(t, ms) }
                     is CastTarget.Chromecast -> currentCast()?.remoteMediaClient?.seek(
                         com.google.android.gms.cast.MediaSeekOptions.Builder().setPosition(ms).build())
+                    is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.seek(t, ms) }
                 }
             }
         }
@@ -327,6 +338,10 @@ object CastManager {
                     is CastTarget.Chromecast -> currentCast()?.let { s ->
                         val v = (s.volume + delta / 100.0).coerceIn(0.0, 1.0); s.volume = v; volume = (v * 100).toInt()
                     }
+                    is CastTarget.AirPlay -> withContext(Dispatchers.IO) {
+                        val v = ((if (volume < 0) AirPlayBridge.getVolume(t) else volume) + delta).coerceIn(0, 100)
+                        AirPlayBridge.setVolume(t, v); volume = v
+                    }
                 }
             }
         }
@@ -341,6 +356,7 @@ object CastManager {
                 when (t) {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { Dlna.stop(t) }
                     is CastTarget.Chromecast -> CastContext.getSharedInstance(app).sessionManager.endCurrentSession(true)
+                    is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.stop(t) }
                     null -> {}
                 }
             }
@@ -366,6 +382,14 @@ object CastManager {
                         }
                         is CastTarget.Chromecast -> currentCast()?.remoteMediaClient?.let { c ->
                             playing = c.isPlaying; position = c.approximateStreamPosition; duration = c.streamDuration.coerceAtLeast(0)
+                        }
+                        is CastTarget.AirPlay -> {
+                            val (state, pos, dur) = withContext(Dispatchers.IO) { AirPlayBridge.status(t) }
+                            playing = state == "play"
+                            if (dur > 0) duration = dur
+                            position = pos
+                            if (playing) wasPlaying = true
+                            if (state == "stop" && wasPlaying) { playing = false; position = duration }
                         }
                     }
                 }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
@@ -81,14 +82,15 @@ fun CastPickerSheet(file: File, siblings: List<File>, onDismiss: () -> Unit) {
                     modifier = Modifier.clip(CircleShape).background(ExpTheme.crumbBg).clickable { CastManager.startDiscovery() }
                         .padding(horizontal = 16.dp, vertical = 8.dp))
             }
-            CastManager.targets.forEach { t ->
+            val isAudio = mimeOf(file).startsWith("audio/")
+            CastManager.targets.filter { isAudio || it !is CastTarget.AirPlay }.forEach { t ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { CastManager.send(t, file, siblings); onDismiss() }
                     .padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    SoftIcon(if (t is CastTarget.Chromecast) Icons.Filled.Cast else Icons.Filled.Tv, ExpTheme.onBar, 40.dp)
+                    SoftIcon(when (t) { is CastTarget.Chromecast -> Icons.Filled.Cast; is CastTarget.AirPlay -> Icons.Filled.Speaker; else -> Icons.Filled.Tv }, ExpTheme.onBar, 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(t.name, color = ExpTheme.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
-                        Text((if (t is CastTarget.Chromecast) "Google Cast · " else "DLNA · ") + t.detail, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
+                        Text(when (t) { is CastTarget.Chromecast -> "Google Cast · "; is CastTarget.AirPlay -> "AirPlay · "; else -> "DLNA · " } + t.detail, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
                     }
                 }
             }
