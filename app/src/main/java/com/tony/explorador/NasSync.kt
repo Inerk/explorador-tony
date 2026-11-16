@@ -113,7 +113,27 @@ object NasSync {
     private fun isPrivate(h: String) = h.startsWith("192.168.") || h.startsWith("10.") ||
         Regex("""^172\.(1[6-9]|2\d|3[01])\.""").containsMatchIn(h) || h.endsWith(".local")
 
-    private fun base(): String = url.trim().trimEnd('/')
+    private var baseOverride: String? = null
+    private fun base(): String = (baseOverride ?: url).trim().trimEnd('/')
+
+    /** Raíz del servidor WebDAV (https://ip:puerto) sacada de la dirección escrita. */
+    fun serverRoot(): String? = runCatching { java.net.URI(url.trim()) }.getOrNull()
+        ?.takeIf { !it.host.isNullOrBlank() }?.let { "${it.scheme}://${it.host}${if (it.port > 0) ":" + it.port else ""}" }
+
+    /** Carpetas dentro de «path» (relativo a la raíz del servidor). Para elegir la carpeta a mano. */
+    suspend fun browse(path: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        val root = serverRoot() ?: return@withContext Result.failure(Exception("Escribe primero https://IP:5006"))
+        synchronized(this@NasSync) {
+            baseOverride = root
+            try { runCatching { list(client(), path).first.sortedBy { it.lowercase(Locale.ROOT) } } } finally { baseOverride = null }
+        }
+    }
+
+    fun useFolder(path: String) {
+        val root = serverRoot() ?: return
+        url = root + "/" + path.split('/').filter { it.isNotBlank() }.joinToString("/") { Uri.encode(it) }
+        saveSettings()
+    }
     private fun enc(rel: String) = rel.split('/').joinToString("/") { Uri.encode(it) }
     private fun req(path: String) = Request.Builder().url(base() + "/" + enc(path).trimStart('/'))
         .header("Authorization", Credentials.basic(user.trim(), password, Charsets.UTF_8))

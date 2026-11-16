@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -1317,6 +1319,8 @@ private fun ImportDialog(files: List<File>, onDismiss: () -> Unit, onPick: (File
 private fun FoldersPage() {
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
+    var testMsg by remember { mutableStateOf<String?>(null) }
+    var nasBrowse by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(
@@ -1747,9 +1751,12 @@ private fun NasPage() {
                         }
                     }
                 }
+                if (!NasSync.running) Text("📁 Elegir la carpeta del NAS", color = Retro.Orange, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { nasBrowse = true }.padding(vertical = 6.dp))
                 if (!NasSync.running) {
                     Text("Probar conexión", color = Retro.Orange, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { NasSync.test { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }.padding(vertical = 6.dp))
+                        modifier = Modifier.clickable { testMsg = "Probando…"; NasSync.test { testMsg = it } }.padding(vertical = 6.dp))
+                    testMsg?.let { Text(it, color = Retro.Text, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp)) }
                     RetroButton("Sincronizar ahora", Icons.Filled.CloudSync, Modifier.fillMaxWidth()) {
                         if (NasSync.url.isBlank()) Toast.makeText(context, "Escribe la dirección del NAS", Toast.LENGTH_SHORT).show() else NasSync.start()
                     }
@@ -1786,6 +1793,7 @@ private fun NasPage() {
             items(NasSync.failed.toList()) { Line("✕", it, Retro.Red) }
         }
     }
+    if (nasBrowse) NasFolderPicker { nasBrowse = false }
     if (picking) FolderWindow("Carpeta de música en el teléfono", "Usar esta carpeta", java.io.File(NasSync.localFolder), { picking = false }) {
         NasSync.localFolder = it.absolutePath; NasSync.saveSettings(); picking = false
     }
@@ -2002,4 +2010,37 @@ private fun BeatRing(color: Color, modifier: Modifier = Modifier) {
         // centro
         drawCircle(Color.White.copy(alpha = 0.9f), r * (0.16f + 0.08f * pulse), c)
     }
+}
+
+
+/** Navegar las carpetas del NAS (WebDAV) y elegir la de la música. */
+@Composable
+private fun NasFolderPicker(onClose: () -> Unit) {
+    var path by remember { mutableStateOf("") }
+    var items by remember { mutableStateOf<List<String>>(emptyList()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    LaunchedEffect(path) {
+        loading = true; error = null
+        NasSync.browse(path).onSuccess { items = it }.onFailure { error = it.message ?: it.javaClass.simpleName; items = emptyList() }
+        loading = false
+    }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onClose,
+        title = { Text(if (path.isEmpty()) "Carpetas del NAS" else "/" + path) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                if (path.isNotEmpty()) Text("⬅ Atrás", fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth()
+                    .clickable { path = path.substringBeforeLast('/', "") }.padding(vertical = 10.dp))
+                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                error?.let { Text("No se pudo abrir: $it", color = Color(0xFFD93A3A)) }
+                if (!loading && error == null && items.isEmpty()) Text("No hay carpetas aquí.")
+                items.forEach { d ->
+                    Row(Modifier.fillMaxWidth().clickable { path = d }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Folder, null); Spacer(Modifier.width(10.dp)); Text(d.substringAfterLast('/'))
+                    }
+                }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(enabled = path.isNotEmpty(), onClick = { NasSync.useFolder(path); onClose() }) { Text("Usar esta carpeta") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("Cancelar") } })
 }
