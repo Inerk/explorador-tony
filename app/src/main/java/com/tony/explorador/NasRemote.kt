@@ -268,6 +268,21 @@ fun NasRemoteScreen(onClose: () -> Unit) {
         val h = st.host ?: return
         scope.launch(Dispatchers.IO) { runCatching { api(h, method, path, body) }.onFailure { st.error = "No se pudo hacer eso en el NAS (${it.message?.substringAfterLast(' ')})." } }
     }
+    /** Pone en la cola todo (álbum, lista, artista o varias canciones) y empieza en «from»: al terminar sigue con la siguiente. */
+    fun queue(param: String, from: Int, shuffle: Boolean) {
+        if (st.outputs.none { it.selected }) { st.error = "Primero elige una bocina en la pestaña «Bocinas»."; tab = 2; return }
+        st.error = null
+        val h = st.host ?: return
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                api(h, "PUT", "/api/player/shuffle?state=$shuffle")
+                if (st.repeat == "single") api(h, "PUT", "/api/player/repeat?state=all")
+                api(h, "POST", "/api/queue/items/add?clear=true&playback=start" + (if (shuffle) "" else "&playback_from_position=$from") + "&$param")
+            }.onFailure { st.error = "El NAS no respondió: ${it.message}" }
+        }
+    }
+    fun playUris(uris: String, from: Int, shuffle: Boolean): Unit = queue("uris=${enc(uris)}", from, shuffle)
+    fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
     /** Mete una canción a la cola: «next» = justo después de la que suena; si no, al final. */
     fun enqueue(uri: String, next: Boolean) {
         val h = st.host ?: return
@@ -285,21 +300,6 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             }.onFailure { st.error = "No se pudo agregar a la cola (${it.message?.substringAfterLast(' ')})." }
         }
     }
-    /** Pone en la cola todo (álbum, lista, artista o varias canciones) y empieza en «from»: al terminar sigue con la siguiente. */
-    fun queue(param: String, from: Int, shuffle: Boolean) {
-        if (st.outputs.none { it.selected }) { st.error = "Primero elige una bocina en la pestaña «Bocinas»."; tab = 2; return }
-        st.error = null
-        val h = st.host ?: return
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                api(h, "PUT", "/api/player/shuffle?state=$shuffle")
-                if (st.repeat == "single") api(h, "PUT", "/api/player/repeat?state=all")
-                api(h, "POST", "/api/queue/items/add?clear=true&playback=start" + (if (shuffle) "" else "&playback_from_position=$from") + "&$param")
-            }.onFailure { st.error = "El NAS no respondió: ${it.message}" }
-        }
-    }
-    fun playUris(uris: String, from: Int, shuffle: Boolean): Unit = queue("uris=${enc(uris)}", from, shuffle)
-    fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))) {
