@@ -114,7 +114,7 @@ private data class RAlbum(val id: String, val name: String, val artist: String, 
 private data class RArtist(val id: String, val name: String, val albums: Int)
 private data class RPlaylist(val id: String, val name: String, val count: Int)
 private data class RTrack(val uri: String, val title: String, val artist: String, val album: String, val lengthMs: Long, val art: String?, val id: String = "", val rating: Int = 0)
-private data class ROutput(val id: String, val name: String, val type: String, val selected: Boolean, val volume: Int)
+private data class ROutput(val id: String, val name: String, val type: String, val selected: Boolean, val volume: Int, val needsPin: Boolean = false)
 
 /** Lo que dice el NAS de lo que está sonando. */
 private class RState {
@@ -254,7 +254,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                         val o = JSONObject(api(h, "GET", "/api/outputs")).optJSONArray("outputs") ?: JSONArray()
                         val list = (0 until o.length()).map { o.getJSONObject(it) }
                             .filter { !it.optString("name").endsWith("+") && it.optString("type") != "ALSA" }
-                            .map { ROutput(it.optString("id"), it.optString("name"), it.optString("type"), it.optBoolean("selected"), it.optInt("volume")) }
+                            .map { ROutput(it.optString("id"), it.optString("name"), it.optString("type"), it.optBoolean("selected"), it.optInt("volume"), it.optBoolean("needs_auth_key")) }
                         withContext(Dispatchers.Main) { st.outputs.clear(); st.outputs.addAll(list) }
                     }
                 }
@@ -411,6 +411,7 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
     var renaming by remember { mutableStateOf<ROutput?>(null) }
     var saving by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<String?>(null) }
+    var pinFor by remember { mutableStateOf<ROutput?>(null) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         item {
             Text("Perfiles de sonido", color = RC.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
@@ -451,6 +452,12 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text(nick, color = RC.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                         Text(if (nick != o.name) "${o.name} · ${o.type}" else o.type, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (o.needsPin) Text("🔑 Pide código · toca aquí", color = RC.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 3.dp).clip(RoundedCornerShape(8.dp)).clickable {
+                                // prender la bocina hace que la tele muestre el código de 4 números
+                                call("PUT", "/api/outputs/${o.id}", JSONObject().put("selected", true).toString())
+                                pinFor = o
+                            }.padding(vertical = 2.dp))
                     }
                     Icon(Icons.Filled.Edit, "Apodo", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { renaming = o }.padding(9.dp))
                     Icon(if (o.selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (o.selected) RC.accent else RC.sub)
@@ -477,6 +484,16 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
             if (n.isNotBlank()) RemotePrefs.saveProfile(n, st.outputs.map { it.id to Pair(it.selected, it.volume) })
             saving = false
         }, onDismiss = { saving = false })
+    pinFor?.let { o ->
+        TextAsk("Código de AirPlay", "Escribe el código de 4 números que aparece ahora en la pantalla de ${RemotePrefs.nameOf(o.id, o.name)}. Solo se pide una vez.", "", "Ej. 1234",
+            onDone = { pin ->
+                if (pin.isNotBlank()) {
+                    call("PUT", "/api/outputs/${o.id}", JSONObject().put("pin", pin.trim()).toString())
+                    val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = st.outputs[i].copy(needsPin = false)
+                }
+                pinFor = null
+            }, onDismiss = { pinFor = null })
+    }
     deleting?.let { n ->
         androidx.compose.material3.AlertDialog(onDismissRequest = { deleting = null },
             title = { Text("¿Borrar el perfil «$n»?") },
