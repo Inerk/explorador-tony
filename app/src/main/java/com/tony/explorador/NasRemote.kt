@@ -1,8 +1,13 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.tony.explorador
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +38,11 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
@@ -96,6 +106,7 @@ private object RC {
 
 private data class RAlbum(val id: String, val name: String, val artist: String, val art: String?, val tracks: Int)
 private data class RArtist(val id: String, val name: String, val albums: Int)
+private data class RPlaylist(val id: String, val name: String, val count: Int)
 private data class RTrack(val uri: String, val title: String, val artist: String, val album: String, val lengthMs: Long, val art: String?)
 private data class ROutput(val id: String, val name: String, val type: String, val selected: Boolean, val volume: Int)
 
@@ -111,7 +122,42 @@ private class RState {
     var title by mutableStateOf("")
     var artist by mutableStateOf("")
     var art by mutableStateOf<String?>(null)
+    var shuffle by mutableStateOf(false)
+    var repeat by mutableStateOf("off")         // off · all · single
     val outputs = mutableStateListOf<ROutput>()
+}
+
+/** Apodos de bocinas y perfiles de volumen, guardados en el teléfono. */
+object RemotePrefs {
+    private var prefs: android.content.SharedPreferences? = null
+    val nicks = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    /** perfil → (id de bocina → (encendida, volumen)) */
+    val profiles = androidx.compose.runtime.mutableStateMapOf<String, Map<String, Pair<Boolean, Int>>>()
+
+    fun init(c: android.content.Context) {
+        if (prefs != null) return
+        val p = c.applicationContext.getSharedPreferences("remote", android.content.Context.MODE_PRIVATE); prefs = p
+        runCatching { JSONObject(p.getString("nicks", "{}")!!).let { o -> o.keys().forEach { nicks[it] = o.getString(it) } } }
+        runCatching {
+            val o = JSONObject(p.getString("profiles", "{}")!!)
+            o.keys().forEach { name ->
+                val m = o.getJSONObject(name)
+                profiles[name] = m.keys().asSequence().associateWith { id -> m.getJSONObject(id).let { Pair(it.optBoolean("s"), it.optInt("v")) } }
+            }
+        }
+    }
+    fun nameOf(id: String, fallback: String) = nicks[id]?.takeIf { it.isNotBlank() } ?: fallback
+    fun setNick(id: String, nick: String) {
+        if (nick.isBlank()) nicks.remove(id) else nicks[id] = nick.trim()
+        prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
+    }
+    fun saveProfile(name: String, outs: List<Pair<String, Pair<Boolean, Int>>>) { profiles[name.trim()] = outs.toMap(); persist() }
+    fun deleteProfile(name: String) { profiles.remove(name); persist() }
+    private fun persist() {
+        val o = JSONObject()
+        profiles.forEach { (n, m) -> o.put(n, JSONObject().apply { m.forEach { (id, sv) -> put(id, JSONObject().put("s", sv.first).put("v", sv.second)) } }) }
+        prefs?.edit()?.putString("profiles", o.toString())?.apply()
+    }
 }
 
 private fun api(host: String, method: String, path: String, body: String? = null) = AirPlayBridge.http(method, host, path, body)
@@ -132,6 +178,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val st = remember { RState() }
+    remember { RemotePrefs.init(ctx); 0 }
     var tab by remember { mutableStateOf(0) }           // 0 sonando · 1 biblioteca · 2 bocinas
     var reload by remember { mutableStateOf(0) }
     BackHandler { onClose() }
@@ -153,6 +200,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 runCatching {
                     val p = JSONObject(api(h, "GET", "/api/player"))
                     st.state = p.optString("state"); st.volume = p.optInt("volume", st.volume)
+                    st.shuffle = p.optBoolean("shuffle"); st.repeat = p.optString("repeat", "off")
                     st.pos = p.optLong("item_progress_ms"); st.len = p.optLong("item_length_ms")
                     val itemId = p.optLong("item_id", -1)
                     if (itemId >= 0) {
@@ -183,12 +231,22 @@ fun NasRemoteScreen(onClose: () -> Unit) {
         val h = st.host ?: return
         scope.launch(Dispatchers.IO) { runCatching { api(h, method, path, body) }.onFailure { st.error = "El NAS no respondió: ${it.message}" } }
     }
-    fun playUris(uris: String, from: Int = 0) {
+    /** Pone en la cola todo (álbum, lista, artista o varias canciones) y empieza en «from»: al terminar sigue con la siguiente. */
+    fun queue(param: String, from: Int, shuffle: Boolean) {
         if (st.outputs.none { it.selected }) { st.error = "Primero elige una bocina en la pestaña «Bocinas»."; tab = 2; return }
         st.error = null
-        call("POST", "/api/queue/items/add?clear=true&playback=start&playback_from_position=$from&uris=${enc(uris)}")
+        val h = st.host ?: return
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                api(h, "PUT", "/api/player/shuffle?state=$shuffle")
+                if (st.repeat == "single") api(h, "PUT", "/api/player/repeat?state=all")
+                api(h, "POST", "/api/queue/items/add?clear=true&playback=start" + (if (shuffle) "" else "&playback_from_position=$from") + "&$param")
+            }.onFailure { st.error = "El NAS no respondió: ${it.message}" }
+        }
         tab = 0
     }
+    fun playUris(uris: String, from: Int, shuffle: Boolean) = queue("uris=${enc(uris)}", from, shuffle)
+    fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))) {
@@ -209,7 +267,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 val h = st.host
                 if (h != null) when (tab) {
                     0 -> NowPlayingTab(st, ::call)
-                    1 -> LibraryTab(h, ::playUris)
+                    1 -> LibraryTab(h, ::playUris, ::playExpr)
                     2 -> SpeakersTab(st, ::call)
                 }
             }
@@ -246,7 +304,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         Spacer(Modifier.height(20.dp))
         Text(st.title.ifBlank { "Nada sonando" }, color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(st.artist.ifBlank { "Elige música en «Biblioteca»" }, color = RC.sub, fontSize = 14.sp, maxLines = 1)
-        val names = st.outputs.filter { it.selected }.joinToString(", ") { it.name }
+        val names = st.outputs.filter { it.selected }.joinToString(", ") { RemotePrefs.nameOf(it.id, it.name) }
         if (names.isNotBlank()) Text("🔊 $names", color = RC.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
         val len = st.len.coerceAtLeast(1)
@@ -256,7 +314,9 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         Row(Modifier.fillMaxWidth()) {
             Text(fmt(st.pos), color = RC.sub, fontSize = 11.sp); Spacer(Modifier.weight(1f)); Text(fmt(st.len), color = RC.sub, fontSize = 11.sp)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            Icon(Icons.Filled.Shuffle, "Aleatorio", tint = if (st.shuffle) RC.accent else RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape)
+                .clickable { st.shuffle = !st.shuffle; call("PUT", "/api/player/shuffle?state=${st.shuffle}", null) }.padding(10.dp))
             Icon(Icons.Filled.SkipPrevious, "Anterior", tint = RC.text, modifier = Modifier.size(52.dp).clip(CircleShape).clickable { call("PUT", "/api/player/previous", null) }.padding(8.dp))
             Box(Modifier.size(76.dp).clip(CircleShape).background(Brush.linearGradient(listOf(RC.accent, RC.accent2)))
                 .clickable { call("PUT", if (st.state == "play") "/api/player/pause" else "/api/player/play", null); st.state = if (st.state == "play") "pause" else "play" },
@@ -264,7 +324,12 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
                 Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
             Icon(Icons.Filled.SkipNext, "Siguiente", tint = RC.text, modifier = Modifier.size(52.dp).clip(CircleShape).clickable { call("PUT", "/api/player/next", null) }.padding(8.dp))
+            Icon(if (st.repeat == "single") Icons.Filled.RepeatOne else Icons.Filled.Repeat, "Repetir",
+                tint = if (st.repeat == "off") RC.sub else RC.accent, modifier = Modifier.size(44.dp).clip(CircleShape)
+                .clickable { st.repeat = when (st.repeat) { "off" -> "all"; "all" -> "single"; else -> "off" }; call("PUT", "/api/player/repeat?state=${st.repeat}", null) }.padding(10.dp))
         }
+        Text(when { st.shuffle && st.repeat != "off" -> "Aleatorio · repetir"; st.shuffle -> "Aleatorio"; st.repeat == "all" -> "Repetir todo"; st.repeat == "single" -> "Repetir esta canción"; else -> "" },
+            color = RC.accent, fontSize = 11.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.VolumeUp, null, tint = RC.sub, modifier = Modifier.size(20.dp))
             Slider(volDrag ?: (st.volume / 100f), { volDrag = it },
@@ -276,12 +341,38 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
 
 @Composable
 private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
+    var renaming by remember { mutableStateOf<ROutput?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<String?>(null) }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         item {
-            Text("Toca para encender o apagar cada bocina. Puedes usar varias a la vez.", color = RC.sub, fontSize = 13.sp, modifier = Modifier.padding(vertical = 10.dp))
+            Text("Perfiles de sonido", color = RC.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                RemotePrefs.profiles.keys.sorted().forEach { name ->
+                    Text(name, color = RC.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                        modifier = Modifier.clip(CircleShape).background(Color(0x33B98CFF))
+                            .combinedClickable(onLongClick = { deleting = name }) {
+                                // aplicar: prender/apagar y poner el volumen guardado de cada bocina
+                                val prof = RemotePrefs.profiles[name] ?: return@combinedClickable
+                                st.outputs.toList().forEachIndexed { i, o ->
+                                    val sv = prof[o.id] ?: Pair(false, o.volume)
+                                    val body = JSONObject().put("selected", sv.first).apply { if (sv.first) put("volume", sv.second) }.toString()
+                                    call("PUT", "/api/outputs/${o.id}", body)
+                                    st.outputs[i] = o.copy(selected = sv.first, volume = if (sv.first) sv.second else o.volume)
+                                }
+                            }.padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+                Text("+ Guardar actual", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                    modifier = Modifier.clip(CircleShape).background(Brush.linearGradient(listOf(RC.accent, RC.accent2))).clickable { saving = true }
+                        .padding(horizontal = 14.dp, vertical = 8.dp))
+            }
+            Text("Toca un perfil para aplicarlo · mantén presionado para borrarlo.", color = RC.sub, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("Bocinas", color = RC.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp))
+            Text("Toca para encender o apagar · ✏️ para ponerle apodo. Puedes usar varias a la vez.", color = RC.sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
         }
         items(st.outputs, key = { it.id }) { o ->
             var v by remember(o.id) { mutableStateOf<Float?>(null) }
+            val nick = RemotePrefs.nameOf(o.id, o.name)
             Column(Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(16.dp)).background(if (o.selected) Color(0x33B98CFF) else RC.card)
                 .clickable {
                     call("PUT", "/api/outputs/${o.id}", JSONObject().put("selected", !o.selected).toString())
@@ -291,23 +382,63 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                     Icon(Icons.Filled.Speaker, null, tint = if (o.selected) RC.accent else RC.sub, modifier = Modifier.size(28.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(o.name, color = RC.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                        Text(o.type, color = RC.sub, fontSize = 12.sp)
+                        Text(nick, color = RC.text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                        Text(if (nick != o.name) "${o.name} · ${o.type}" else o.type, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    Icon(Icons.Filled.Edit, "Apodo", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { renaming = o }.padding(9.dp))
                     Icon(if (o.selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (o.selected) RC.accent else RC.sub)
                 }
                 if (o.selected) Slider(v ?: (o.volume / 100f), { v = it },
-                    onValueChangeFinished = { v?.let { call("PUT", "/api/outputs/${o.id}", JSONObject().put("volume", (it * 100).toInt()).toString()) }; v = null },
+                    onValueChangeFinished = { v?.let { f ->
+                        val vol = (f * 100).toInt()
+                        call("PUT", "/api/outputs/${o.id}", JSONObject().put("volume", vol).toString())
+                        val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = st.outputs[i].copy(volume = vol)
+                    }; v = null },
                     colors = SliderDefaults.colors(thumbColor = RC.accent, activeTrackColor = RC.accent, inactiveTrackColor = Color(0x33FFFFFF)))
             }
         }
         if (st.outputs.isEmpty()) item { Text("El NAS no ve bocinas todavía.", color = RC.sub, modifier = Modifier.padding(16.dp)) }
+        item { Spacer(Modifier.height(20.dp)) }
+    }
+
+    renaming?.let { o ->
+        TextAsk("Apodo para la bocina", "Original: ${o.name}", RemotePrefs.nicks[o.id].orEmpty(), "Ej. Bocina de la cocina",
+            onDone = { RemotePrefs.setNick(o.id, it); renaming = null }, onDismiss = { renaming = null })
+    }
+    if (saving) TextAsk("Guardar perfil", "Guarda qué bocinas están prendidas y el volumen de cada una.", "", "Ej. Fiesta, Noche, Comida",
+        onDone = { n ->
+            if (n.isNotBlank()) RemotePrefs.saveProfile(n, st.outputs.map { it.id to Pair(it.selected, it.volume) })
+            saving = false
+        }, onDismiss = { saving = false })
+    deleting?.let { n ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { deleting = null },
+            title = { Text("¿Borrar el perfil «$n»?") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { RemotePrefs.deleteProfile(n); deleting = null }) { Text("Borrar") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("Cancelar") } })
     }
 }
 
 @Composable
-private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
-    var mode by remember { mutableStateOf(0) }           // 0 álbumes · 1 artistas · 2 canciones
+private fun TextAsk(title: String, sub: String, initial: String, hint: String, onDone: (String) -> Unit, onDismiss: () -> Unit) {
+    var t by remember { mutableStateOf(initial) }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(sub, fontSize = 13.sp)
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.material3.OutlinedTextField(t, { t = it }, singleLine = true, placeholder = { Text(hint) })
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { onDone(t) }) { Text("Guardar") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancelar") } })
+}
+
+@Composable
+private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit) {
+    var mode by remember { mutableStateOf(0) }           // 0 álbumes · 1 artistas · 2 canciones · 3 listas
+    var openPlaylist by remember { mutableStateOf<RPlaylist?>(null) }
+    val playlists = remember { mutableStateListOf<RPlaylist>() }
     var query by remember { mutableStateOf("") }
     var openAlbum by remember { mutableStateOf<RAlbum?>(null) }
     var openArtist by remember { mutableStateOf<RArtist?>(null) }
@@ -317,13 +448,14 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
     val artists = remember { mutableStateListOf<RArtist>() }
     val tracks = remember { mutableStateListOf<RTrack>() }
 
-    LaunchedEffect(mode, query, openAlbum, openArtist) {
-        loading = true; msg = null
+    LaunchedEffect(mode, query, openAlbum, openArtist, openPlaylist) {
+        loading = true; msg = null; playlists.clear()
         if (query.isNotBlank()) delay(350)
         val res = withContext(Dispatchers.IO) {
             runCatching {
-                val a = openAlbum; val ar = openArtist
+                val a = openAlbum; val ar = openArtist; val pl = openPlaylist
                 when {
+                    pl != null -> Triple(emptyList(), emptyList(), tracksOf(JSONObject(api(host, "GET", "/api/library/playlists/${pl.id}/tracks")).items(), host))
                     a != null -> Triple(emptyList(), emptyList(), tracksOf(JSONObject(api(host, "GET", "/api/library/albums/${a.id}/tracks")).items(), host))
                     ar != null -> Triple(albumsOf(JSONObject(api(host, "GET", "/api/library/artists/${ar.id}/albums")).items(), host), emptyList(), emptyList())
                     query.isNotBlank() -> {
@@ -338,6 +470,13 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
                         val art = JSONObject(api(host, "GET", "/api/library/artists?media_kind=music")).items()
                         Triple(emptyList(), (0 until art.length()).map { art.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }, emptyList())
                     }
+                    mode == 3 -> {
+                        val ls = JSONObject(api(host, "GET", "/api/library/playlists")).items()
+                        val list = (0 until ls.length()).map { ls.getJSONObject(it) }.filter { it.optString("type") != "folder" }
+                            .map { RPlaylist(it.optString("id"), it.optString("name"), it.optInt("item_count")) }
+                        withContext(Dispatchers.Main) { playlists.addAll(list) }
+                        Triple(emptyList(), emptyList(), emptyList())
+                    }
                     else -> {
                         val r = JSONObject(api(host, "GET", "/api/search?type=tracks&expression=${enc("media_kind is music order by title")}&limit=500"))
                         Triple(emptyList(), emptyList(), tracksOf(r.optJSONObject("tracks")?.items() ?: JSONArray(), host))
@@ -347,26 +486,32 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
         }
         res.onSuccess { (al, ar, tr) ->
             albums.clear(); albums.addAll(al); artists.clear(); artists.addAll(ar); tracks.clear(); tracks.addAll(tr)
-            if (al.isEmpty() && ar.isEmpty() && tr.isEmpty()) msg = if (query.isBlank() && openAlbum == null && openArtist == null)
+            if (al.isEmpty() && ar.isEmpty() && tr.isEmpty() && playlists.isEmpty()) msg = if (mode == 3 && query.isBlank() && openPlaylist == null)
+                "No hay listas en el NAS. Las listas son archivos .m3u dentro de tu carpeta Music (también las lee de iTunes)."
+            else if (query.isBlank() && openAlbum == null && openArtist == null && openPlaylist == null)
                 "El NAS no tiene música en su biblioteca todavía. Hay que conectarle la carpeta de música del NAS a OwnTone." else "Sin resultados."
         }.onFailure { msg = "No se pudo leer la biblioteca: ${it.message}" }
         loading = false
     }
 
     Column(Modifier.fillMaxSize()) {
-        val back = openAlbum != null || openArtist != null
+        val back = openAlbum != null || openArtist != null || openPlaylist != null
+        val goBack = { if (openAlbum != null) openAlbum = null else if (openPlaylist != null) openPlaylist = null else openArtist = null }
         if (back) {
-            BackHandler { if (openAlbum != null) openAlbum = null else openArtist = null }
+            BackHandler { goBack() }
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.ArrowBack, "Atrás", tint = RC.text, modifier = Modifier.size(40.dp).clip(CircleShape)
-                    .clickable { if (openAlbum != null) openAlbum = null else openArtist = null }.padding(8.dp))
+                    .clickable { goBack() }.padding(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(openAlbum?.name ?: openArtist?.name.orEmpty(), color = RC.text, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(openAlbum?.name ?: openPlaylist?.name ?: openArtist?.name.orEmpty(), color = RC.text, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     openAlbum?.let { Text(it.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1) }
                 }
-                openAlbum?.let { a ->
-                    Text("Tocar todo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(RC.accent, RC.accent2))).clickable { play("library:album:${a.id}", 0) }.padding(horizontal = 14.dp, vertical = 8.dp))
+                val uri = openAlbum?.let { "library:album:${it.id}" } ?: openPlaylist?.let { "library:playlist:${it.id}" } ?: openArtist?.let { "library:artist:${it.id}" }
+                if (uri != null) {
+                    Icon(Icons.Filled.Shuffle, "Aleatorio", tint = Color.White, modifier = Modifier.padding(end = 6.dp).size(38.dp).clip(CircleShape)
+                        .background(Color(0x33FFFFFF)).clickable { play(uri, 0, true) }.padding(9.dp))
+                    Icon(Icons.Filled.PlayArrow, "Tocar todo", tint = Color.White, modifier = Modifier.size(38.dp).clip(CircleShape)
+                        .background(Brush.linearGradient(listOf(RC.accent, RC.accent2))).clickable { play(uri, 0, false) }.padding(7.dp))
                 }
             }
         } else {
@@ -382,8 +527,8 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
                 }
                 if (query.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RC.sub, modifier = Modifier.size(20.dp).clickable { query = "" })
             }
-            if (query.isBlank()) Row(Modifier.padding(horizontal = 14.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Álbumes", "Artistas", "Canciones").forEachIndexed { i, l ->
+            if (query.isBlank()) Row(Modifier.padding(horizontal = 14.dp, vertical = 2.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Álbumes", "Artistas", "Canciones", "Listas").forEachIndexed { i, l ->
                     Text(l, color = if (mode == i) Color.White else RC.sub, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                         modifier = Modifier.clip(CircleShape).background(if (mode == i) RC.accent.copy(alpha = 0.55f) else RC.card).clickable { mode = i }
                             .padding(horizontal = 14.dp, vertical = 7.dp))
@@ -394,6 +539,20 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
         msg?.let { Text(it, color = RC.sub, fontSize = 14.sp, modifier = Modifier.padding(20.dp)) }
 
         val showAlbumsGrid = albums.isNotEmpty() && artists.isEmpty() && tracks.isEmpty() && query.isBlank()
+        if (mode == 3 && openPlaylist == null && query.isBlank() && playlists.isNotEmpty()) {
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+                items(playlists, key = { "pl" + it.id }) { pl ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openPlaylist = pl }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Filled.QueueMusic, null, tint = RC.accent) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) { Text(pl.name, color = RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("${pl.count} canciones", color = RC.sub, fontSize = 12.sp) }
+                        Icon(Icons.Filled.Shuffle, "Aleatorio", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { play("library:playlist:${pl.id}", 0, true) }.padding(9.dp))
+                    }
+                }
+            }
+            return@Column
+        }
         if (showAlbumsGrid) {
             LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
                 items(albums, key = { it.id }) { a -> AlbumCard(a) { openAlbum = a } }
@@ -423,7 +582,16 @@ private fun LibraryTab(host: String, play: (String, Int) -> Unit) {
                 if (query.isNotBlank()) item { Section("Canciones") }
                 itemsIndexed(tracks, key = { i, t -> "tr$i" + t.uri }) { i, t ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .clickable { val a = openAlbum; if (a != null) play("library:album:${a.id}", i) else play(t.uri, 0) }
+                        .clickable {
+                            val a = openAlbum; val pl = openPlaylist
+                            when {
+                                a != null -> play("library:album:${a.id}", i, false)
+                                pl != null -> play("library:playlist:${pl.id}", i, false)
+                                query.isBlank() && mode == 2 -> playExpr("media_kind is music order by title", i, false)
+                                // resultados de búsqueda: sigue con los demás resultados
+                                else -> play(tracks.joinToString(",") { it.uri }, i, false)
+                            }
+                        }
                         .padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (openAlbum != null) Text("${i + 1}", color = RC.sub, fontSize = 13.sp, modifier = Modifier.width(30.dp)) else { Cover(t.art, 44); Spacer(Modifier.width(12.dp)) }
                         Column(Modifier.weight(1f)) {

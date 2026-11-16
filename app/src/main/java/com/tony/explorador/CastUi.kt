@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -99,7 +100,7 @@ fun CastPickerSheet(file: File, siblings: List<File>, onDismiss: () -> Unit) {
                     SoftIcon(when (t) { is CastTarget.Chromecast -> Icons.Filled.Cast; is CastTarget.AirPlay -> Icons.Filled.Speaker; else -> Icons.Filled.Tv }, ExpTheme.onBar, 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(t.name, color = ExpTheme.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
+                        Text(if (t is CastTarget.AirPlay) { RemotePrefs.init(LocalContext.current); RemotePrefs.nameOf(t.outputId, t.name) } else t.name, color = ExpTheme.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
                         Text(when (t) { is CastTarget.Chromecast -> "Google Cast · "; is CastTarget.AirPlay -> "AirPlay · "; else -> "DLNA · " } + t.detail, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
                     }
                 }
