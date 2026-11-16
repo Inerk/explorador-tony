@@ -266,7 +266,24 @@ fun NasRemoteScreen(onClose: () -> Unit) {
 
     fun call(method: String, path: String, body: String? = null) {
         val h = st.host ?: return
-        scope.launch(Dispatchers.IO) { runCatching { api(h, method, path, body) }.onFailure { st.error = "El NAS no respondió: ${it.message}" } }
+        scope.launch(Dispatchers.IO) { runCatching { api(h, method, path, body) }.onFailure { st.error = "No se pudo hacer eso en el NAS (${it.message?.substringAfterLast(' ')})." } }
+    }
+    /** Mete una canción a la cola: «next» = justo después de la que suena; si no, al final. */
+    fun enqueue(uri: String, next: Boolean) {
+        val h = st.host ?: return
+        if (st.state != "play" && st.state != "pause") { playUris(uri, 0, false); return }
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                var pos = ""
+                if (next) {
+                    val itemId = JSONObject(api(h, "GET", "/api/player")).optLong("item_id", -1)
+                    val q = JSONObject(api(h, "GET", "/api/queue")).items()
+                    for (i in 0 until q.length()) { val it = q.getJSONObject(i); if (it.optLong("id") == itemId) { pos = "&position=${it.optInt("position") + 1}"; break } }
+                }
+                api(h, "POST", "/api/queue/items/add?uris=${enc(uri)}$pos")
+                st.error = if (next) "✓ Sonará después de la actual" else "✓ Agregada al final de la cola"
+            }.onFailure { st.error = "No se pudo agregar a la cola (${it.message?.substringAfterLast(' ')})." }
+        }
     }
     /** Pone en la cola todo (álbum, lista, artista o varias canciones) y empieza en «from»: al terminar sigue con la siguiente. */
     fun queue(param: String, from: Int, shuffle: Boolean) {
@@ -281,7 +298,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             }.onFailure { st.error = "El NAS no respondió: ${it.message}" }
         }
     }
-    fun playUris(uris: String, from: Int, shuffle: Boolean) = queue("uris=${enc(uris)}", from, shuffle)
+    fun playUris(uris: String, from: Int, shuffle: Boolean): Unit = queue("uris=${enc(uris)}", from, shuffle)
     fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
@@ -295,6 +312,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 if (st.searching) CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 else Icon(Icons.Filled.Refresh, "Buscar otra vez", tint = RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { reload++ }.padding(10.dp))
             }
+            LaunchedEffect(st.error) { if (st.error != null && st.host != null) { delay(5000); st.error = null } }
             st.error?.let {
                 Text(it, color = Color(0xFFFFB4C8), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     .clip(RoundedCornerShape(10.dp)).background(Color(0x33FF4F7A)).clickable { if (st.host == null) askIp = true else st.error = null }.padding(10.dp).fillMaxWidth())
@@ -303,7 +321,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 val h = st.host
                 if (h != null) when (tab) {
                     0 -> NowPlayingTab(st, ::call)
-                    1 -> LibraryTab(h, nav, ::playUris, ::playExpr)
+                    1 -> LibraryTab(h, nav, ::playUris, ::playExpr, ::enqueue, st.state == "play" || st.state == "pause")
                     2 -> SpeakersTab(st, ::call)
                 }
             }
@@ -356,7 +374,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     var volDrag by remember { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(24.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth(0.82f).aspectRatio(1f, matchHeightConstraintsFirst = true).clip(RoundedCornerShape(24.dp)).background(RC.card), contentAlignment = Alignment.Center) {
             if (st.art != null) AsyncImage(st.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size(80.dp))
         }
@@ -555,7 +573,9 @@ private val SHELVES = listOf(
 private const val MUSIC = "media_kind is music"
 
 @Composable
-private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit) {
+private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit,
+                       enqueue: (String, Boolean) -> Unit, playing: Boolean) {
+    var queueFor by remember { mutableStateOf<RTrack?>(null) }
     var page by nav::page          // null = menú principal
     var query by nav::query
     var openAlbum by nav::openAlbum
@@ -587,7 +607,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                     p != null -> tr = tracksOf(JSONObject(api(host, "GET", "/api/library/playlists/${p.id}/tracks")).items(), host)
                     a != null -> tr = tracksOf(JSONObject(api(host, "GET", "/api/library/albums/${a.id}/tracks")).items(), host)
                     art != null -> al = albumsOf(JSONObject(api(host, "GET", "/api/library/artists/${art.id}/albums")).items(), host)
-                    y != null -> al = albumsExpr("$MUSIC and year = $y order by album")
+                    y != null -> tr = tracksExpr("$MUSIC and year = $y order by album", 2000)
                     query.isNotBlank() -> {
                         val r = JSONObject(api(host, "GET", "/api/search?type=tracks,albums,artists&query=${enc(query)}"))
                         val aa = r.optJSONObject("artists")?.items() ?: JSONArray()
@@ -650,7 +670,8 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                 }
                 val uri = openAlbum?.let { "library:album:${it.id}" } ?: openPlaylist?.let { "library:playlist:${it.id}" } ?: openArtist?.let { "library:artist:${it.id}" }
                 val expr = when { uri != null -> null; page == "songs" -> "$MUSIC order by title"; page == "favs" -> "$MUSIC and rating >= 80 order by title"
-                    page == "top" -> "$MUSIC and play_count > 0 order by play_count desc"; page == "recent" -> "$MUSIC order by time_modified desc"; else -> null }
+                    page == "top" -> "$MUSIC and play_count > 0 order by play_count desc"; page == "recent" -> "$MUSIC order by time_modified desc"
+                    openYear != null -> "$MUSIC and year = $openYear order by album"; else -> null }
                 if (uri != null || expr != null) {
                     Icon(Icons.Filled.Shuffle, "Aleatorio", tint = Color.White, modifier = Modifier.padding(end = 6.dp).size(38.dp).clip(CircleShape)
                         .background(Color(0x33FFFFFF)).clickable { if (uri != null) play(uri, 0, true) else playExpr(expr!!, 0, true) }.padding(9.dp))
@@ -717,7 +738,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                     Column(Modifier.padding(6.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(0x558FD3FF), Color(0x33B98CFF))))
                         .clickable { openYear = y }.padding(vertical = 18.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("$y", color = RC.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
-                        Text("$n álbumes", color = RC.sub, fontSize = 12.sp)
+                        Text("$n álbumes · ver canciones", color = RC.sub, fontSize = 12.sp)
                     }
                 }
             }
@@ -781,6 +802,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                                 query.isBlank() && page == "favs" -> playExpr("$MUSIC and rating >= 80 order by title", i, false)
                                 query.isBlank() && page == "top" -> playExpr("$MUSIC and play_count > 0 order by play_count desc", i, false)
                                 query.isBlank() && page == "recent" -> playExpr("$MUSIC order by time_modified desc", i, false)
+                                openYear != null -> playExpr("$MUSIC and year = $openYear order by album", i, false)
                                 else -> play(tracks.joinToString(",") { it.uri }, i, false)
                             }
                         }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -792,11 +814,20 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                         }
                         if (t.rating >= 80) Icon(Icons.Filled.Favorite, null, tint = Color(0xFFFF5A8A), modifier = Modifier.size(16.dp).padding(end = 4.dp))
                         Text(fmt(t.lengthMs), color = RC.sub, fontSize = 12.sp)
+                        if (playing) Icon(Icons.Filled.QueueMusic, "Agregar a la cola", tint = RC.accent,
+                            modifier = Modifier.padding(start = 4.dp).size(36.dp).clip(CircleShape).clickable { queueFor = t }.padding(7.dp))
                     }
                 }
             }
             item { Spacer(Modifier.height(20.dp)) }
         }
+    }
+    queueFor?.let { t ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { queueFor = null },
+            title = { Text(t.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+            text = { Text("¿Cuándo quieres que suene? Lo demás sigue normal después.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { enqueue(t.uri, true); queueFor = null }) { Text("Después de la actual") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { enqueue(t.uri, false); queueFor = null }) { Text("Al final de la cola") } })
     }
 }
 
