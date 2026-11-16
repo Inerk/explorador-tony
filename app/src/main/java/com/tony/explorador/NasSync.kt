@@ -45,7 +45,9 @@ object NasSync {
     var password by mutableStateOf("")
     var localFolder by mutableStateOf("")
     /** true: el teléfono manda — solo sube al NAS lo que falta, no baja nada. */
-    var uploadOnly by mutableStateOf(true)
+    /** 0 = en los dos sentidos (todos los aparatos quedan con todo) · 1 = solo subir · 2 = solo bajar */
+    var mode by mutableIntStateOf(0)
+    val uploadOnly get() = mode == 1
 
     var running by mutableStateOf(false)
         private set
@@ -70,11 +72,11 @@ object NasSync {
         password = prefs.getString("pass", "").orEmpty()
         localFolder = prefs.getString("local", null)
             ?: File(Environment.getExternalStorageDirectory(), Environment.DIRECTORY_MUSIC).absolutePath
-        uploadOnly = prefs.getBoolean("uploadOnly", true)
+        mode = prefs.getInt("syncMode", 0)
     }
 
     fun saveSettings() {
-        prefs.edit().putString("url", url.trim()).putString("user", user.trim()).putString("pass", password).putString("local", localFolder).putBoolean("uploadOnly", uploadOnly).apply()
+        prefs.edit().putString("url", url.trim()).putString("user", user.trim()).putString("pass", password).putString("local", localFolder).putInt("syncMode", mode).apply()
     }
 
     fun stop() { job?.cancel(); job = null; running = false; status = "Detenido"; Work.end("nas") }
@@ -236,7 +238,7 @@ object NasSync {
                 val localKeys = local.mapTo(HashSet()) { key(it.rel.substringAfterLast('/'), it.size) }
                 val remoteByRel = remote.associateBy { it.rel.lowercase(Locale.ROOT) }
                 val localByRel = local.associateBy { it.rel.lowercase(Locale.ROOT) }
-                val toUpload = local.filter { key(it.rel.substringAfterLast('/'), it.size) !in remoteKeys }
+                val toUpload = if (mode == 2) emptyList() else local.filter { key(it.rel.substringAfterLast('/'), it.size) !in remoteKeys }
                 val toDownload = if (uploadOnly) emptyList() else remote.filter { key(it.rel.substringAfterLast('/'), it.size) !in localKeys }
                 total = toUpload.size + toDownload.size
                 val scanPaths = mutableListOf<String>()

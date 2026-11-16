@@ -1732,14 +1732,20 @@ private fun NasPage() {
                         Text(NasSync.localFolder.substringAfter("/0/", NasSync.localFolder), color = Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !NasSync.running) { NasSync.uploadOnly = !NasSync.uploadOnly; NasSync.saveSettings() }
-                    .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(if (NasSync.uploadOnly) "El teléfono manda" else "En los dos sentidos", color = Retro.Text, fontWeight = FontWeight.SemiBold)
-                        Text(if (NasSync.uploadOnly) "Solo sube al NAS lo que le falta. No baja nada al teléfono." else "Sube lo que falta en el NAS y baja lo que falta en el teléfono.",
-                            color = Retro.SubText, fontSize = 12.sp)
+                Text("¿Qué hace al sincronizar?", color = Retro.Text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                listOf(
+                    Triple(0, "Todos mis aparatos con todo", "Sube al NAS lo que falta allá y baja al teléfono lo que falta aquí. Si cada teléfono sincroniza, todos terminan con la misma música."),
+                    Triple(1, "Solo subir al NAS", "El teléfono manda: sube lo nuevo y no baja nada."),
+                    Triple(2, "Solo bajar del NAS", "Baja al teléfono la música que agregaste desde otros aparatos, sin subir nada."),
+                ).forEach { (m, t, d) ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !NasSync.running) { NasSync.mode = m; NasSync.saveSettings() }
+                        .padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(NasSync.mode == m, { NasSync.mode = m; NasSync.saveSettings() }, enabled = !NasSync.running)
+                        Column(Modifier.weight(1f)) {
+                            Text(t, color = Retro.Text, fontSize = 14.sp)
+                            Text(d, color = Retro.SubText, fontSize = 12.sp)
+                        }
                     }
-                    androidx.compose.material3.Switch(NasSync.uploadOnly, { NasSync.uploadOnly = it; NasSync.saveSettings() }, enabled = !NasSync.running)
                 }
                 if (!NasSync.running) {
                     Text("Probar conexión", color = Retro.Orange, fontWeight = FontWeight.Bold,
@@ -1754,7 +1760,7 @@ private fun NasPage() {
                     Text((if (t > 0) "${NasSync.done} de $t · " else "") + NasSync.status, color = Retro.SubText, fontSize = 12.sp, maxLines = 2)
                     RetroButton("Detener", Icons.Filled.Stop, Modifier.fillMaxWidth()) { NasSync.stop() }
                 }
-                Text((if (NasSync.uploadOnly) "Sube al NAS lo que le falta." else "Sube al NAS lo que falta allá y baja al teléfono lo que falta aquí.") + " Compara por nombre y tamaño. No borra ni reemplaza nada en ningún lado.",
+                Text("Compara por nombre y tamaño. No borra ni reemplaza nada en ningún lado.",
                     color = Retro.SubText, fontSize = 11.sp)
             }
         }
