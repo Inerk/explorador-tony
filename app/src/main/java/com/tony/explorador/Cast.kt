@@ -203,6 +203,8 @@ object CastManager {
     var volume by mutableStateOf(-1); private set
     var status by mutableStateOf<String?>(null); private set
     var expanded by mutableStateOf(false)
+    /** Qué pasa con la búsqueda de bocinas AirPlay (NAS). */
+    var airplayStatus by mutableStateOf<String?>(null); private set
     val active get() = target != null && file != null
 
     private var poll: Job? = null
@@ -252,7 +254,14 @@ object CastManager {
         }
         // AirPlay (HomePod) a través del NAS
         scope.launch {
-            val found = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.discover(app) }.getOrDefault(emptyList()) }
+            airplayStatus = "AirPlay: buscando el NAS…"
+            val res = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.discover(app) } }
+            val found = res.getOrDefault(emptyList())
+            airplayStatus = when {
+                res.isFailure -> "AirPlay: error ${res.exceptionOrNull()?.message ?: ""}"
+                found.isNotEmpty() -> null
+                else -> "AirPlay: no encontré el NAS (${AirPlayBridge.lastInfo})"
+            }
             for (t in found) if (targets.none { it is CastTarget.AirPlay && it.outputId == t.outputId }) targets += t
         }
     }

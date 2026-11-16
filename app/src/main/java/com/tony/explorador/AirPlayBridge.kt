@@ -27,6 +27,9 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object AirPlayBridge {
     private const val PORT = 3689
+    /** Pista para diagnosticar: IP del teléfono y cuántos equipos revisó. */
+    @Volatile var lastInfo = ""
+
     private fun prefs(c: Context) = c.getSharedPreferences("airplay", Context.MODE_PRIVATE)
 
     /** Busca OwnTone: la última dirección que funcionó, la del NAS (sincronizar) y lo que anuncie la red. */
@@ -37,7 +40,9 @@ object AirPlayBridge {
         hosts += nsdHosts(c)
         for (h in hosts) tryHost(c, h)?.let { return it }
         // último recurso: revisar toda la red de la casa buscando OwnTone (puerto 3689)
-        for (h in scanSubnet()) if (h !in hosts) tryHost(c, h)?.let { return it }
+        val open = scanSubnet()
+        for (h in open) if (h !in hosts) tryHost(c, h)?.let { return it }
+        lastInfo = "tu IP ${MediaServer.localIp() ?: "desconocida"}, ${open.size} con puerto 3689"
         return emptyList()
     }
 

@@ -56,8 +56,15 @@ import java.io.File
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun CastPickerSheet(file: File, siblings: List<File>, onDismiss: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val permLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { CastManager.startDiscovery() }
     DisposableEffect(Unit) {
-        CastManager.startDiscovery()
+        val perm = "android.permission.ACCESS_LOCAL_NETWORK"
+        if (android.os.Build.VERSION.SDK_INT >= 36 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(ctx, perm) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            runCatching { permLauncher.launch(perm) }.onFailure { CastManager.startDiscovery() }
+        else CastManager.startDiscovery()
         onDispose { CastManager.stopDiscovery() }
     }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ExpTheme.bar) {
@@ -70,6 +77,9 @@ fun CastPickerSheet(file: File, siblings: List<File>, onDismiss: () -> Unit) {
                     Text(file.name, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (CastManager.searching) CircularProgressIndicator(color = ExpTheme.onBar, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+            }
+            if (mimeOf(file).startsWith("audio/")) CastManager.airplayStatus?.let {
+                Text("🔊 $it", color = ExpTheme.sub, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
             }
             Spacer(Modifier.size(12.dp))
             if (CastManager.targets.isEmpty()) {
