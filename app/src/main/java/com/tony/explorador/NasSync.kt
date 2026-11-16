@@ -174,8 +174,30 @@ object NasSync {
     fun test(onResult: (String) -> Unit) {
         saveSettings()
         scope.launch {
-            val msg = runCatching { val (d, f) = list(client(), ""); "Conexión correcta ✔  (${d.size} carpetas y ${f.size} archivos en esa carpeta)" }
+            val http = client()
+            var msg = runCatching { val (d, f) = list(http, ""); "Conexión correcta ✔  (${d.size} carpetas y ${f.size} archivos en esa carpeta)" }
                 .getOrElse { "No se pudo conectar: ${it.message ?: it.javaClass.simpleName}" }
+            if (msg.contains("No existe esa carpeta")) {
+                // buscar la carpeta de música desde la raíz del NAS (dos niveles)
+                val original = url
+                val uri = runCatching { java.net.URI(original.trim()) }.getOrNull()
+                val root = uri?.let { "${it.scheme}://${it.host}${if (it.port > 0) ":" + it.port else ""}" }
+                if (root != null) {
+                    url = root
+                    val found = runCatching {
+                        val (top, _) = list(http, "")
+                        top.firstOrNull { it.substringAfterLast('/').equals("music", true) || it.substringAfterLast('/').equals("música", true) }
+                            ?: top.firstNotNullOfOrNull { d -> runCatching { list(http, d).first }.getOrNull()
+                                ?.firstOrNull { it.substringAfterLast('/').equals("music", true) || it.substringAfterLast('/').equals("música", true) } }
+                            ?: run { msg = "No encontré la carpeta. En el NAS hay: " + top.joinToString(", ") { "/" + it }; null }
+                    }.getOrNull()
+                    if (found != null) {
+                        url = root + "/" + found.split('/').joinToString("/") { Uri.encode(it) }
+                        saveSettings()
+                        msg = "Encontré tu música en /$found ✔ Ya dejé esa dirección puesta."
+                    } else url = original
+                }
+            }
             withContext(Dispatchers.Main) { onResult(msg) }
         }
     }

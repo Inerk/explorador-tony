@@ -1754,7 +1754,7 @@ private fun NasPage() {
                     Text((if (t > 0) "${NasSync.done} de $t · " else "") + NasSync.status, color = Retro.SubText, fontSize = 12.sp, maxLines = 2)
                     RetroButton("Detener", Icons.Filled.Stop, Modifier.fillMaxWidth()) { NasSync.stop() }
                 }
-                Text("Sube al NAS lo que falta allá y baja al teléfono lo que falta aquí. Compara por nombre y tamaño. No borra ni reemplaza nada en ningún lado.",
+                Text((if (NasSync.uploadOnly) "Sube al NAS lo que le falta." else "Sube al NAS lo que falta allá y baja al teléfono lo que falta aquí.") + " Compara por nombre y tamaño. No borra ni reemplaza nada en ningún lado.",
                     color = Retro.SubText, fontSize = 11.sp)
             }
         }
