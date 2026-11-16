@@ -50,6 +50,8 @@ object AirPlayBridge {
         return runCatching { outputs(h) }.getOrDefault(emptyList())
     }
 
+    fun savedHost(c: Context): String? = prefs(c).getString("host", null)
+    fun saveHost(c: Context, h: String) = remember(c, h)
     private fun remember(c: Context, h: String) { prefs(c).edit().putString("host", h).apply() }
     private fun isOwnTone(h: String) = runCatching { JSONObject(http("GET", h, "/api/config")).has("version") }.getOrDefault(false)
 

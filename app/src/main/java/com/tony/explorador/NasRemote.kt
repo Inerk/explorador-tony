@@ -183,12 +183,24 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     var reload by remember { mutableStateOf(0) }
     BackHandler { onClose() }
 
+    // Android nuevo pide permiso para ver aparatos de la red de la casa
+    val localPerm = "android.permission.ACCESS_LOCAL_NETWORK"
+    fun hasPerm() = android.os.Build.VERSION.SDK_INT < 36 ||
+        androidx.core.content.ContextCompat.checkSelfPermission(ctx, localPerm) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    var permAsked by remember { mutableStateOf(false) }
+    val permLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { permAsked = true; reload++ }
+    var askIp by remember { mutableStateOf(false) }
+
     // encontrar el NAS
     LaunchedEffect(reload) {
+        if (!hasPerm() && !permAsked) { runCatching { permLauncher.launch(localPerm) }.onFailure { permAsked = true; reload++ }; return@LaunchedEffect }
         st.searching = true; st.error = null
         st.host = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.findHost(ctx) }.getOrNull() }
         st.searching = false
-        if (st.host == null) st.error = "No encontré el NAS con OwnTone (${AirPlayBridge.lastInfo})."
+        if (st.host == null) st.error = if (!hasPerm())
+            "La app no tiene permiso para ver tu red. Ve a Ajustes del teléfono → Apps → Explorador Tony → Permisos → «Dispositivos cercanos / red local» y actívalo."
+        else "No encontré el NAS con OwnTone (${AirPlayBridge.lastInfo}). Toca aquí para escribir su dirección."
     }
 
     // estado de lo que suena, cada segundo
@@ -261,7 +273,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             }
             st.error?.let {
                 Text(it, color = Color(0xFFFFB4C8), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(10.dp)).background(Color(0x33FF4F7A)).clickable { st.error = null }.padding(10.dp).fillMaxWidth())
+                    .clip(RoundedCornerShape(10.dp)).background(Color(0x33FF4F7A)).clickable { if (st.host == null) askIp = true else st.error = null }.padding(10.dp).fillMaxWidth())
             }
             Box(Modifier.weight(1f)) {
                 val h = st.host
@@ -271,6 +283,9 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                     2 -> SpeakersTab(st, ::call)
                 }
             }
+            if (askIp) TextAsk("Dirección del NAS", "Escribe la IP de tu NAS (la ves en el NAS en Panel de control → Ajustes de red).",
+                AirPlayBridge.savedHost(ctx).orEmpty(), "Ej. 192.168.3.74",
+                onDone = { ip -> askIp = false; if (ip.isNotBlank()) { AirPlayBridge.saveHost(ctx, ip.trim()); reload++ } }, onDismiss = { askIp = false })
             // pestañas
             Row(Modifier.fillMaxWidth().background(Color(0x33000000)).padding(vertical = 6.dp)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
