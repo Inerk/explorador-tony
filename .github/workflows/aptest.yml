@@ -1,0 +1,16 @@
+name: aptest
+on: push
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pip install srptools cryptography
+      - run: |
+          python3 -u fake_atv.py > srv.log 2>&1 &
+          sleep 2
+          gradle -q run --args=7777 || true
+          echo ---- server; cat srv.log

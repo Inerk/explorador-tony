@@ -1,5 +1,5 @@
-plugins {
-    id("com.android.application") version "8.7.3" apply false
-    id("org.jetbrains.kotlin.android") version "2.0.21" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
-}
+plugins { kotlin("jvm") version "2.0.21"; application }
+repositories { mavenCentral() }
+dependencies { implementation("org.bouncycastle:bcprov-jdk18on:1.78.1") }
+application { mainClass.set("com.tony.explorador.TestMainKt") }
+kotlin { jvmToolchain(17) }
