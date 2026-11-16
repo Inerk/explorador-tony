@@ -26,31 +26,32 @@ import java.util.concurrent.ConcurrentHashMap
  * que usa la tele) y OwnTone la toca en la bocina elegida.
  */
 object AirPlayBridge {
-    private const val PORT = 3689
+    const val PORT = 3689
     /** Pista para diagnosticar: IP del teléfono y cuántos equipos revisó. */
     @Volatile var lastInfo = ""
 
     private fun prefs(c: Context) = c.getSharedPreferences("airplay", Context.MODE_PRIVATE)
 
-    /** Busca OwnTone: la última dirección que funcionó, la del NAS (sincronizar) y lo que anuncie la red. */
-    suspend fun discover(c: Context): List<CastTarget.AirPlay> {
+    /** Busca OwnTone: la última dirección que funcionó, la del NAS (sincronizar), lo que anuncie la red y, si no, toda la red. */
+    suspend fun findHost(c: Context): String? {
         val hosts = LinkedHashSet<String>()
         prefs(c).getString("host", null)?.let { hosts += it }
         runCatching { URI(NasSync.url.trim()).host }.getOrNull()?.takeIf { it.isNotBlank() }?.let { hosts += it }
         hosts += nsdHosts(c)
-        for (h in hosts) tryHost(c, h)?.let { return it }
-        // último recurso: revisar toda la red de la casa buscando OwnTone (puerto 3689)
+        for (h in hosts) if (isOwnTone(h)) { remember(c, h); return h }
         val open = scanSubnet()
-        for (h in open) if (h !in hosts) tryHost(c, h)?.let { return it }
+        for (h in open) if (h !in hosts && isOwnTone(h)) { remember(c, h); return h }
         lastInfo = "tu IP ${MediaServer.localIp() ?: "desconocida"}, ${open.size} con puerto 3689"
-        return emptyList()
+        return null
     }
 
-    private fun tryHost(c: Context, h: String): List<CastTarget.AirPlay>? {
-        val outs = runCatching { outputs(h) }.getOrNull() ?: return null
-        prefs(c).edit().putString("host", h).apply()
-        return outs
+    suspend fun discover(c: Context): List<CastTarget.AirPlay> {
+        val h = findHost(c) ?: return emptyList()
+        return runCatching { outputs(h) }.getOrDefault(emptyList())
     }
+
+    private fun remember(c: Context, h: String) { prefs(c).edit().putString("host", h).apply() }
+    private fun isOwnTone(h: String) = runCatching { JSONObject(http("GET", h, "/api/config")).has("version") }.getOrDefault(false)
 
     private suspend fun scanSubnet(): List<String> = coroutineScope {
         val ip = MediaServer.localIp() ?: return@coroutineScope emptyList()
@@ -91,8 +92,6 @@ object AirPlayBridge {
     }
 
     private fun outputs(host: String): List<CastTarget.AirPlay> {
-        val cfg = JSONObject(http("GET", host, "/api/config"))
-        if (!cfg.has("version")) return emptyList()
         val arr = JSONObject(http("GET", host, "/api/outputs")).optJSONArray("outputs") ?: JSONArray()
         val list = mutableListOf<CastTarget.AirPlay>()
         for (i in 0 until arr.length()) {
@@ -133,7 +132,8 @@ object AirPlayBridge {
         return Triple(p.optString("state"), p.optLong("item_progress_ms"), p.optLong("item_length_ms"))
     }
 
-    private fun http(method: String, host: String, path: String, body: String? = null): String {
+    /** Llamada directa a la API de OwnTone (la usa también el control remoto). */
+    fun http(method: String, host: String, path: String, body: String? = null): String {
         val c = URL("http://$host:$PORT$path").openConnection() as HttpURLConnection
         c.requestMethod = method
         c.connectTimeout = 2500; c.readTimeout = 6000

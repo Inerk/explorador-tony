@@ -478,6 +478,13 @@ fun AppRoot() {
         // lo que se está mandando a la TV
         CastControlBar(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
 
+        // control remoto de la música del NAS (OwnTone)
+        androidx.compose.animation.AnimatedVisibility(RemoteUi.open,
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+            NasRemoteScreen { RemoteUi.open = false }
+        }
+
         UpdateDialog(
             state = updateState,
             currentName = versionName,

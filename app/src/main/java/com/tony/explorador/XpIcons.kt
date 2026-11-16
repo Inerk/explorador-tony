@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET, EXPLORER, UPDATE }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET, EXPLORER, UPDATE, REMOTE }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -68,6 +68,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.INTERNET -> drawInternet()
             XpIconKind.EXPLORER -> drawFolder()
             XpIconKind.UPDATE -> drawDrive(Color(0xFFDADDE3), Color(0xFF8F96A3))
+            XpIconKind.REMOTE -> drawSpeakerRemote()
         }
     }
 }
@@ -435,4 +436,23 @@ private fun DrawScope.drawInternet() {
     // brillo
     drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.7f), Color.Transparent), startY = c.y - r, endY = c.y),
         Offset(c.x - r * 0.6f, c.y - r * 0.92f), Size(r * 1.2f, r * 0.75f))
+}
+
+/** Bocina con ondas: control remoto de la música del NAS. */
+private fun DrawScope.drawSpeakerRemote() {
+    val w = size.width
+    val h = size.height
+    drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFB98CFF), Color(0xFF5A2FB0))),
+        Offset(w * 0.22f, h * 0.10f), Size(w * 0.48f, h * 0.76f), CornerRadius(w * 0.10f))
+    drawRoundRect(Color(0xFF2E1868), Offset(w * 0.22f, h * 0.10f), Size(w * 0.48f, h * 0.76f), CornerRadius(w * 0.10f), style = Stroke(w * 0.025f))
+    drawLine(Color.White.copy(alpha = 0.55f), Offset(w * 0.30f, h * 0.15f), Offset(w * 0.62f, h * 0.15f), strokeWidth = w * 0.02f, cap = StrokeCap.Round)
+    drawCircle(Color(0xFF1A0F3A), w * 0.07f, Offset(w * 0.46f, h * 0.30f))
+    drawCircle(Color(0xFF1A0F3A), w * 0.15f, Offset(w * 0.46f, h * 0.60f))
+    drawCircle(Brush.radialGradient(listOf(Color(0xFFFF9AD5), Color(0xFF7A3CD0)), center = Offset(w * 0.44f, h * 0.58f), radius = w * 0.12f),
+        w * 0.10f, Offset(w * 0.46f, h * 0.60f))
+    for (i in 0..1) {
+        val r = w * (0.16f + i * 0.09f)
+        drawArc(Color(0xFFFF7AC6).copy(alpha = 0.9f - i * 0.3f), -50f, 100f, false,
+            Offset(w * 0.68f - r, h * 0.42f - r), Size(r * 2, r * 2), style = Stroke(w * 0.035f, cap = StrokeCap.Round))
+    }
 }
