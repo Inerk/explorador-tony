@@ -131,6 +131,7 @@ fun XpDesktop(
         add(DeskApp("camera", "Cámara", XpIconKind.CAMERA) { onOpenFolder(dir(Environment.DIRECTORY_DCIM)) })
         add(DeskApp("videos", "Videos", XpIconKind.VIDEO_PLAYER) { onOpenVideos() })
         add(DeskApp("remote", "Control remoto", XpIconKind.REMOTE) { RemoteUi.open = true })
+        add(DeskApp("casa", "Casa", XpIconKind.HOUSE) { HomeUi.open = true })
         add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
         add(DeskApp("panel", "Ajustes", XpIconKind.SETTINGS) { settings.open = true; settings.minimized = false })
         add(DeskApp("explorer", "Explorador de archivos", XpIconKind.EXPLORER) { ExplorerHome.show = true; onOpenFolder(internal) })

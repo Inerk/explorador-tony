@@ -213,6 +213,7 @@ fun NebulaHome(
                         "${formatSize(r.file.freeSpace)} libres de ${formatSize(r.file.totalSpace)}") { onOpenDir(r.file) }
                 }
                 LocationRow(null, "NAS · Música", "Control remoto de tus bocinas", onRemote)
+                LocationRow(Icons.Filled.Home, "Casa", "Focos, aires, teles y aspiradora", onClick = { HomeUi.open = true })
                 Spacer(Modifier.height(16.dp))
             }
             // barra de abajo

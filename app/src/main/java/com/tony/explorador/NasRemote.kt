@@ -34,6 +34,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
@@ -104,10 +110,10 @@ private object RC {
     val sub = Color(0xFFB4A8D6)
 }
 
-private data class RAlbum(val id: String, val name: String, val artist: String, val art: String?, val tracks: Int)
+private data class RAlbum(val id: String, val name: String, val artist: String, val art: String?, val tracks: Int, val year: Int = 0)
 private data class RArtist(val id: String, val name: String, val albums: Int)
 private data class RPlaylist(val id: String, val name: String, val count: Int)
-private data class RTrack(val uri: String, val title: String, val artist: String, val album: String, val lengthMs: Long, val art: String?)
+private data class RTrack(val uri: String, val title: String, val artist: String, val album: String, val lengthMs: Long, val art: String?, val id: String = "", val rating: Int = 0)
 private data class ROutput(val id: String, val name: String, val type: String, val selected: Boolean, val volume: Int)
 
 /** Lo que dice el NAS de lo que está sonando. */
@@ -122,6 +128,8 @@ private class RState {
     var title by mutableStateOf("")
     var artist by mutableStateOf("")
     var art by mutableStateOf<String?>(null)
+    var trackId by mutableStateOf("")
+    var rating by mutableStateOf(0)
     var shuffle by mutableStateOf(false)
     var repeat by mutableStateOf("off")         // off · all · single
     val outputs = mutableStateListOf<ROutput>()
@@ -161,16 +169,19 @@ object RemotePrefs {
 }
 
 private fun api(host: String, method: String, path: String, body: String? = null) = AirPlayBridge.http(method, host, path, body)
-private fun artUrl(host: String, rel: String?) = rel?.takeIf { it.isNotBlank() }?.let { if (it.startsWith("http")) it else "http://$host:${AirPlayBridge.PORT}$it" }
+// OwnTone da la portada como «./artwork/item/12»: hay que quitarle el punto
+private fun artUrl(host: String, rel: String?) = rel?.takeIf { it.isNotBlank() }?.let {
+    if (it.startsWith("http")) it else "http://$host:${AirPlayBridge.PORT}/" + it.removePrefix(".").trimStart('/')
+}
 private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 private fun fmt(ms: Long): String { val t = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(t / 60, t % 60) }
 
 private fun JSONObject.items(): JSONArray = optJSONArray("items") ?: JSONArray()
 private fun albumsOf(a: JSONArray, host: String) = (0 until a.length()).map { a.getJSONObject(it) }.map {
-    RAlbum(it.optString("id"), it.optString("name"), it.optString("artist"), artUrl(host, it.optString("artwork_url")), it.optInt("track_count"))
+    RAlbum(it.optString("id"), it.optString("name"), it.optString("artist"), artUrl(host, it.optString("artwork_url")), it.optInt("track_count"), it.optInt("year"))
 }
 private fun tracksOf(a: JSONArray, host: String) = (0 until a.length()).map { a.getJSONObject(it) }.map {
-    RTrack(it.optString("uri"), it.optString("title"), it.optString("artist"), it.optString("album"), it.optLong("length_ms"), artUrl(host, it.optString("artwork_url")))
+    RTrack(it.optString("uri"), it.optString("title"), it.optString("artist"), it.optString("album"), it.optLong("length_ms"), artUrl(host, it.optString("artwork_url")), it.optString("id"), it.optInt("rating"))
 }
 
 @Composable
@@ -221,6 +232,11 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                             val it = q.getJSONObject(i)
                             if (it.optLong("id") == itemId) {
                                 st.title = it.optString("title"); st.artist = it.optString("artist")
+                                val tid = it.optString("track_id")
+                                if (tid != st.trackId) {
+                                    st.trackId = tid
+                                    st.rating = runCatching { JSONObject(api(h, "GET", "/api/library/tracks/$tid")).optInt("rating") }.getOrDefault(0)
+                                }
                                 st.art = artUrl(h, it.optString("artwork_url")); break
                             }
                         }
@@ -319,6 +335,14 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         Spacer(Modifier.height(20.dp))
         Text(st.title.ifBlank { "Nada sonando" }, color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(st.artist.ifBlank { "Elige música en «Biblioteca»" }, color = RC.sub, fontSize = 14.sp, maxLines = 1)
+        if (st.trackId.isNotBlank()) {
+            val fav = st.rating >= 80
+            Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorito", tint = if (fav) Color(0xFFFF5A8A) else RC.sub,
+                modifier = Modifier.padding(top = 4.dp).size(40.dp).clip(CircleShape).clickable {
+                    val nv = if (fav) 0 else 100; st.rating = nv
+                    call("PUT", "/api/library/tracks/${st.trackId}?rating=$nv", null)
+                }.padding(8.dp))
+        }
         val names = st.outputs.filter { it.selected }.joinToString(", ") { RemotePrefs.nameOf(it.id, it.name) }
         if (names.isNotBlank()) Text("🔊 $names", color = RC.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
@@ -449,89 +473,140 @@ private fun TextAsk(title: String, sub: String, initial: String, hint: String, o
         dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }
 
+private data class Shelf(val key: String, val label: String, val icon: ImageVector, val color: Color)
+
+private val SHELVES = listOf(
+    Shelf("lists", "Listas", Icons.Filled.QueueMusic, Color(0xFFFF7AC6)),
+    Shelf("artists", "Artistas", Icons.Filled.Person, Color(0xFFB98CFF)),
+    Shelf("albums", "Álbumes", Icons.Filled.Album, Color(0xFF7FB2FF)),
+    Shelf("songs", "Canciones", Icons.Filled.MusicNote, Color(0xFF6EE7B7)),
+    Shelf("recent", "Últimas agregadas", Icons.Filled.NewReleases, Color(0xFFFFC94D)),
+    Shelf("top", "Más escuchadas", Icons.Filled.TrendingUp, Color(0xFFFF9A6B)),
+    Shelf("years", "Por año", Icons.Filled.CalendarMonth, Color(0xFF8FD3FF)),
+    Shelf("favs", "Favoritos", Icons.Filled.Favorite, Color(0xFFFF5A8A)),
+)
+
+private const val MUSIC = "media_kind is music"
+
 @Composable
 private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit) {
-    var mode by remember { mutableStateOf(0) }           // 0 álbumes · 1 artistas · 2 canciones · 3 listas
-    var openPlaylist by remember { mutableStateOf<RPlaylist?>(null) }
-    val playlists = remember { mutableStateListOf<RPlaylist>() }
+    var page by remember { mutableStateOf<String?>(null) }          // null = menú principal
     var query by remember { mutableStateOf("") }
     var openAlbum by remember { mutableStateOf<RAlbum?>(null) }
     var openArtist by remember { mutableStateOf<RArtist?>(null) }
+    var openPlaylist by remember { mutableStateOf<RPlaylist?>(null) }
+    var openYear by remember { mutableStateOf<Int?>(null) }
     var loading by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
+    var reloadTick by remember { mutableStateOf(0) }
     val albums = remember { mutableStateListOf<RAlbum>() }
     val artists = remember { mutableStateListOf<RArtist>() }
     val tracks = remember { mutableStateListOf<RTrack>() }
+    val playlists = remember { mutableStateListOf<RPlaylist>() }
+    val years = remember { mutableStateListOf<Pair<Int, Int>>() }      // año → cuántos álbumes
+    val recentShelf = remember { mutableStateListOf<RAlbum>() }
 
-    LaunchedEffect(mode, query, openAlbum, openArtist, openPlaylist) {
-        loading = true; msg = null; playlists.clear()
+    fun tracksExpr(e: String, limit: Int = 500) = tracksOf(JSONObject(api(host, "GET", "/api/search?type=tracks&expression=${enc(e)}&limit=$limit")).optJSONObject("tracks")?.items() ?: JSONArray(), host)
+    fun albumsExpr(e: String, limit: Int = 500) = albumsOf(JSONObject(api(host, "GET", "/api/search?type=albums&expression=${enc(e)}&limit=$limit")).optJSONObject("albums")?.items() ?: JSONArray(), host)
+
+    LaunchedEffect(page, query, openAlbum, openArtist, openPlaylist, openYear, reloadTick) {
+        loading = true; msg = null
         if (query.isNotBlank()) delay(350)
         val res = withContext(Dispatchers.IO) {
             runCatching {
-                val a = openAlbum; val ar = openArtist; val pl = openPlaylist
+                var al: List<RAlbum> = emptyList(); var ar: List<RArtist> = emptyList(); var tr: List<RTrack> = emptyList()
+                var pl: List<RPlaylist> = emptyList(); var ys: List<Pair<Int, Int>> = emptyList(); var shelf: List<RAlbum> = emptyList()
+                val a = openAlbum; val art = openArtist; val p = openPlaylist; val y = openYear
                 when {
-                    pl != null -> Triple(emptyList(), emptyList(), tracksOf(JSONObject(api(host, "GET", "/api/library/playlists/${pl.id}/tracks")).items(), host))
-                    a != null -> Triple(emptyList(), emptyList(), tracksOf(JSONObject(api(host, "GET", "/api/library/albums/${a.id}/tracks")).items(), host))
-                    ar != null -> Triple(albumsOf(JSONObject(api(host, "GET", "/api/library/artists/${ar.id}/albums")).items(), host), emptyList(), emptyList())
+                    p != null -> tr = tracksOf(JSONObject(api(host, "GET", "/api/library/playlists/${p.id}/tracks")).items(), host)
+                    a != null -> tr = tracksOf(JSONObject(api(host, "GET", "/api/library/albums/${a.id}/tracks")).items(), host)
+                    art != null -> al = albumsOf(JSONObject(api(host, "GET", "/api/library/artists/${art.id}/albums")).items(), host)
+                    y != null -> al = albumsExpr("$MUSIC and year = $y order by album")
                     query.isNotBlank() -> {
                         val r = JSONObject(api(host, "GET", "/api/search?type=tracks,albums,artists&query=${enc(query)}"))
-                        val art = r.optJSONObject("artists")?.items() ?: JSONArray()
-                        Triple(albumsOf(r.optJSONObject("albums")?.items() ?: JSONArray(), host),
-                            (0 until art.length()).map { art.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) },
-                            tracksOf(r.optJSONObject("tracks")?.items() ?: JSONArray(), host))
+                        val aa = r.optJSONObject("artists")?.items() ?: JSONArray()
+                        al = albumsOf(r.optJSONObject("albums")?.items() ?: JSONArray(), host)
+                        ar = (0 until aa.length()).map { aa.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }
+                        tr = tracksOf(r.optJSONObject("tracks")?.items() ?: JSONArray(), host)
                     }
-                    mode == 0 -> Triple(albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host), emptyList(), emptyList())
-                    mode == 1 -> {
-                        val art = JSONObject(api(host, "GET", "/api/library/artists?media_kind=music")).items()
-                        Triple(emptyList(), (0 until art.length()).map { art.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }, emptyList())
+                    page == null -> shelf = albumsExpr("$MUSIC order by time_added desc", 12)
+                    page == "albums" -> al = albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host)
+                    page == "artists" -> {
+                        val aa = JSONObject(api(host, "GET", "/api/library/artists?media_kind=music")).items()
+                        ar = (0 until aa.length()).map { aa.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }
                     }
-                    mode == 3 -> {
+                    page == "songs" -> tr = tracksExpr("$MUSIC order by title")
+                    page == "lists" -> {
                         val ls = JSONObject(api(host, "GET", "/api/library/playlists")).items()
-                        val list = (0 until ls.length()).map { ls.getJSONObject(it) }.filter { it.optString("type") != "folder" }
+                        pl = (0 until ls.length()).map { ls.getJSONObject(it) }.filter { it.optString("type") != "folder" }
                             .map { RPlaylist(it.optString("id"), it.optString("name"), it.optInt("item_count")) }
-                        withContext(Dispatchers.Main) { playlists.addAll(list) }
-                        Triple(emptyList(), emptyList(), emptyList())
                     }
-                    else -> {
-                        val r = JSONObject(api(host, "GET", "/api/search?type=tracks&expression=${enc("media_kind is music order by title")}&limit=500"))
-                        Triple(emptyList(), emptyList(), tracksOf(r.optJSONObject("tracks")?.items() ?: JSONArray(), host))
-                    }
+                    page == "recent" -> al = albumsExpr("$MUSIC order by time_added desc", 60)
+                    page == "top" -> tr = tracksExpr("$MUSIC and play_count > 0 order by play_count desc", 100)
+                    page == "years" -> ys = albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host)
+                        .filter { it.year > 0 }.groupingBy { it.year }.eachCount().toList().sortedByDescending { it.first }
+                    page == "favs" -> tr = tracksExpr("$MUSIC and rating >= 80 order by title")
                 }
+                listOf(al, ar, tr, pl, ys, shelf)
             }
         }
-        res.onSuccess { (al, ar, tr) ->
-            albums.clear(); albums.addAll(al); artists.clear(); artists.addAll(ar); tracks.clear(); tracks.addAll(tr)
-            if (al.isEmpty() && ar.isEmpty() && tr.isEmpty() && playlists.isEmpty()) msg = if (mode == 3 && query.isBlank() && openPlaylist == null)
-                "No hay listas en el NAS. Las listas son archivos .m3u dentro de tu carpeta Music (también las lee de iTunes)."
-            else if (query.isBlank() && openAlbum == null && openArtist == null && openPlaylist == null)
-                "El NAS no tiene música en su biblioteca todavía. Hay que conectarle la carpeta de música del NAS a OwnTone." else "Sin resultados."
+        res.onSuccess { l ->
+            @Suppress("UNCHECKED_CAST")
+            run {
+                albums.clear(); albums.addAll(l[0] as List<RAlbum>); artists.clear(); artists.addAll(l[1] as List<RArtist>)
+                tracks.clear(); tracks.addAll(l[2] as List<RTrack>); playlists.clear(); playlists.addAll(l[3] as List<RPlaylist>)
+                years.clear(); years.addAll(l[4] as List<Pair<Int, Int>>); recentShelf.clear(); recentShelf.addAll(l[5] as List<RAlbum>)
+            }
+            val empty = albums.isEmpty() && artists.isEmpty() && tracks.isEmpty() && playlists.isEmpty() && years.isEmpty()
+            if (empty && (page != null || query.isNotBlank())) msg = when {
+                query.isNotBlank() -> "Sin resultados."
+                page == "lists" -> "No hay listas. Las listas son archivos .m3u dentro de tu carpeta Music."
+                page == "favs" -> "Aún no tienes favoritos. Toca el ❤ en «Sonando» para agregar canciones."
+                page == "top" -> "Todavía no hay canciones escuchadas desde el NAS."
+                else -> "No hay nada aquí todavía."
+            }
         }.onFailure { msg = "No se pudo leer la biblioteca: ${it.message}" }
         loading = false
     }
 
+    val inside = openAlbum != null || openArtist != null || openPlaylist != null || openYear != null
+    fun goBack() {
+        when {
+            openAlbum != null -> openAlbum = null
+            openPlaylist != null -> openPlaylist = null
+            openYear != null -> openYear = null
+            openArtist != null -> openArtist = null
+            query.isNotBlank() -> query = ""
+            else -> page = null
+        }
+    }
+    if (inside || page != null || query.isNotBlank()) BackHandler { goBack() }
+
     Column(Modifier.fillMaxSize()) {
-        val back = openAlbum != null || openArtist != null || openPlaylist != null
-        val goBack = { if (openAlbum != null) openAlbum = null else if (openPlaylist != null) openPlaylist = null else openArtist = null }
-        if (back) {
-            BackHandler { goBack() }
+        // encabezado
+        if (inside || page != null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ArrowBack, "Atrás", tint = RC.text, modifier = Modifier.size(40.dp).clip(CircleShape)
-                    .clickable { goBack() }.padding(8.dp))
+                Icon(Icons.Filled.ArrowBack, "Atrás", tint = RC.text, modifier = Modifier.size(40.dp).clip(CircleShape).clickable { goBack() }.padding(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(openAlbum?.name ?: openPlaylist?.name ?: openArtist?.name.orEmpty(), color = RC.text, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    openAlbum?.let { Text(it.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1) }
+                    Text(openAlbum?.name ?: openPlaylist?.name ?: openYear?.toString() ?: openArtist?.name ?: SHELVES.firstOrNull { it.key == page }?.label.orEmpty(),
+                        color = RC.text, fontWeight = FontWeight.Bold, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    openAlbum?.let { Text(it.artist + if (it.year > 0) " · ${it.year}" else "", color = RC.sub, fontSize = 12.sp, maxLines = 1) }
                 }
                 val uri = openAlbum?.let { "library:album:${it.id}" } ?: openPlaylist?.let { "library:playlist:${it.id}" } ?: openArtist?.let { "library:artist:${it.id}" }
-                if (uri != null) {
+                val expr = when { uri != null -> null; page == "songs" -> "$MUSIC order by title"; page == "favs" -> "$MUSIC and rating >= 80 order by title"
+                    page == "top" -> "$MUSIC and play_count > 0 order by play_count desc"; else -> null }
+                if (uri != null || expr != null) {
                     Icon(Icons.Filled.Shuffle, "Aleatorio", tint = Color.White, modifier = Modifier.padding(end = 6.dp).size(38.dp).clip(CircleShape)
-                        .background(Color(0x33FFFFFF)).clickable { play(uri, 0, true) }.padding(9.dp))
+                        .background(Color(0x33FFFFFF)).clickable { if (uri != null) play(uri, 0, true) else playExpr(expr!!, 0, true) }.padding(9.dp))
                     Icon(Icons.Filled.PlayArrow, "Tocar todo", tint = Color.White, modifier = Modifier.size(38.dp).clip(CircleShape)
-                        .background(Brush.linearGradient(listOf(RC.accent, RC.accent2))).clickable { play(uri, 0, false) }.padding(7.dp))
+                        .background(Brush.linearGradient(listOf(RC.accent, RC.accent2))).clickable { if (uri != null) play(uri, 0, false) else playExpr(expr!!, 0, false) }.padding(7.dp))
                 }
             }
         } else {
-            // buscador y filtros
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp)).background(RC.card).padding(horizontal = 12.dp, vertical = 10.dp),
+            Text("Biblioteca", color = RC.text, fontWeight = FontWeight.Black, fontSize = 32.sp, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+        }
+        if (!inside && page == null) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(RC.card).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Search, null, tint = RC.sub, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
@@ -542,24 +617,54 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                 }
                 if (query.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RC.sub, modifier = Modifier.size(20.dp).clickable { query = "" })
             }
-            if (query.isBlank()) Row(Modifier.padding(horizontal = 14.dp, vertical = 2.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Álbumes", "Artistas", "Canciones", "Listas").forEachIndexed { i, l ->
-                    Text(l, color = if (mode == i) Color.White else RC.sub, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                        modifier = Modifier.clip(CircleShape).background(if (mode == i) RC.accent.copy(alpha = 0.55f) else RC.card).clickable { mode = i }
-                            .padding(horizontal = 14.dp, vertical = 7.dp))
-                }
-            }
         }
-        if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp) }
+        if (loading) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp) }
         msg?.let { Text(it, color = RC.sub, fontSize = 14.sp, modifier = Modifier.padding(20.dp)) }
 
-        val showAlbumsGrid = albums.isNotEmpty() && artists.isEmpty() && tracks.isEmpty() && query.isBlank()
-        if (mode == 3 && openPlaylist == null && query.isBlank() && playlists.isNotEmpty()) {
+        // menú principal estilo biblioteca de música
+        if (!inside && page == null && query.isBlank()) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(SHELVES, key = { it.key }) { sh ->
+                    Row(Modifier.fillMaxWidth().clickable { page = sh.key }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(sh.color.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                            Icon(sh.icon, null, tint = sh.color, modifier = Modifier.size(20.dp)) }
+                        Spacer(Modifier.width(14.dp))
+                        Text(sh.label, color = RC.text, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = RC.sub)
+                    }
+                    Box(Modifier.padding(start = 64.dp).fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
+                }
+                if (recentShelf.isNotEmpty()) item {
+                    Text("Agregadas recientemente", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp))
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
+                        recentShelf.forEach { a -> Box(Modifier.width(150.dp)) { AlbumCard(a) { openAlbum = a } } }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                }
+            }
+            return@Column
+        }
+
+        // años
+        if (page == "years" && !inside && query.isBlank()) {
+            LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+                items(years, key = { "y" + it.first }) { (y, n) ->
+                    Column(Modifier.padding(6.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(0x558FD3FF), Color(0x33B98CFF))))
+                        .clickable { openYear = y }.padding(vertical = 18.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$y", color = RC.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
+                        Text("$n álbumes", color = RC.sub, fontSize = 12.sp)
+                    }
+                }
+            }
+            return@Column
+        }
+
+        // listas
+        if (page == "lists" && !inside && query.isBlank()) {
             LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
                 items(playlists, key = { "pl" + it.id }) { pl ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openPlaylist = pl }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(RC.card), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.QueueMusic, null, tint = RC.accent) }
+                        Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(RC.card), contentAlignment = Alignment.Center) { Icon(Icons.Filled.QueueMusic, null, tint = RC.accent) }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) { Text(pl.name, color = RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("${pl.count} canciones", color = RC.sub, fontSize = 12.sp) }
                         Icon(Icons.Filled.Shuffle, "Aleatorio", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { play("library:playlist:${pl.id}", 0, true) }.padding(9.dp))
@@ -568,11 +673,16 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
             }
             return@Column
         }
-        if (showAlbumsGrid) {
+
+        // álbumes en cuadrícula (álbumes, recientes, un año, un artista)
+        if (albums.isNotEmpty() && artists.isEmpty() && tracks.isEmpty() && query.isBlank()) {
             LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
                 items(albums, key = { it.id }) { a -> AlbumCard(a) { openAlbum = a } }
             }
-        } else LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
+            return@Column
+        }
+
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
             if (artists.isNotEmpty()) {
                 if (query.isNotBlank()) item { Section("Artistas") }
                 items(artists, key = { "ar" + it.id }) { ar ->
@@ -602,17 +712,19 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                             when {
                                 a != null -> play("library:album:${a.id}", i, false)
                                 pl != null -> play("library:playlist:${pl.id}", i, false)
-                                query.isBlank() && mode == 2 -> playExpr("media_kind is music order by title", i, false)
-                                // resultados de búsqueda: sigue con los demás resultados
+                                query.isBlank() && page == "songs" -> playExpr("$MUSIC order by title", i, false)
+                                query.isBlank() && page == "favs" -> playExpr("$MUSIC and rating >= 80 order by title", i, false)
+                                query.isBlank() && page == "top" -> playExpr("$MUSIC and play_count > 0 order by play_count desc", i, false)
                                 else -> play(tracks.joinToString(",") { it.uri }, i, false)
                             }
-                        }
-                        .padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (openAlbum != null) Text("${i + 1}", color = RC.sub, fontSize = 13.sp, modifier = Modifier.width(30.dp)) else { Cover(t.art, 44); Spacer(Modifier.width(12.dp)) }
+                        }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (openAlbum != null || openPlaylist != null) Text("${i + 1}", color = RC.sub, fontSize = 13.sp, modifier = Modifier.width(30.dp))
+                        else { Cover(t.art, 44); Spacer(Modifier.width(12.dp)) }
                         Column(Modifier.weight(1f)) {
                             Text(t.title, color = RC.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(t.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        if (t.rating >= 80) Icon(Icons.Filled.Favorite, null, tint = Color(0xFFFF5A8A), modifier = Modifier.size(16.dp).padding(end = 4.dp))
                         Text(fmt(t.lengthMs), color = RC.sub, fontSize = 12.sp)
                     }
                 }

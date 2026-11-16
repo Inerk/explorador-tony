@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 
 /** Íconos dibujados a mano con el estilo brillante de los 2000. */
-enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET, EXPLORER, UPDATE, REMOTE }
+enum class XpIconKind { COMPUTER, DOCUMENTS, MUSIC, PICTURES, CAMERA, VIDEOS, DOWNLOADS, DRIVE, SD_CARD, FOLDER, SETTINGS, PLAYER, GALLERY, VIDEO_PLAYER, TRASH, INTERNET, EXPLORER, UPDATE, REMOTE, HOUSE }
 
 @Composable
 fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
@@ -69,6 +69,7 @@ fun XpIcon(kind: XpIconKind, size: Dp = 48.dp, modifier: Modifier = Modifier) {
             XpIconKind.EXPLORER -> drawFolder()
             XpIconKind.UPDATE -> drawDrive(Color(0xFFDADDE3), Color(0xFF8F96A3))
             XpIconKind.REMOTE -> drawSpeakerRemote()
+            XpIconKind.HOUSE -> drawHouse()
         }
     }
 }
@@ -455,4 +456,14 @@ private fun DrawScope.drawSpeakerRemote() {
         drawArc(Color(0xFFFF7AC6).copy(alpha = 0.9f - i * 0.3f), -50f, 100f, false,
             Offset(w * 0.68f - r, h * 0.42f - r), Size(r * 2, r * 2), style = Stroke(w * 0.035f, cap = StrokeCap.Round))
     }
+}
+
+/** Casita con foco encendido: control de la casa (Home Assistant). */
+private fun DrawScope.drawHouse() {
+    val w = size.width; val h = size.height
+    val roof = Path().apply { moveTo(w * 0.08f, h * 0.48f); lineTo(w * 0.5f, h * 0.12f); lineTo(w * 0.92f, h * 0.48f); close() }
+    drawRoundRect(Brush.verticalGradient(listOf(Color(0xFFB98CFF), Color(0xFF5A2FB0))), Offset(w * 0.18f, h * 0.42f), Size(w * 0.64f, h * 0.46f), CornerRadius(w * 0.06f))
+    drawPath(roof, Brush.verticalGradient(listOf(Color(0xFFFF9AD5), Color(0xFFB04FD8))))
+    drawCircle(Brush.radialGradient(listOf(Color(0xFFFFF4B0), Color(0xFFFFB020)), Offset(w * 0.5f, h * 0.62f), w * 0.12f), w * 0.11f, Offset(w * 0.5f, h * 0.62f))
+    drawRect(Color(0xFF2A1A5A), Offset(w * 0.45f, h * 0.72f), Size(w * 0.1f, h * 0.06f))
 }

@@ -485,6 +485,11 @@ fun AppRoot() {
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
             NasRemoteScreen { RemoteUi.open = false }
         }
+        androidx.compose.animation.AnimatedVisibility(HomeUi.open,
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+            HomeControlScreen { HomeUi.open = false }
+        }
 
         UpdateDialog(
             state = UpdateCenter.state,
