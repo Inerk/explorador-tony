@@ -179,11 +179,13 @@ object MediaServer {
 }
 
 /** Una pantalla a la que se puede mandar: TV con DLNA (LG, Samsung, Sony…) o Chromecast/Google TV. */
-sealed class CastTarget(val name: String, val detail: String) {
-    class Dlna(name: String, detail: String, val avControl: String, val rcControl: String?) : CastTarget(name, detail)
-    class Chromecast(name: String, detail: String, val routeId: String) : CastTarget(name, detail)
+sealed class CastTarget(val name: String, val detail: String, val screen: Boolean = true) {
+    class Dlna(name: String, detail: String, val avControl: String, val rcControl: String?, screen: Boolean = true) : CastTarget(name, detail, screen)
+    class Chromecast(name: String, detail: String, val routeId: String, screen: Boolean = true) : CastTarget(name, detail, screen)
     /** Bocina AirPlay (HomePod…) a través de OwnTone en el NAS. Solo música. */
-    class AirPlay(name: String, detail: String, val host: String, val outputId: String) : CastTarget(name, detail)
+    class AirPlay(name: String, detail: String, val host: String, val outputId: String) : CastTarget(name, detail, false)
+    /** Apple TV directo desde el teléfono (video). */
+    class AppleTv(name: String, detail: String, val host: String, val port: Int, val deviceId: String) : CastTarget(name, detail)
 }
 
 object CastManager {
@@ -228,7 +230,10 @@ object CastManager {
         val r = router ?: return
         val sel = castSelector()
         val found = r.routes.filter { !it.isDefault && it.matchesSelector(sel) && it.isEnabled }
-            .map { CastTarget.Chromecast(it.name, it.description ?: "Chromecast / Google TV", it.id) }
+            .map { r ->
+                val video = runCatching { com.google.android.gms.cast.CastDevice.getFromBundle(r.extras)?.hasCapability(com.google.android.gms.cast.CastDevice.CAPABILITY_VIDEO_OUT) }.getOrNull() ?: true
+                CastTarget.Chromecast(r.name, r.description ?: "Chromecast / Google TV", r.id, video)
+            }
         targets.removeAll { it is CastTarget.Chromecast }
         targets.addAll(found)
     }
@@ -251,6 +256,11 @@ object CastManager {
                 for (t in found) if (targets.none { it is CastTarget.Dlna && it.avControl == t.avControl }) targets += t
             }
             searching = false
+        }
+        // Apple TV (video directo)
+        scope.launch {
+            val found = withContext(Dispatchers.IO) { runCatching { AppleTvCast.discover(app) }.getOrDefault(emptyList()) }
+            for (t in found) if (targets.none { it is CastTarget.AppleTv && it.deviceId == t.deviceId }) targets += t
         }
         // AirPlay (HomePod) a través del NAS
         scope.launch {
@@ -286,10 +296,12 @@ object CastManager {
             try {
                 if (old is CastTarget.Dlna && old !== t) runCatching { withContext(Dispatchers.IO) { Dlna.stop(old) } }
                 if (old is CastTarget.AirPlay && old !== t) runCatching { withContext(Dispatchers.IO) { AirPlayBridge.stop(old) } }
+                if (old is CastTarget.AppleTv && old !== t) runCatching { withContext(Dispatchers.IO) { AppleTvCast.stop() } }
                 when (t) {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { Dlna.play(t, f) }
                     is CastTarget.Chromecast -> castLoad(t, f)
                     is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.play(t, f) }
+                    is CastTarget.AppleTv -> atvPlay(t, f)
                 }
                 status = null
                 startPolling()
@@ -314,6 +326,7 @@ object CastManager {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { if (playing) Dlna.action(t, "Pause") else Dlna.action(t, "Play", "<Speed>1</Speed>") }
                     is CastTarget.Chromecast -> currentCast()?.remoteMediaClient?.let { if (it.isPlaying) it.pause() else it.play() }
                     is CastTarget.AirPlay -> withContext(Dispatchers.IO) { if (playing) AirPlayBridge.pause(t) else AirPlayBridge.resume(t) }
+                    is CastTarget.AppleTv -> withContext(Dispatchers.IO) { if (playing) AppleTvCast.pause() else AppleTvCast.resume() }
                 }
                 playing = !playing
             }
@@ -330,6 +343,7 @@ object CastManager {
                     is CastTarget.Chromecast -> currentCast()?.remoteMediaClient?.seek(
                         com.google.android.gms.cast.MediaSeekOptions.Builder().setPosition(ms).build())
                     is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.seek(t, ms) }
+                    is CastTarget.AppleTv -> withContext(Dispatchers.IO) { AppleTvCast.seek(ms) }
                 }
             }
         }
@@ -351,6 +365,7 @@ object CastManager {
                         val v = ((if (volume < 0) AirPlayBridge.getVolume(t) else volume) + delta).coerceIn(0, 100)
                         AirPlayBridge.setVolume(t, v); volume = v
                     }
+                    is CastTarget.AppleTv -> { status = "El volumen se cambia con el control de la Apple TV" }
                 }
             }
         }
@@ -366,6 +381,7 @@ object CastManager {
                     is CastTarget.Dlna -> withContext(Dispatchers.IO) { Dlna.stop(t) }
                     is CastTarget.Chromecast -> CastContext.getSharedInstance(app).sessionManager.endCurrentSession(true)
                     is CastTarget.AirPlay -> withContext(Dispatchers.IO) { AirPlayBridge.stop(t) }
+                    is CastTarget.AppleTv -> withContext(Dispatchers.IO) { AppleTvCast.stop() }
                     null -> {}
                 }
             }
@@ -400,10 +416,53 @@ object CastManager {
                             if (playing) wasPlaying = true
                             if (state == "stop" && wasPlaying) { playing = false; position = duration }
                         }
+                        is CastTarget.AppleTv -> {
+                            val r = withContext(Dispatchers.IO) { runCatching { AppleTvCast.status() } }
+                            r.onSuccess { (pos, dur) ->
+                                if (dur > 0) duration = dur
+                                val ended = dur > 0 && pos >= dur - 1500 && wasPlaying
+                                playing = dur > 0 && !AppleTvCast.paused && !ended
+                                position = pos
+                                if (playing) wasPlaying = true
+                            }.onFailure { playing = false; status = "Se cortó la conexión con la Apple TV" }
+                        }
                     }
                 }
                 delay(1000)
             }
+        }
+    }
+
+    // ───── Apple TV ─────
+
+    /** Nombre de la Apple TV que está pidiendo el código (para enseñar la ventanita). */
+    var pinPrompt by mutableStateOf<String?>(null); private set
+    private var pinReply: kotlinx.coroutines.CompletableDeferred<String?>? = null
+    fun answerPin(pin: String?) { pinReply?.complete(pin); pinReply = null; pinPrompt = null }
+
+    private suspend fun atvPair(t: CastTarget.AppleTv, id: HapIdentity) {
+        status = "Mira la tele: va a salir un código de 4 números"
+        withContext(Dispatchers.IO) { AirPlayHap.pinStart(t.host, t.port) }
+        val d = kotlinx.coroutines.CompletableDeferred<String?>()
+        pinReply = d; pinPrompt = t.name
+        val pin = d.await()?.trim()
+        if (pin.isNullOrBlank()) throw Exception("cancelaste el código")
+        status = "Pareando con ${t.name}…"
+        withContext(Dispatchers.IO) { AirPlayHap.pairSetup(t.host, t.port, pin, id) }
+        AppleTvCast.markPaired(app, t.deviceId)
+    }
+
+    private suspend fun atvPlay(t: CastTarget.AppleTv, f: File) {
+        val id = AppleTvCast.identity(app)
+        if (!AppleTvCast.isPaired(app, t.deviceId)) atvPair(t, id)
+        val url = withContext(Dispatchers.IO) { MediaServer.urlFor(f) }
+        try {
+            withContext(Dispatchers.IO) { AppleTvCast.start(t, id, url) }
+        } catch (e: HapException) {
+            if (!e.notPaired) throw e
+            AppleTvCast.forget(app, t.deviceId)
+            atvPair(t, id)
+            withContext(Dispatchers.IO) { AppleTvCast.start(t, id, url) }
         }
     }
 
@@ -500,7 +559,17 @@ object Dlna {
             if (type.contains("AVTransport")) av = resolve(base, ctl)
             if (type.contains("RenderingControl")) rc = resolve(base, ctl)
         }
-        return av?.let { CastTarget.Dlna(name, model.ifBlank { "Pantalla DLNA" }, it, rc) }
+        var cm: String? = null
+        Regex("""<(?:\w+:)?service>([\s\S]*?)</(?:\w+:)?service>""").findAll(xml).forEach { m ->
+            val s = m.groupValues[1]
+            if (tag(s, "serviceType")?.contains("ConnectionManager") == true) tag(s, "controlURL")?.let { cm = resolve(base, it) }
+        }
+        // ¿tiene pantalla? (las bocinas solo aceptan audio)
+        val screen = cm?.let { u ->
+            runCatching { soap(u, "urn:schemas-upnp-org:service:ConnectionManager:1", "GetProtocolInfo", "") }.getOrNull()
+                ?.let { r -> tag(r, "Sink")?.let { it.contains("video/") || it.contains("image/") } }
+        } ?: true
+        return av?.let { CastTarget.Dlna(name, model.ifBlank { "Pantalla DLNA" }, it, rc, screen) }
     }
 
     private fun resolve(base: String, rel: String) = URL(URL(base), rel).toString()

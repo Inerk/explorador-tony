@@ -478,6 +478,7 @@ fun AppRoot() {
         // lo que se está mandando a la TV
         CastControlBar(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
         CastSheet.file?.let { f -> CastPickerSheet(f, CastSheet.siblings) { CastSheet.file = null } }
+        CastPinDialog()
 
         // control remoto de la música del NAS (OwnTone)
         androidx.compose.animation.AnimatedVisibility(RemoteUi.open,

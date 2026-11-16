@@ -101,14 +101,15 @@ fun CastPickerSheet(file: File, siblings: List<File>, onDismiss: () -> Unit) {
                         .padding(horizontal = 16.dp, vertical = 8.dp))
             }
             val isAudio = mimeOf(file).startsWith("audio/")
-            CastManager.targets.filter { isAudio || it !is CastTarget.AirPlay }.forEach { t ->
+            val isVideo = mimeOf(file).startsWith("video/")
+            CastManager.targets.filter { when (it) { is CastTarget.AirPlay -> isAudio; is CastTarget.AppleTv -> isVideo; else -> isAudio || it.screen } }.forEach { t ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { CastManager.send(t, file, siblings); onDismiss() }
                     .padding(vertical = 10.dp, horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     SoftIcon(when (t) { is CastTarget.Chromecast -> Icons.Filled.Cast; is CastTarget.AirPlay -> Icons.Filled.Speaker; else -> Icons.Filled.Tv }, ExpTheme.onBar, 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(if (t is CastTarget.AirPlay) { RemotePrefs.init(LocalContext.current); RemotePrefs.nameOf(t.outputId, t.name) } else t.name, color = ExpTheme.text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, maxLines = 1)
-                        Text(when (t) { is CastTarget.Chromecast -> "Google Cast · "; is CastTarget.AirPlay -> "AirPlay · "; else -> "DLNA · " } + t.detail, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
+                        Text(when (t) { is CastTarget.Chromecast -> "Google Cast · "; is CastTarget.AirPlay -> "AirPlay · "; is CastTarget.AppleTv -> "AirPlay · "; else -> "DLNA · " } + t.detail, color = ExpTheme.sub, fontSize = 12.sp, maxLines = 1)
                     }
                 }
             }
@@ -185,4 +186,24 @@ private fun Pill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: S
         Icon(icon, null, tint = ExpTheme.onBar, modifier = Modifier.size(18.dp))
         Text(" $label", color = ExpTheme.onBar, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+/** Ventanita para escribir el código que enseña la Apple TV la primera vez. */
+@Composable
+fun CastPinDialog() {
+    val name = CastManager.pinPrompt ?: return
+    var pin by remember(name) { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(onDismissRequest = { CastManager.answerPin(null) },
+        title = { Text("Código de AirPlay") },
+        text = {
+            Column {
+                Text("Escribe el código de 4 números que aparece en $name. Solo se pide una vez.", fontSize = 14.sp)
+                Spacer(Modifier.size(10.dp))
+                androidx.compose.material3.OutlinedTextField(pin, { v -> pin = v.filter { it.isDigit() }.take(8) }, singleLine = true,
+                    placeholder = { Text("Ej. 1234") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword))
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { CastManager.answerPin(pin) }, enabled = pin.length >= 4) { Text("Listo") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { CastManager.answerPin(null) }) { Text("Cancelar") } })
 }

@@ -56,7 +56,7 @@ android {
 android {
     packaging {
         resources {
-            excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/DEPENDENCIES")
+            excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/DEPENDENCIES", "META-INF/versions/9/OSGI-INF/MANIFEST.MF")
         }
     }
 }
@@ -91,4 +91,5 @@ dependencies {
     implementation("androidx.mediarouter:mediarouter:1.7.0")
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 }
