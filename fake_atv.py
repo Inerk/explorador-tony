@@ -74,7 +74,7 @@ def handle(sock):
                 if state==1:
                     ctx=SRPContext("Pair-Setup",PIN,prime=constants.PRIME_3072,generator=constants.PRIME_3072_GEN,hash_func=hashlib.sha512)
                     _,verifier,salt=ctx.get_user_data_triplet()
-                    sess=SRPServerSession(SRPContext("Pair-Setup",prime=constants.PRIME_3072,generator=constants.PRIME_3072_GEN,hash_func=hashlib.sha512),verifier)
+                    sess=SRPServerSession(SRPContext("Pair-Setup",prime=constants.PRIME_3072,generator=constants.PRIME_3072_GEN,hash_func=hashlib.sha512),password_verifier=verifier)
                     st["sess"]=sess; st["salt"]=salt
                     c.send(200,tlv_enc([(6,b"\x02"),(2,int_to_bytes(int(salt,16))),(3,int_to_bytes(int(sess.public,16)))]))
                 elif state==3:
