@@ -138,7 +138,7 @@ fun CastControlBar(modifier: Modifier = Modifier) {
                 Column(Modifier.weight(1f)) {
                     Text(file.nameWithoutExtension, color = ExpTheme.text, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(CastManager.status ?: "En ${t.name}", color = if (CastManager.status?.startsWith("No") == true) Color(0xFFD93A3A) else ExpTheme.sub,
-                        fontSize = 12.sp, maxLines = 2)
+                        fontSize = 12.sp, maxLines = 5)
                 }
                 if (!isImage) Box(Modifier.size(40.dp).clip(CircleShape).background(ExpTheme.onBar).clickable { CastManager.togglePlay() },
                     contentAlignment = Alignment.Center) {

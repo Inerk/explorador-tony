@@ -285,6 +285,17 @@ object AirPlayHap {
         fun v(k: String) = Regex("""$k:\s*([\d.]+)""").find(t)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
         return v("position") to v("duration")
     }
+    /** Resumen corto de /playback-info (listo, error…) para diagnosticar. */
+    fun playbackInfo(c: AirPlayConn): String {
+        val r = c.request("GET", "/playback-info", MEDIA_HEADERS)
+        if (r.code !in 200..299) return "playback-info ${r.code}"
+        val m: Map<String, Any?> = if (r.body.size > 8 && String(r.body, 0, 6) == "bplist") BPlist.read(r.body) as? Map<String, Any?> ?: emptyMap()
+            else Regex("""<key>([^<]+)</key>\s*<(\w+)(?:/>|>([^<]*)</\w+>)""").findAll(r.text).associate { it.groupValues[1] to (it.groupValues[3].ifEmpty { it.groupValues[2] }) }
+        val keys = listOf("readyToPlay", "playbackBufferEmpty", "playbackLikelyToKeepUp", "rate", "duration", "error", "errorCode", "errorDomain", "status")
+        val parts = keys.mapNotNull { k -> m[k]?.let { "$k=${it.toString().take(80)}" } }
+        val err = m.entries.filter { it.key.contains("rror", true) && it.key !in keys }.map { "${it.key}=${it.value.toString().take(80)}" }
+        return (parts + err).joinToString(" · ").ifBlank { "playback-info vacío" }
+    }
     fun seek(c: AirPlayConn, sec: Double) { c.request("POST", "/scrub?position=%.3f".format(java.util.Locale.US, sec), MEDIA_HEADERS) }
     fun rate(c: AirPlayConn, r: Int) { c.request("POST", "/rate?value=$r.000000", MEDIA_HEADERS) }
     fun stop(c: AirPlayConn) { runCatching { c.request("POST", "/stop", MEDIA_HEADERS) }; c.close() }
@@ -311,6 +322,31 @@ object BPlist {
         out.write(ByteArray(6)); out.write(offSize); out.write(1)
         out.write(long8(count.toLong())); out.write(long8(0)); out.write(long8(tableAt.toLong()))
         return out.toByteArray()
+    }
+    /** Lector mínimo de plist binario (dict, arreglos, texto, números, sí/no). */
+    fun read(b: ByteArray): Any? {
+        val t = b.size - 32
+        val offSize = b[t + 6].toInt() and 0xff; val refSize = b[t + 7].toInt() and 0xff
+        fun num(at: Int, n: Int): Long { var v = 0L; for (i in 0 until n) v = (v shl 8) or (b[at + i].toLong() and 0xff); return v }
+        val count = num(t + 8, 8).toInt(); val top = num(t + 16, 8).toInt(); val table = num(t + 24, 8).toInt()
+        fun off(i: Int) = num(table + i * offSize, offSize).toInt()
+        fun obj(i: Int, depth: Int): Any? {
+            if (depth > 20 || i >= count) return null
+            var p = off(i); val m = b[p].toInt() and 0xff; val hi = m shr 4; var lo = m and 0xf
+            fun len(): Int { if (lo != 0xf) return lo; val im = b[p + 1].toInt() and 0xf; val n = 1 shl im; val v = num(p + 2, n).toInt(); p += 1 + n; return v }
+            return when (hi) {
+                0x0 -> when (m) { 0x08 -> false; 0x09 -> true; else -> null }
+                0x1 -> num(p + 1, 1 shl lo)
+                0x2 -> if (lo == 3) java.lang.Double.longBitsToDouble(num(p + 1, 8)) else java.lang.Float.intBitsToFloat(num(p + 1, 4).toInt()).toDouble()
+                0x5 -> { val n = len(); String(b, p + 1, n, Charsets.US_ASCII) }
+                0x6 -> { val n = len(); String(b, p + 1, n * 2, Charsets.UTF_16BE) }
+                0xA -> { val n = len(); (0 until n).map { obj(num(p + 1 + it * refSize, refSize).toInt(), depth + 1) } }
+                0xD -> { val n = len(); (0 until n).associate { k ->
+                    obj(num(p + 1 + k * refSize, refSize).toInt(), depth + 1).toString() to obj(num(p + 1 + (n + k) * refSize, refSize).toInt(), depth + 1) } }
+                else -> "?"
+            }
+        }
+        return runCatching { obj(top, 0) }.getOrNull()
     }
     private fun long8(v: Long) = ByteArray(8) { ((v ushr (8 * (7 - it))) and 0xff).toByte() }
     private fun intMarker(n: Int) = if (n < 256) byteArrayOf(0x10, n.toByte()) else byteArrayOf(0x11, (n shr 8).toByte(), n.toByte())

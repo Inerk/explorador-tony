@@ -75,18 +75,34 @@ object AppleTvCast {
     // ───── reproducir ─────
 
     private var conn: AirPlayConn? = null
+    private var url: String? = null
     @Volatile var paused = false; private set
 
     fun start(t: CastTarget.AppleTv, id: HapIdentity, url: String) {
         close()
         val c = AirPlayHap.connect(t.host, t.port, id)
-        conn = c; paused = false
+        conn = c; paused = false; this.url = url
         AirPlayHap.play(c, url)
+        runCatching { AirPlayHap.rate(c, 1) }
     }
     fun status(): Pair<Long, Long> {
         val c = conn ?: throw HapException("Sin conexión con la Apple TV")
         val (p, d) = AirPlayHap.scrub(c)
         return (p * 1000).toLong() to (d * 1000).toLong()
+    }
+    /** Qué está pasando mientras la Apple TV carga (para saber dónde se atora). */
+    fun loadingReport(secs: Int): String {
+        val tok = url?.let { MediaServer.tokenOf(it) }
+        val hits = tok?.let { MediaServer.hits[it] } ?: 0
+        val mb = (tok?.let { MediaServer.sent[it] } ?: 0L) / 1_000_000.0
+        val base = when {
+            hits == 0 && secs >= 8 -> "La Apple TV no ha pedido el video al teléfono. Revisa que estén en el mismo wifi."
+            hits == 0 -> "Esperando a que la Apple TV pida el video…"
+            else -> "La Apple TV pidió el video $hits veces · %.1f MB enviados".format(java.util.Locale.US, mb)
+        }
+        if (secs < 12 || secs % 6 != 0) return base
+        val info = runCatching { conn?.let { AirPlayHap.playbackInfo(it) } }.getOrNull().orEmpty()
+        return if (info.isBlank()) base else "$base\n$info"
     }
     fun pause() { conn?.let { AirPlayHap.rate(it, 0) }; paused = true }
     fun resume() { conn?.let { AirPlayHap.rate(it, 1) }; paused = false }

@@ -76,6 +76,10 @@ object MediaServer {
     private var server: ServerSocket? = null
     private val pool = Executors.newCachedThreadPool()
     private val files = ConcurrentHashMap<String, File>()
+    /** Cuántas veces pidió cada archivo la pantalla y cuántos bytes se le mandaron (para saber si sí lo está bajando). */
+    val hits = ConcurrentHashMap<String, Int>()
+    val sent = ConcurrentHashMap<String, Long>()
+    fun tokenOf(url: String) = url.split('/').getOrNull(4)
 
     fun localIp(): String? {
         val all = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().filter { it.isUp && !it.isLoopback }
@@ -133,6 +137,7 @@ object MediaServer {
         val path = parts.getOrNull(1) ?: return
         val token = path.split('/').getOrNull(2)
         val f = token?.let { files[it] }
+        token?.let { hits.merge(it, 1, Int::plus) }
         if (f == null || !f.isFile) { write(out, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); return }
         val len = f.length()
         var start = 0L; var end = len - 1; var partial = false
@@ -170,6 +175,7 @@ object MediaServer {
                 val n = raf.read(buf, 0, minOf(buf.size.toLong(), left).toInt())
                 if (n <= 0) break
                 out.write(buf, 0, n); left -= n
+                token?.let { sent.merge(it, n.toLong(), Long::plus) }
             }
             out.flush()
         }
@@ -391,6 +397,7 @@ object CastManager {
     private fun startPolling() {
         poll?.cancel()
         poll = scope.launch {
+            var loadSecs = 0
             var wasPlaying = false
             while (isActive && target != null) {
                 val t = target ?: break
@@ -418,7 +425,13 @@ object CastManager {
                         }
                         is CastTarget.AppleTv -> {
                             val r = withContext(Dispatchers.IO) { runCatching { AppleTvCast.status() } }
+                            val (_, d0) = r.getOrDefault(0L to 0L)
+                            val report = if (r.isSuccess && d0 <= 0) withContext(Dispatchers.IO) { AppleTvCast.loadingReport(loadSecs + 1) } else null
                             r.onSuccess { (pos, dur) ->
+                                if (dur <= 0) {
+                                    loadSecs++
+                                    status = report
+                                } else if (loadSecs > 0) { loadSecs = 0; status = null }
                                 if (dur > 0) duration = dur
                                 val ended = dur > 0 && pos >= dur - 1500 && wasPlaying
                                 playing = dur > 0 && !AppleTvCast.paused && !ended
