@@ -190,9 +190,18 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val st = remember { RState() }
     remember { RemotePrefs.init(ctx); 0 }
-    var tab by remember { mutableStateOf(0) }           // 0 sonando · 1 biblioteca · 2 bocinas
+    var tab by remember { mutableStateOf(1) }           // 0 sonando · 1 biblioteca · 2 bocinas
+    val nav = remember { LibNav() }
     var reload by remember { mutableStateOf(0) }
-    BackHandler { onClose() }
+    // atrás: dentro de la biblioteca regresa a donde estabas; desde Sonando/Bocinas vuelve a la biblioteca
+    fun handleBack() {
+        when {
+            tab != 1 -> tab = 1
+            nav.canBack -> nav.back()
+            else -> onClose()
+        }
+    }
+    BackHandler { handleBack() }
 
     // Android nuevo pide permiso para ver aparatos de la red de la casa
     val localPerm = "android.permission.ACCESS_LOCAL_NETWORK"
@@ -271,7 +280,6 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 api(h, "POST", "/api/queue/items/add?clear=true&playback=start" + (if (shuffle) "" else "&playback_from_position=$from") + "&$param")
             }.onFailure { st.error = "El NAS no respondió: ${it.message}" }
         }
-        tab = 0
     }
     fun playUris(uris: String, from: Int, shuffle: Boolean) = queue("uris=${enc(uris)}", from, shuffle)
     fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
@@ -279,7 +287,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ArrowBack, "Cerrar", tint = RC.text, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { onClose() }.padding(10.dp))
+                Icon(Icons.Filled.ArrowBack, "Cerrar", tint = RC.text, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { handleBack() }.padding(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Control remoto", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                     Text(st.host?.let { "Música del NAS · $it" } ?: if (st.searching) "Buscando el NAS…" else "Sin conexión", color = RC.sub, fontSize = 12.sp)
@@ -295,13 +303,33 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 val h = st.host
                 if (h != null) when (tab) {
                     0 -> NowPlayingTab(st, ::call)
-                    1 -> LibraryTab(h, ::playUris, ::playExpr)
+                    1 -> LibraryTab(h, nav, ::playUris, ::playExpr)
                     2 -> SpeakersTab(st, ::call)
                 }
             }
             if (askIp) TextAsk("Dirección del NAS", "Escribe la IP de tu NAS (la ves en el NAS en Panel de control → Ajustes de red).",
                 AirPlayBridge.savedHost(ctx).orEmpty(), "Ej. 192.168.3.74",
                 onDone = { ip -> askIp = false; if (ip.isNotBlank()) { AirPlayBridge.saveHost(ctx, ip.trim()); reload++ } }, onDismiss = { askIp = false })
+            // lo que suena, chiquito, cuando no estás en «Sonando»
+            if (tab != 0 && st.title.isNotBlank()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(Color(0x553A2580))
+                    .clickable { tab = 0 }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+                        if (st.art != null) AsyncImage(st.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        else Icon(Icons.Filled.MusicNote, null, tint = RC.sub)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(st.title, color = RC.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(st.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, "Pausa", tint = RC.text,
+                        modifier = Modifier.size(40.dp).clip(CircleShape).clickable {
+                            call("PUT", if (st.state == "play") "/api/player/pause" else "/api/player/play"); st.state = if (st.state == "play") "pause" else "play"
+                        }.padding(8.dp))
+                    Icon(Icons.Filled.SkipNext, "Siguiente", tint = RC.text, modifier = Modifier.size(40.dp).clip(CircleShape).clickable { call("PUT", "/api/player/next") }.padding(8.dp))
+                }
+            }
             // pestañas
             Row(Modifier.fillMaxWidth().background(Color(0x33000000)).padding(vertical = 6.dp)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
@@ -473,6 +501,27 @@ private fun TextAsk(title: String, sub: String, initial: String, hint: String, o
         dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancelar") } })
 }
 
+/** Dónde vas dentro de la biblioteca; vive fuera de la pestaña para no perderse al ir a «Sonando». */
+private class LibNav {
+    var page by mutableStateOf<String?>(null)
+    var query by mutableStateOf("")
+    var openAlbum by mutableStateOf<RAlbum?>(null)
+    var openArtist by mutableStateOf<RArtist?>(null)
+    var openPlaylist by mutableStateOf<RPlaylist?>(null)
+    var openYear by mutableStateOf<Int?>(null)
+    val canBack get() = openAlbum != null || openArtist != null || openPlaylist != null || openYear != null || query.isNotBlank() || page != null
+    fun back() {
+        when {
+            openAlbum != null -> openAlbum = null
+            openPlaylist != null -> openPlaylist = null
+            openYear != null -> openYear = null
+            openArtist != null -> openArtist = null
+            query.isNotBlank() -> query = ""
+            else -> page = null
+        }
+    }
+}
+
 private data class Shelf(val key: String, val label: String, val icon: ImageVector, val color: Color)
 
 private val SHELVES = listOf(
@@ -489,13 +538,13 @@ private val SHELVES = listOf(
 private const val MUSIC = "media_kind is music"
 
 @Composable
-private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit) {
-    var page by remember { mutableStateOf<String?>(null) }          // null = menú principal
-    var query by remember { mutableStateOf("") }
-    var openAlbum by remember { mutableStateOf<RAlbum?>(null) }
-    var openArtist by remember { mutableStateOf<RArtist?>(null) }
-    var openPlaylist by remember { mutableStateOf<RPlaylist?>(null) }
-    var openYear by remember { mutableStateOf<Int?>(null) }
+private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -> Unit, playExpr: (String, Int, Boolean) -> Unit) {
+    var page by nav::page          // null = menú principal
+    var query by nav::query
+    var openAlbum by nav::openAlbum
+    var openArtist by nav::openArtist
+    var openPlaylist by nav::openPlaylist
+    var openYear by nav::openYear
     var loading by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
     var reloadTick by remember { mutableStateOf(0) }
@@ -570,17 +619,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
     }
 
     val inside = openAlbum != null || openArtist != null || openPlaylist != null || openYear != null
-    fun goBack() {
-        when {
-            openAlbum != null -> openAlbum = null
-            openPlaylist != null -> openPlaylist = null
-            openYear != null -> openYear = null
-            openArtist != null -> openArtist = null
-            query.isNotBlank() -> query = ""
-            else -> page = null
-        }
-    }
-    if (inside || page != null || query.isNotBlank()) BackHandler { goBack() }
+    fun goBack() = nav.back()
 
     Column(Modifier.fillMaxSize()) {
         // encabezado
