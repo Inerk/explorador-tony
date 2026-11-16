@@ -78,9 +78,35 @@ object NasSync {
 
     private data class Remote(val rel: String, val size: Long)
 
-    private fun client() = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS).writeTimeout(0, TimeUnit.SECONDS)
-        .build()
+    private fun client(): OkHttpClient {
+        val b = OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS).readTimeout(120, TimeUnit.SECONDS).writeTimeout(0, TimeUnit.SECONDS)
+        val host = runCatching { java.net.URI(base()).host }.getOrNull().orEmpty()
+        if (base().startsWith("https", true) && isPrivate(host)) {
+            // NAS de la casa con certificado propio (UGREEN, Synology…): se confía en él la primera vez
+            // y se recuerda su huella; si después cambia, se rechaza.
+            val def = javax.net.ssl.TrustManagerFactory.getInstance(javax.net.ssl.TrustManagerFactory.getDefaultAlgorithm())
+                .apply { init(null as java.security.KeyStore?) }.trustManagers.filterIsInstance<javax.net.ssl.X509TrustManager>().first()
+            val tm = object : javax.net.ssl.X509TrustManager {
+                override fun checkClientTrusted(c: Array<java.security.cert.X509Certificate>, a: String) = def.checkClientTrusted(c, a)
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = def.acceptedIssuers
+                override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, a: String) {
+                    if (runCatching { def.checkServerTrusted(chain, a) }.isSuccess) return
+                    val fp = java.security.MessageDigest.getInstance("SHA-256").digest(chain[0].encoded).joinToString("") { "%02x".format(it) }
+                    val key = "pin_$host"
+                    val saved = prefs.getString(key, null)
+                    if (saved == null) prefs.edit().putString(key, fp).apply()
+                    else if (saved != fp) throw java.security.cert.CertificateException("El certificado del NAS cambió")
+                }
+            }
+            val ctx = javax.net.ssl.SSLContext.getInstance("TLS").apply { init(null, arrayOf(tm), null) }
+            b.sslSocketFactory(ctx.socketFactory, tm).hostnameVerifier { h, _ -> h == host }
+        }
+        return b.build()
+    }
+
+    private fun isPrivate(h: String) = h.startsWith("192.168.") || h.startsWith("10.") ||
+        Regex("""^172\.(1[6-9]|2\d|3[01])\.""").containsMatchIn(h) || h.endsWith(".local")
 
     private fun base(): String = url.trim().trimEnd('/')
     private fun enc(rel: String) = rel.split('/').joinToString("/") { Uri.encode(it) }
