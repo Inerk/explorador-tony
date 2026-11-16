@@ -504,7 +504,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
     val tracks = remember { mutableStateListOf<RTrack>() }
     val playlists = remember { mutableStateListOf<RPlaylist>() }
     val years = remember { mutableStateListOf<Pair<Int, Int>>() }      // año → cuántos álbumes
-    val recentShelf = remember { mutableStateListOf<RAlbum>() }
+    val recentShelf = remember { mutableStateListOf<RTrack>() }
 
     fun tracksExpr(e: String, limit: Int = 500) = tracksOf(JSONObject(api(host, "GET", "/api/search?type=tracks&expression=${enc(e)}&limit=$limit")).optJSONObject("tracks")?.items() ?: JSONArray(), host)
     fun albumsExpr(e: String, limit: Int = 500) = albumsOf(JSONObject(api(host, "GET", "/api/search?type=albums&expression=${enc(e)}&limit=$limit")).optJSONObject("albums")?.items() ?: JSONArray(), host)
@@ -515,7 +515,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
         val res = withContext(Dispatchers.IO) {
             runCatching {
                 var al: List<RAlbum> = emptyList(); var ar: List<RArtist> = emptyList(); var tr: List<RTrack> = emptyList()
-                var pl: List<RPlaylist> = emptyList(); var ys: List<Pair<Int, Int>> = emptyList(); var shelf: List<RAlbum> = emptyList()
+                var pl: List<RPlaylist> = emptyList(); var ys: List<Pair<Int, Int>> = emptyList(); var recentTr: List<RTrack> = emptyList()
                 val a = openAlbum; val art = openArtist; val p = openPlaylist; val y = openYear
                 when {
                     p != null -> tr = tracksOf(JSONObject(api(host, "GET", "/api/library/playlists/${p.id}/tracks")).items(), host)
@@ -529,7 +529,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                         ar = (0 until aa.length()).map { aa.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }
                         tr = tracksOf(r.optJSONObject("tracks")?.items() ?: JSONArray(), host)
                     }
-                    page == null -> shelf = albumsExpr("$MUSIC order by time_added desc", 12)
+                    page == null -> recentTr = tracksExpr("$MUSIC order by time_modified desc", 15)
                     page == "albums" -> al = albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host)
                     page == "artists" -> {
                         val aa = JSONObject(api(host, "GET", "/api/library/artists?media_kind=music")).items()
@@ -541,13 +541,13 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                         pl = (0 until ls.length()).map { ls.getJSONObject(it) }.filter { it.optString("type") != "folder" }
                             .map { RPlaylist(it.optString("id"), it.optString("name"), it.optInt("item_count")) }
                     }
-                    page == "recent" -> al = albumsExpr("$MUSIC order by time_added desc", 60)
+                    page == "recent" -> tr = tracksExpr("$MUSIC order by time_modified desc", 200)
                     page == "top" -> tr = tracksExpr("$MUSIC and play_count > 0 order by play_count desc", 100)
                     page == "years" -> ys = albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host)
                         .filter { it.year > 0 }.groupingBy { it.year }.eachCount().toList().sortedByDescending { it.first }
                     page == "favs" -> tr = tracksExpr("$MUSIC and rating >= 80 order by title")
                 }
-                listOf(al, ar, tr, pl, ys, shelf)
+                listOf(al, ar, tr, pl, ys, recentTr)
             }
         }
         res.onSuccess { l ->
@@ -555,7 +555,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
             run {
                 albums.clear(); albums.addAll(l[0] as List<RAlbum>); artists.clear(); artists.addAll(l[1] as List<RArtist>)
                 tracks.clear(); tracks.addAll(l[2] as List<RTrack>); playlists.clear(); playlists.addAll(l[3] as List<RPlaylist>)
-                years.clear(); years.addAll(l[4] as List<Pair<Int, Int>>); recentShelf.clear(); recentShelf.addAll(l[5] as List<RAlbum>)
+                years.clear(); years.addAll(l[4] as List<Pair<Int, Int>>); recentShelf.clear(); recentShelf.addAll(l[5] as List<RTrack>)
             }
             val empty = albums.isEmpty() && artists.isEmpty() && tracks.isEmpty() && playlists.isEmpty() && years.isEmpty()
             if (empty && (page != null || query.isNotBlank())) msg = when {
@@ -594,7 +594,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                 }
                 val uri = openAlbum?.let { "library:album:${it.id}" } ?: openPlaylist?.let { "library:playlist:${it.id}" } ?: openArtist?.let { "library:artist:${it.id}" }
                 val expr = when { uri != null -> null; page == "songs" -> "$MUSIC order by title"; page == "favs" -> "$MUSIC and rating >= 80 order by title"
-                    page == "top" -> "$MUSIC and play_count > 0 order by play_count desc"; else -> null }
+                    page == "top" -> "$MUSIC and play_count > 0 order by play_count desc"; page == "recent" -> "$MUSIC order by time_modified desc"; else -> null }
                 if (uri != null || expr != null) {
                     Icon(Icons.Filled.Shuffle, "Aleatorio", tint = Color.White, modifier = Modifier.padding(end = 6.dp).size(38.dp).clip(CircleShape)
                         .background(Color(0x33FFFFFF)).clickable { if (uri != null) play(uri, 0, true) else playExpr(expr!!, 0, true) }.padding(9.dp))
@@ -637,7 +637,16 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                 if (recentShelf.isNotEmpty()) item {
                     Text("Agregadas recientemente", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp))
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
-                        recentShelf.forEach { a -> Box(Modifier.width(150.dp)) { AlbumCard(a) { openAlbum = a } } }
+                        recentShelf.forEachIndexed { i, t ->
+                            Column(Modifier.width(140.dp).padding(6.dp).clip(RoundedCornerShape(14.dp)).clickable { playExpr("$MUSIC order by time_modified desc", i, false) }.padding(4.dp)) {
+                                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+                                    if (t.art != null) AsyncImage(t.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                    else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size(40.dp))
+                                }
+                                Text(t.title, color = RC.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                                Text(t.artist, color = RC.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                 }
@@ -715,6 +724,7 @@ private fun LibraryTab(host: String, play: (String, Int, Boolean) -> Unit, playE
                                 query.isBlank() && page == "songs" -> playExpr("$MUSIC order by title", i, false)
                                 query.isBlank() && page == "favs" -> playExpr("$MUSIC and rating >= 80 order by title", i, false)
                                 query.isBlank() && page == "top" -> playExpr("$MUSIC and play_count > 0 order by play_count desc", i, false)
+                                query.isBlank() && page == "recent" -> playExpr("$MUSIC order by time_modified desc", i, false)
                                 else -> play(tracks.joinToString(",") { it.uri }, i, false)
                             }
                         }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
