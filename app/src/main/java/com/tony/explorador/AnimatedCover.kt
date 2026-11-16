@@ -117,6 +117,29 @@ object AnimatedCovers {
         return null
     }
 
+    /**
+     * Las carátulas animadas viejas que vivían dentro de la app (no se podían sincronizar)
+     * se pasan a la carpeta «.animadas» junto a su canción o álbum. Regresa cuántas movió.
+     */
+    fun exportPrivate(songs: List<Song>): Int {
+        if (!::dir.isInitialized) return 0
+        var n = 0
+        val albumsDone = HashSet<String>()
+        for (s in songs) {
+            runCatching {
+                val own = songFile(s.path)
+                if (own.isFile && !besideSong(s.path).exists()) { hiddenDir(s.path); if (own.renameTo(besideSong(s.path)) || own.copyTo(besideSong(s.path)).exists()) { own.delete(); n++ } }
+                val a = s.album
+                if (a.isNotBlank() && a != UNKNOWN_ALBUM && albumsDone.add(a.lowercase(Locale.ROOT))) {
+                    val af = albumFile(a)
+                    if (af.isFile && !besideAlbum(s.path).exists()) { hiddenDir(s.path); if (af.renameTo(besideAlbum(s.path)) || af.copyTo(besideAlbum(s.path)).exists()) { af.delete(); n++ } }
+                }
+            }
+        }
+        if (n > 0) version++
+        return n
+    }
+
     /** Si la que aplica es una que guardó la app (y por eso se puede quitar). */
     fun isOwn(file: File?): Boolean = file != null && ::dir.isInitialized && (file.parentFile == dir || isHidden(file))
 

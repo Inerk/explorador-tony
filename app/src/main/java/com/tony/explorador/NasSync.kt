@@ -234,6 +234,8 @@ object NasSync {
             val http = client()
             val localRoot = File(localFolder)
             try {
+                // 0) carátulas animadas guardadas dentro de la app → a su carpeta «.animadas» para que también viajen
+                if (mode != 2) { status = "Preparando carátulas animadas…"; runCatching { AnimatedCovers.exportPrivate(LibraryStore.songs) } }
                 // 1) qué hay en el NAS
                 status = "Revisando el NAS…"
                 val remote = mutableListOf<Remote>()
@@ -294,6 +296,8 @@ object NasSync {
                     }
                     val ok = runCatching {
                         target.parentFile?.mkdirs()
+                        // las carátulas animadas no deben salir en la galería
+                        if (target.parentFile?.name == AnimatedCovers.HIDDEN) runCatching { File(target.parentFile, ".nomedia").createNewFile() }
                         val part = File(target.parentFile, target.name + ".descargando")
                         val fine = http.newCall(req(f.rel).get().build()).execute().use { resp ->
                             if (resp.code !in 200..299) false
