@@ -38,9 +38,12 @@ object Work {
 
     private fun refresh() {
         if (!::app.isInitialized) return
-        if (tasks.isEmpty()) app.stopService(Intent(app, WorkService::class.java))
-        else runCatching { ContextCompat.startForegroundService(app, Intent(app, WorkService::class.java)) }
-            .onSuccess { WorkService.notifyNow(app, current()) }
+        if (tasks.isEmpty()) {
+            // nunca se detiene «desde fuera»: si el servicio aún no arranca, él mismo se apaga al arrancar
+            WorkService.instance?.finishIfIdle()
+        } else if (WorkService.instance == null) {
+            runCatching { ContextCompat.startForegroundService(app, Intent(app, WorkService::class.java)) }
+        } else WorkService.notifyNow(app, current())
     }
 }
 
@@ -49,22 +52,36 @@ class WorkService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() { super.onCreate(); instance = this }
+
+    fun finishIfIdle() {
+        if (Work.current() != null) return
+        runCatching { if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true) }
+        stopSelf()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val n = build(this, Work.current())
-        if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        else startForeground(ID, n)
+        // siempre se llama startForeground primero (si no, Android cierra la app)
+        val ok = runCatching {
+            if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            else startForeground(ID, n)
+        }.isSuccess
+        if (!ok) { stopSelf(); return START_NOT_STICKY }
         if (wake == null) wake = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "drivenebula:work").apply { acquire(3 * 60 * 60 * 1000L) }
-        if (Work.current() == null) stopSelf()
+        if (Work.current() == null) finishIfIdle()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        instance = null
         runCatching { wake?.release() }; wake = null
         super.onDestroy()
     }
 
     companion object {
+        @Volatile var instance: WorkService? = null
         private const val ID = 4711
         private const val CH = "trabajos"
 
