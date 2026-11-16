@@ -1732,6 +1732,15 @@ private fun NasPage() {
                         Text(NasSync.localFolder.substringAfter("/0/", NasSync.localFolder), color = Retro.Text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(enabled = !NasSync.running) { NasSync.uploadOnly = !NasSync.uploadOnly; NasSync.saveSettings() }
+                    .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (NasSync.uploadOnly) "El teléfono manda" else "En los dos sentidos", color = Retro.Text, fontWeight = FontWeight.SemiBold)
+                        Text(if (NasSync.uploadOnly) "Solo sube al NAS lo que le falta. No baja nada al teléfono." else "Sube lo que falta en el NAS y baja lo que falta en el teléfono.",
+                            color = Retro.SubText, fontSize = 12.sp)
+                    }
+                    androidx.compose.material3.Switch(NasSync.uploadOnly, { NasSync.uploadOnly = it; NasSync.saveSettings() }, enabled = !NasSync.running)
+                }
                 if (!NasSync.running) {
                     Text("Probar conexión", color = Retro.Orange, fontWeight = FontWeight.Bold,
                         modifier = Modifier.clickable { NasSync.test { Toast.makeText(context, it, Toast.LENGTH_LONG).show() } }.padding(vertical = 6.dp))

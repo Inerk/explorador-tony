@@ -53,6 +53,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
 
+/** Abre «Mandar a la pantalla» desde cualquier lado (fotos, videos, música). */
+object CastSheet {
+    var file by androidx.compose.runtime.mutableStateOf<File?>(null)
+    var siblings: List<File> = emptyList()
+    fun open(f: File, list: List<File> = listOf(f)) { siblings = list; file = f }
+}
+
 /** Elegir a qué pantalla mandar el archivo. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable

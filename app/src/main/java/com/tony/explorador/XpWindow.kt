@@ -160,16 +160,50 @@ fun XpWindowFrame(
     }
 }
 
+/** Botones de ventana con cuerpos celestes: luna = minimizar, sol = agrandar, estrella = cerrar. */
 @Composable
 fun XpCaptionButton(label: String, brush: Brush, onClick: () -> Unit) {
+    val kind = when (label) { "_" -> 0; "□", "❐" -> 1; "✕" -> 2; else -> 3 }
+    val glow = when (kind) { 0 -> Color(0xFF8FB8FF); 1 -> Color(0xFFFFC94D); 2 -> Color(0xFFFF7AC6); else -> Color(0xFFB98CFF) }
     Box(
-        Modifier.size(22.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(brush)
-            .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(3.dp))
+        Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Brush.radialGradient(listOf(glow.copy(alpha = 0.45f), Color(0x22000000))))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Canvas(Modifier.size(18.dp)) {
+            val w = size.width; val c = Offset(w / 2, size.height / 2)
+            when (kind) {
+                0 -> { // luna creciente
+                    drawCircle(Color(0xFFEAF1FF), w * 0.42f, c)
+                    drawCircle(Color(0xFF2A3570), w * 0.36f, Offset(c.x + w * 0.2f, c.y - w * 0.12f))
+                }
+                1 -> { // sol
+                    for (i in 0 until 8) {
+                        val a = Math.toRadians(i * 45.0)
+                        val o1 = Offset(c.x + (w * 0.30f) * kotlin.math.cos(a).toFloat(), c.y + (w * 0.30f) * kotlin.math.sin(a).toFloat())
+                        val o2 = Offset(c.x + (w * 0.48f) * kotlin.math.cos(a).toFloat(), c.y + (w * 0.48f) * kotlin.math.sin(a).toFloat())
+                        drawLine(Color(0xFFFFD34D), o1, o2, strokeWidth = w * 0.09f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                    }
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFFFF4B0), Color(0xFFFFB020)), c, w * 0.24f), w * 0.24f, c)
+                }
+                2 -> { // estrella
+                    val path = androidx.compose.ui.graphics.Path()
+                    for (i in 0 until 10) {
+                        val r = if (i % 2 == 0) w * 0.48f else w * 0.2f
+                        val a = Math.toRadians(-90.0 + i * 36.0)
+                        val x = c.x + r * kotlin.math.cos(a).toFloat(); val y = c.y + r * kotlin.math.sin(a).toFloat()
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    path.close()
+                    drawPath(path, Brush.linearGradient(listOf(Color(0xFFFFE6F6), Color(0xFFFF7AC6))))
+                }
+                else -> { // planeta (otros botones)
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFE6D6FF), Color(0xFF8A5CFF)), c, w * 0.3f), w * 0.3f, c)
+                    drawOval(Color(0xFFE6D6FF), Offset(c.x - w * 0.48f, c.y - w * 0.1f), androidx.compose.ui.geometry.Size(w * 0.96f, w * 0.2f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.07f))
+                }
+            }
+        }
     }
 }

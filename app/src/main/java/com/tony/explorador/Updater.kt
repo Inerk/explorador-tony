@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -50,6 +52,7 @@ sealed interface UpdateState {
     data class Available(val info: UpdateInfo) : UpdateState
     data class Downloading(val info: UpdateInfo, val progress: Float) : UpdateState
     data class NeedsPermission(val apk: File) : UpdateState
+    data class Ready(val apk: File) : UpdateState
     data class Error(val message: String) : UpdateState
 }
 
@@ -188,16 +191,48 @@ fun UpdateDialog(
                 }
             }
         }
-        is UpdateState.Downloading -> XpDownloadDialog(state.info.tag, state.progress, state.info.size)
+        is UpdateState.Downloading -> if (!UpdateCenter.hidden) NebulaDownloadDialog(state.info.tag, state.progress, state.info.size) { UpdateCenter.hidden = true }
+        is UpdateState.Ready -> ThemedDialog("Actualización lista", onDismiss,
+            listOf(DialogButton("Después", onClick = onDismiss), DialogButton("Instalar", true) { onInstall(state.apk) })) {
+            Text("Ya se bajó la nueva versión. Toca Instalar.")
+        }
         is UpdateState.NeedsPermission -> ThemedDialog(
             "Falta un permiso", onDismiss,
             listOf(DialogButton("Cancelar", onClick = onDismiss), DialogButton("Instalar", true) { onInstall(state.apk) }),
         ) {
-            Text("La primera vez, Android pide permitir que Explorador Tony instale apps. " +
+            Text("La primera vez, Android pide permitir que DriveNebula instale apps. " +
                 "Actívalo en la pantalla que se abre, regresa y toca Instalar.")
         }
         is UpdateState.Error -> ThemedDialog("No se pudo actualizar", onDismiss, listOf(DialogButton("Aceptar", true, onDismiss))) {
             Text(state.message)
+        }
+    }
+}
+
+/** La descarga de la actualización vive fuera de la pantalla: sigue aunque cambies de app. */
+object UpdateCenter {
+    var state by androidx.compose.runtime.mutableStateOf<UpdateState>(UpdateState.Idle)
+    /** la ventanita de descarga se escondió: sigue bajando en segundo plano */
+    var hidden by androidx.compose.runtime.mutableStateOf(false)
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main)
+    private var job: kotlinx.coroutines.Job? = null
+
+    fun download(context: Context, info: UpdateInfo) {
+        if (job?.isActive == true) return
+        val app = context.applicationContext
+        state = UpdateState.Downloading(info, 0f); hidden = false
+        Work.begin("update", "Bajando la actualización ${info.tag}…")
+        job = scope.launch {
+            try {
+                var last = -1
+                val apk = downloadApk(app, info) { p ->
+                    val pct = (p * 100).toInt()
+                    if (pct != last) { last = pct; state = UpdateState.Downloading(info, p); Work.update("update", "Bajando ${info.tag} · $pct%", pct) }
+                }
+                state = UpdateState.Ready(apk); hidden = false
+            } catch (e: Exception) {
+                state = UpdateState.Error("La descarga falló. Intenta de nuevo.\n(${e.message})")
+            } finally { Work.end("update") }
         }
     }
 }

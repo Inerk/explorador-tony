@@ -199,7 +199,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
         st.host = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.findHost(ctx) }.getOrNull() }
         st.searching = false
         if (st.host == null) st.error = if (!hasPerm())
-            "La app no tiene permiso para ver tu red. Ve a Ajustes del teléfono → Apps → Explorador Tony → Permisos → «Dispositivos cercanos / red local» y actívalo."
+            "La app no tiene permiso para ver tu red. Ve a Ajustes del teléfono → Apps → DriveNebula → Permisos → «Dispositivos cercanos / red local» y actívalo."
         else "No encontré el NAS con OwnTone (${AirPlayBridge.lastInfo}). Toca aquí para escribir su dirección."
     }
 

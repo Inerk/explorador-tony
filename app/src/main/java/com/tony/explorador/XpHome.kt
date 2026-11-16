@@ -133,7 +133,7 @@ fun XpDesktop(
         add(DeskApp("remote", "Control remoto", XpIconKind.REMOTE) { RemoteUi.open = true })
         add(DeskApp("downloads", "Descargas", XpIconKind.DOWNLOADS) { onOpenFolder(dir(Environment.DIRECTORY_DOWNLOADS)) })
         add(DeskApp("panel", "Ajustes", XpIconKind.SETTINGS) { settings.open = true; settings.minimized = false })
-        add(DeskApp("explorer", "Explorador de archivos", XpIconKind.EXPLORER) { onOpenFolder(internal) })
+        add(DeskApp("explorer", "Explorador de archivos", XpIconKind.EXPLORER) { ExplorerHome.show = true; onOpenFolder(internal) })
         add(DeskApp("updates", "Actualizar", XpIconKind.UPDATE) { onCheckUpdates() })
         add(DeskApp("trash", "Papelera", XpIconKind.TRASH) { AppNav.openTrash() })
         add(DeskApp("web", "Internet", XpIconKind.INTERNET) { AppNav.openWeb() })

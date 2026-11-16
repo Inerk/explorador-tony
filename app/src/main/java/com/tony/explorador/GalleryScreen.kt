@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -481,6 +482,11 @@ private fun Thumb(item: GalleryItem, modifier: Modifier = Modifier, ratio: Float
                 }
             } else {
                 Icon(Icons.Filled.PlayCircle, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.align(Alignment.Center).size(26.dp))
+            }
+            // botoncito para mandar el video a la tele
+            Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(if (small) 22.dp else 28.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color.Black.copy(alpha = 0.45f)).clickable { CastSheet.open(item.file) }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Cast, "Mandar a la tele", tint = Color.White, modifier = Modifier.size(if (small) 13.dp else 16.dp))
             }
         }
     }

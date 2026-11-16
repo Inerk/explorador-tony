@@ -234,7 +234,7 @@ fun ControlPanelContent(
                 color = XpColors.InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp))
         }
-        item { PanelItem(XpIconKind.COMPUTER, "Acerca de", "Explorador Tony") { aboutOpen = true } }
+        item { PanelItem(XpIconKind.COMPUTER, "Acerca de", "DriveNebula") { aboutOpen = true } }
     }
 
     if (musicSkinOpen) MusicSkinDialog(onDismiss = { musicSkinOpen = false })
@@ -263,7 +263,7 @@ fun ControlPanelContent(
     if (aboutOpen) {
         AlertDialog(
             onDismissRequest = { aboutOpen = false },
-            title = { Text("Explorador Tony") },
+            title = { Text("DriveNebula") },
             text = { Text("Versión $versionName\nExplorador de archivos con música, fotos y videos.\nHecho a la medida para ${LibraryStore.userName}.") },
             confirmButton = { TextButton(onClick = { aboutOpen = false }) { Text("Aceptar") } }
         )

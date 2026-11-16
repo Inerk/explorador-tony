@@ -65,7 +65,7 @@ fun XpDownloadDialog(tag: String, progress: Float, totalBytes: Long) {
                 Spacer(Modifier.height(10.dp))
                 FlyingPapers(Modifier.fillMaxWidth().height(70.dp))
                 Spacer(Modifier.height(10.dp))
-                Text("Explorador Tony $tag", fontSize = 13.sp, color = XpColors.Ink)
+                Text("DriveNebula $tag", fontSize = 13.sp, color = XpColors.Ink)
                 Spacer(Modifier.height(6.dp))
                 XpBlocksBar(progress)
                 Spacer(Modifier.height(6.dp))

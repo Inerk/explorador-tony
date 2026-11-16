@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Favorite
@@ -207,6 +208,10 @@ fun VideoPlayerScreen(
                         onPlayAsMusic(VideoSession.files, i, player.currentPosition)
                     }) { Icon(Icons.Filled.LibraryMusic, contentDescription = "Reproducir como música", tint = Color.White) }
                 }
+                IconButton(onClick = {
+                    val cur = VideoSession.files.getOrNull(player.currentMediaItemIndex.coerceAtLeast(0))
+                    if (cur != null) { player.pause(); CastSheet.open(cur, VideoSession.files) }
+                }) { Icon(Icons.Filled.Cast, contentDescription = "Mandar a la tele", tint = Color.White) }
                 IconButton(onClick = { infoOpen = true }) {
                     Icon(Icons.Filled.Info, contentDescription = "Información", tint = Color.White)
                 }

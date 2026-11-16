@@ -13,7 +13,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             runCatching {
                 java.io.File(filesDir, "ultimo_error.txt").writeText(
-                    "Explorador Tony v" + currentVersionName(this) + " · Android " + android.os.Build.VERSION.RELEASE +
+                    "DriveNebula v" + currentVersionName(this) + " · Android " + android.os.Build.VERSION.RELEASE +
                         " · hilo " + t.name + "\n" + android.util.Log.getStackTraceString(e).take(6000))
             }
             previous?.uncaughtException(t, e)
@@ -23,6 +23,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
         LibraryStore.init(this)
         Trash.init(this)
         NasSync.init(this)
+        Work.init(this)
         LyricsLocal.init(this)
         LyricsTranslate.init(this)
         CastManager.init(this)

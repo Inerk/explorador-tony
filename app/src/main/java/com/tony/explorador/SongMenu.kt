@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Animation
@@ -104,6 +105,7 @@ fun SongMenuWindow(
         MenuOption("Sincronizar letra", Icons.Filled.Timer, Color(0xFFFFB0E0)) { MusicUi.syncLyricsFor = path; onDismiss() },
         MenuOption("Etiquetar web", Icons.Filled.TravelExplore, Color(0xFF8FD3FF)) { tagOnline = true },
         MenuOption("Buscar letra", Icons.Filled.Search, Color(0xFF8FD3FF)) { lyricsOnline = true },
+        MenuOption("Bocina o TV", Icons.Filled.Cast, Color(0xFFB98CFF)) { onDismiss(); CastSheet.open(File(path)) },
         MenuOption("Compartir", Icons.Filled.Share) { shareFiles(context, listOf(File(path))) },
         MenuOption("Artista", Icons.Filled.Mic) { onGoTo("artist", artist) },
         MenuOption("Álbum", Icons.Filled.Album) { onGoTo("album", album) },

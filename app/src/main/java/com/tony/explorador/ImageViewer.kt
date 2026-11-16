@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
@@ -136,6 +137,7 @@ fun ImageViewerScreen(allFiles: List<File>, startIndex: Int, onClose: () -> Unit
                         } else android.widget.Toast.makeText(context, "No se pudo mejorar esta foto", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
+                Btn(Icons.Filled.Cast, "A la tele") { CastSheet.open(f, files.toList()) }
                 Btn(Icons.Filled.Share, "Compartir") { shareFiles(context, listOf(f)) }
                 Btn(Icons.Filled.Delete, "Eliminar") {
                     busy = true

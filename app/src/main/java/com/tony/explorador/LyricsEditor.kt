@@ -165,7 +165,7 @@ fun LyricsSyncEditor(path: String, player: Player, onClose: () -> Unit) {
                         dest.copyTo(backup, overwrite = true)
                         Trash.moveToTrash(listOf(backup))
                     }
-                    dest.writeText((header + "[re:Explorador Tony]" + body).joinToString("\n"))
+                    dest.writeText((header + "[re:DriveNebula]" + body).joinToString("\n"))
                     true
                 }.getOrDefault(false)
             }

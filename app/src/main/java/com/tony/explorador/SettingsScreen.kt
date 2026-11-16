@@ -110,7 +110,7 @@ fun SettingsScreen(
         Item("Explorador", "Papelera", "Lo que borras se guarda aquí un tiempo", null, R.drawable.ic_cat_trash, Color(0xFFFF8A1F)) { onClose(); AppNav.openTrash() },
         Item("Sistema", "Buscar actualizaciones", "Versión instalada: $versionName (beta)", null, R.drawable.ic_cat_update, Color(0xFF8E5BE8)) { onUpdates() },
         Item("Sistema", "Historial de versiones", "Qué cambió en cada versión", Icons.Outlined.History, null, Color(0xFF5C6BC0)) { historyOpen = true },
-        Item("Sistema", "Acerca de", "Explorador Tony", Icons.Outlined.Info, null, Color(0xFF8C93A8)) { aboutOpen = true },
+        Item("Sistema", "Acerca de", "DriveNebula", Icons.Outlined.Info, null, Color(0xFF8C93A8)) { aboutOpen = true },
     )
     val shown = if (query.isBlank()) items else items.filter {
         it.title.contains(query, true) || it.sub.contains(query, true) || it.section.contains(query, true)
@@ -131,7 +131,7 @@ fun SettingsScreen(
                         Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("Ajustes", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black)
-                                Text("Explorador Tony · v$versionName", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+                                Text("DriveNebula · v$versionName", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
                             }
                             Image(painterResource(R.drawable.ic_cat_settings), null, Modifier.size(72.dp))
                         }
@@ -221,7 +221,7 @@ fun SettingsScreen(
     if (aboutOpen) AlertDialog(
         onDismissRequest = { aboutOpen = false },
         icon = { Image(painterResource(R.drawable.app_logo), null, Modifier.size(72.dp)) },
-        title = { Text("Explorador Tony") },
+        title = { Text("DriveNebula") },
         text = { Text("Versión $versionName\nExplorador de archivos con música, fotos, videos y documentos.\nHecho a la medida para ${LibraryStore.userName}.\n\n$APP_CREDITS") },
         confirmButton = { TextButton(onClick = { aboutOpen = false }) { Text("Aceptar") } }
     )

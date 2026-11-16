@@ -44,6 +44,8 @@ object NasSync {
     var user by mutableStateOf("")
     var password by mutableStateOf("")
     var localFolder by mutableStateOf("")
+    /** true: el teléfono manda — solo sube al NAS lo que falta, no baja nada. */
+    var uploadOnly by mutableStateOf(true)
 
     var running by mutableStateOf(false)
         private set
@@ -68,13 +70,14 @@ object NasSync {
         password = prefs.getString("pass", "").orEmpty()
         localFolder = prefs.getString("local", null)
             ?: File(Environment.getExternalStorageDirectory(), Environment.DIRECTORY_MUSIC).absolutePath
+        uploadOnly = prefs.getBoolean("uploadOnly", true)
     }
 
     fun saveSettings() {
-        prefs.edit().putString("url", url.trim()).putString("user", user.trim()).putString("pass", password).putString("local", localFolder).apply()
+        prefs.edit().putString("url", url.trim()).putString("user", user.trim()).putString("pass", password).putString("local", localFolder).putBoolean("uploadOnly", uploadOnly).apply()
     }
 
-    fun stop() { job?.cancel(); job = null; running = false; status = "Detenido" }
+    fun stop() { job?.cancel(); job = null; running = false; status = "Detenido"; Work.end("nas") }
 
     private data class Remote(val rel: String, val size: Long)
 
@@ -181,6 +184,7 @@ object NasSync {
         if (running) return
         saveSettings()
         uploaded.clear(); downloaded.clear(); different.clear(); failed.clear(); finished = false
+        Work.begin("nas", "Sincronizando con el NAS…")
         job = scope.launch {
             running = true; done = 0; total = 0
             val http = client()
@@ -211,14 +215,14 @@ object NasSync {
                 val remoteByRel = remote.associateBy { it.rel.lowercase(Locale.ROOT) }
                 val localByRel = local.associateBy { it.rel.lowercase(Locale.ROOT) }
                 val toUpload = local.filter { key(it.rel.substringAfterLast('/'), it.size) !in remoteKeys }
-                val toDownload = remote.filter { key(it.rel.substringAfterLast('/'), it.size) !in localKeys }
+                val toDownload = if (uploadOnly) emptyList() else remote.filter { key(it.rel.substringAfterLast('/'), it.size) !in localKeys }
                 total = toUpload.size + toDownload.size
                 val scanPaths = mutableListOf<String>()
 
                 // 4) subir lo que falta en el NAS
                 for (f in toUpload) {
                     if (!isActive) break
-                    status = "Subiendo: ${f.rel.substringAfterLast('/')}"
+                    status = "Subiendo: ${f.rel.substringAfterLast('/')}"; Work.update("nas", "Subiendo al NAS ${done + 1} de $total", if (total > 0) done * 100 / total else -1)
                     if (remoteByRel[f.rel.lowercase(Locale.ROOT)] != null) {
                         // ya hay uno con ese nombre en esa carpeta pero de otro tamaño: no se reemplaza
                         withContext(Dispatchers.Main) { different.add(f.rel) }; done++; continue
@@ -239,7 +243,7 @@ object NasSync {
                 // 5) bajar lo que falta en el teléfono
                 for (f in toDownload) {
                     if (!isActive) break
-                    status = "Descargando: ${f.rel.substringAfterLast('/')}"
+                    status = "Descargando: ${f.rel.substringAfterLast('/')}"; Work.update("nas", "Bajando del NAS ${done + 1} de $total", if (total > 0) done * 100 / total else -1)
                     val target = File(localRoot, f.rel)
                     if (target.exists() || localByRel[f.rel.lowercase(Locale.ROOT)] != null) {
                         withContext(Dispatchers.Main) { different.add(f.rel) }; done++; continue
@@ -265,6 +269,7 @@ object NasSync {
             }
             running = false
             finished = true
+            Work.end("nas")
         }
     }
 }

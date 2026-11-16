@@ -30,7 +30,7 @@ object ExitReport {
         // si el atrapador normal ya guardó un error de Java, ese es más útil
         if (bad.reason == ApplicationExitInfo.REASON_CRASH && errFile.isFile) return
         val sb = StringBuilder()
-        sb.append("Explorador Tony v").append(currentVersionName(context)).append(" · Android ").append(Build.VERSION.RELEASE)
+        sb.append("DriveNebula v").append(currentVersionName(context)).append(" · Android ").append(Build.VERSION.RELEASE)
             .append(" · ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
         sb.append("Cierre inesperado: ").append(reasonName(bad.reason))
         sb.append(" · ").append(SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(Date(bad.timestamp))).append('\n')

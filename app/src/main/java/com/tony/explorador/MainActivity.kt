@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
     /** Si se abrió desde el icono «Música Tony», entra directo a la música. */
     private fun checkMusicLaunch(intent: android.content.Intent?) {
         if (intent?.component?.className?.endsWith("MusicAlias") == true) AppNav.musicLaunch++
+        if (intent?.component?.className?.endsWith("RemoteAlias") == true) RemoteUi.open = true
     }
 }
 
@@ -250,32 +251,31 @@ fun AppRoot() {
 
     // ── Actualizaciones desde GitHub ──
     val scope = rememberCoroutineScope()
-    var updateState by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     val versionName = remember { currentVersionName(context) }
 
     fun checkUpdates(manual: Boolean) {
         scope.launch {
-            if (manual) updateState = UpdateState.Checking
+            if (manual) UpdateCenter.state = UpdateState.Checking
             try {
                 val info = fetchLatestRelease()
                 UpdateBadge.available = info.versionCode > currentVersionCode(context)
-                updateState = when {
+                UpdateCenter.state = when {
                     info.versionCode > currentVersionCode(context) -> UpdateState.Available(info)
                     manual -> UpdateState.UpToDate
                     else -> UpdateState.Idle
                 }
             } catch (e: Exception) {
-                if (manual) updateState = UpdateState.Error("Revisa tu conexión a internet.\n(${e.message})")
+                if (manual) UpdateCenter.state = UpdateState.Error("Revisa tu conexión a internet.\n(${e.message})")
             }
         }
     }
 
     fun installOrAsk(apk: java.io.File) {
         if (canInstallApks(context)) {
-            updateState = UpdateState.Idle
+            UpdateCenter.state = UpdateState.Idle
             installApk(context, apk)
         } else {
-            updateState = UpdateState.NeedsPermission(apk)
+            UpdateCenter.state = UpdateState.NeedsPermission(apk)
             openInstallPermissionSettings(context)
         }
     }
@@ -431,7 +431,7 @@ fun AppRoot() {
                 DialogButton("Cerrar") { dismiss() },
                 DialogButton("Copiar error", true) {
                     val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Error Explorador Tony", txt))
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Error DriveNebula", txt))
                     android.widget.Toast.makeText(context, "Copiado. Pégaselo a Claude.", android.widget.Toast.LENGTH_LONG).show()
                     dismiss()
                 })) {
@@ -477,6 +477,7 @@ fun AppRoot() {
 
         // lo que se está mandando a la TV
         CastControlBar(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
+        CastSheet.file?.let { f -> CastPickerSheet(f, CastSheet.siblings) { CastSheet.file = null } }
 
         // control remoto de la música del NAS (OwnTone)
         androidx.compose.animation.AnimatedVisibility(RemoteUi.open,
@@ -486,25 +487,11 @@ fun AppRoot() {
         }
 
         UpdateDialog(
-            state = updateState,
+            state = UpdateCenter.state,
             currentName = versionName,
-            onDownload = { info ->
-                scope.launch {
-                    updateState = UpdateState.Downloading(info, 0f)
-                    try {
-                        var last = -1
-                        val apk = downloadApk(context, info) { p ->
-                            val pct = (p * 100).toInt()
-                            if (pct != last) { last = pct; updateState = UpdateState.Downloading(info, p) }
-                        }
-                        installOrAsk(apk)
-                    } catch (e: Exception) {
-                        updateState = UpdateState.Error("La descarga falló. Intenta de nuevo.\n(${e.message})")
-                    }
-                }
-            },
+            onDownload = { info -> UpdateCenter.download(context, info) },
             onInstall = { apk -> installOrAsk(apk) },
-            onDismiss = { updateState = UpdateState.Idle },
+            onDismiss = { UpdateCenter.state = UpdateState.Idle },
         )
     }
 }
@@ -543,7 +530,7 @@ fun PermissionScreen(onGranted: () -> Unit) {
         Icon(Icons.Filled.FolderOpen, contentDescription = null, modifier = Modifier.size(72.dp),
             tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
-        Text("Explorador Tony", style = MaterialTheme.typography.headlineSmall)
+        Text("DriveNebula", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(12.dp))
         Text(
             "Para ver y administrar tus archivos, la app necesita el permiso de acceso a todos los archivos.",
