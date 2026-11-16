@@ -1319,8 +1319,6 @@ private fun ImportDialog(files: List<File>, onDismiss: () -> Unit, onPick: (File
 private fun FoldersPage() {
     val scope = rememberCoroutineScope()
     var picking by remember { mutableStateOf(false) }
-    var testMsg by remember { mutableStateOf<String?>(null) }
-    var nasBrowse by remember { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Text(
@@ -1706,6 +1704,8 @@ private fun AnimatedCoversPage() {
 private fun NasPage() {
     val context = LocalContext.current
     var picking by remember { mutableStateOf(false) }
+    var testMsg by remember { mutableStateOf<String?>(null) }
+    var nasBrowse by remember { mutableStateOf(false) }
     var showPass by remember { mutableStateOf(false) }
     val fieldColors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
         focusedTextColor = Retro.Text, unfocusedTextColor = Retro.Text, focusedBorderColor = Retro.Orange,
