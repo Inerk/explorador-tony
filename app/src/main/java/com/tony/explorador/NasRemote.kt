@@ -358,9 +358,12 @@ fun NasRemoteScreen(onClose: () -> Unit) {
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
         // fondo: la portada de lo que suena, borrosa, como en Apple Music
-        Box(Modifier.align(Alignment.TopStart).padding(start = 0.dp).size(260.dp).blur(90.dp).background(RC.accent.copy(alpha = 0.35f), CircleShape))
-        Box(Modifier.align(Alignment.BottomEnd).size(300.dp).blur(110.dp).background(RC.accent2.copy(alpha = 0.25f), CircleShape))
-        st.art?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, alpha = 0.55f, modifier = Modifier.fillMaxSize().blur(80.dp)) }
+        // luces suaves de color (degradados, sin orillas)
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(RC.accent.copy(alpha = 0.30f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(0f, 0f), radius = 1100f)))
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(RC.accent2.copy(alpha = 0.22f), Color.Transparent),
+            center = androidx.compose.ui.geometry.Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY), radius = 1300f)))
+        st.art?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, alpha = 0.55f, modifier = Modifier.fillMaxSize().blur(80.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Rectangle)) }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x66140F2B), Color(0xCC140F2B), Color(0xF0140F2B)))))
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
