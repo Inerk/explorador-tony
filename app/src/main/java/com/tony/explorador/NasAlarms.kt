@@ -169,6 +169,7 @@ object NasAlarms {
                 api("PUT", "/api/outputs/$id", JSONObject().put("selected", sv.first).apply { if (sv.first) put("volume", sv.second) }.toString())
             }
         }
+        a.profile?.let { RemotePrefs.profiles[it] }?.let { prof -> Keeper.push(host, prof.filter { it.value.first }.map { it.key to it.value.second }) }
         a.volume?.let { api("PUT", "/api/player/volume?volume=$it") }
         api("PUT", "/api/player/shuffle?state=${a.shuffle}")
         val what = if (a.kind == "folder") "expression=" + URLEncoder.encode("media_kind is music and path starts with \"${a.source.replace("\"", "")}\"", "UTF-8")

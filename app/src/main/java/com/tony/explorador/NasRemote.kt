@@ -142,6 +142,26 @@ internal fun VolumeControl(value: Int, modifier: Modifier = Modifier, step: Int 
     }
 }
 
+/** Nebula Keeper (en el NAS, puerto 3690): recuerda qué bocinas quieres y las reconecta si se caen. */
+internal object Keeper {
+    const val PORT = 3690
+    fun push(host: String, sel: List<Pair<String, Int>>) = Thread {
+        runCatching {
+            val body = JSONObject().put("keep", JSONObject().apply { sel.forEach { (id, v) -> put(id, v) } }).toString().toByteArray()
+            (java.net.URL("http://$host:$PORT/keep").openConnection() as java.net.HttpURLConnection).run {
+                requestMethod = "POST"; doOutput = true; connectTimeout = 3000; readTimeout = 3000
+                setRequestProperty("Content-Type", "application/json"); outputStream.use { it.write(body) }; responseCode; disconnect()
+            }
+        }
+    }.start()
+    fun info(host: String): JSONObject? = runCatching {
+        (java.net.URL("http://$host:$PORT/").openConnection() as java.net.HttpURLConnection).run {
+            connectTimeout = 2000; readTimeout = 2000; JSONObject(inputStream.bufferedReader().readText()).also { disconnect() }
+        }
+    }.getOrNull()
+}
+private fun keepNow(st: RState) { st.host?.let { h -> Keeper.push(h, st.outputs.filter { it.selected }.map { it.id to it.volume }) } }
+
 /** Para comparar textos sin acentos ni mayúsculas. */
 private fun norm(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 
@@ -471,8 +491,25 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
     var saving by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<String?>(null) }
     var pinFor by remember { mutableStateOf<ROutput?>(null) }
+    var keeper by remember { mutableStateOf<JSONObject?>(null) }
+    var keeperChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(st.host) {
+        val h = st.host ?: return@LaunchedEffect
+        while (isActive) { keeper = withContext(Dispatchers.IO) { Keeper.info(h) }; keeperChecked = true; delay(10_000) }
+    }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         item {
+            if (keeperChecked) {
+                val k = keeper
+                Column(Modifier.fillMaxWidth().padding(top = 10.dp).glass(RoundedCornerShape(16.dp)).padding(12.dp)) {
+                    Text(if (k != null) "🔁 Reconexión automática activa · cada ${k.optInt("intervalo", 60)} s" else "🔁 Reconexión automática no instalada en el NAS",
+                        color = if (k != null) RC.text else RC.sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    if (k != null) {
+                        Text("Si una bocina prendida se desconecta mientras suena música, el NAS la vuelve a conectar sola.", color = RC.sub, fontSize = 11.sp)
+                        k.optString("ultimo").takeIf { it.isNotBlank() }?.let { Text("Último: $it", color = RC.accent, fontSize = 11.sp) }
+                    }
+                }
+            }
             Text("Perfiles de sonido", color = RC.accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp, bottom = 6.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RemotePrefs.profiles.keys.sorted().forEach { name ->
@@ -487,6 +524,7 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                                     call("PUT", "/api/outputs/${o.id}", body)
                                     st.outputs[i] = o.copy(selected = sv.first, volume = if (sv.first) sv.second else o.volume)
                                 }
+                                keepNow(st)
                             }.padding(horizontal = 14.dp, vertical = 8.dp))
                 }
                 Text("+ Guardar actual", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
@@ -504,6 +542,7 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                 .clickable {
                     call("PUT", "/api/outputs/${o.id}", JSONObject().put("selected", !o.selected).toString())
                     val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = o.copy(selected = !o.selected)
+                    keepNow(st)
                 }.padding(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Speaker, null, tint = if (o.selected) RC.accent else RC.sub, modifier = Modifier.size(28.dp))
@@ -524,6 +563,7 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                 if (o.selected) VolumeControl(o.volume, Modifier.fillMaxWidth().padding(top = 8.dp)) { vol ->
                     call("PUT", "/api/outputs/${o.id}", JSONObject().put("volume", vol).toString())
                     val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = st.outputs[i].copy(volume = vol)
+                    keepNow(st)
                 }
             }
         }
