@@ -1449,7 +1449,8 @@ fun letterOf(text: String): String {
 }
 
 @Composable
-fun AlphabetScroller(firstIndex: Map<String, Int>, onJump: (Int) -> Unit) {
+fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text, activeColor: Color = Retro.Orange,
+                     dimColor: Color = Retro.SubText.copy(alpha = 0.4f), panelColor: Color = Retro.Panel.copy(alpha = 0.7f), onJump: (Int) -> Unit) {
     var active by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     fun jump(y: Float, h: Int) {
@@ -1486,11 +1487,11 @@ fun AlphabetScroller(firstIndex: Map<String, Int>, onJump: (Int) -> Unit) {
                     l, fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.width(12.dp).padding(end = 2.dp)
-                        .background(if (active != null) Retro.Panel.copy(alpha = 0.7f) else Color.Transparent),
+                        .background(if (active != null) panelColor else Color.Transparent),
                     color = when {
-                        l == active -> Retro.Orange
-                        l in firstIndex -> Retro.Text
-                        else -> Retro.SubText.copy(alpha = 0.4f)
+                        l == active -> activeColor
+                        l in firstIndex -> textColor
+                        else -> dimColor
                     }
                 )
             }

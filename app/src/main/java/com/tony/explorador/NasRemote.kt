@@ -4,6 +4,14 @@ package com.tony.explorador
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -100,7 +108,7 @@ import java.net.URLEncoder
 /** Abre el control remoto del NAS desde cualquier lado. */
 object RemoteUi { var open by mutableStateOf(false) }
 
-private object RC {
+internal object RC {
     val bg1 = Color(0xFF140F2B)
     val bg2 = Color(0xFF2A1650)
     val card = Color(0x22FFFFFF)
@@ -109,6 +117,33 @@ private object RC {
     val text = Color(0xFFF4EEFF)
     val sub = Color(0xFFB4A8D6)
 }
+
+/** Vidrio estilo Apple: blanco translúcido con brillo arriba y orilla fina. */
+internal fun Modifier.glass(shape: Shape = RoundedCornerShape(18.dp), strong: Boolean = false): Modifier = this
+    .clip(shape)
+    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (strong) 0.20f else 0.13f), Color.White.copy(alpha = if (strong) 0.09f else 0.04f))))
+    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.34f), Color.White.copy(alpha = 0.05f))), shape)
+
+/** Barra de volumen con botones − y + en las orillas (de 5 en 5) para no pasarse. */
+@Composable
+internal fun VolumeControl(value: Int, modifier: Modifier = Modifier, step: Int = 5, onSet: (Int) -> Unit) {
+    var drag by remember { mutableStateOf<Float?>(null) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.Remove, "Bajar volumen", tint = RC.text, modifier = Modifier.size(36.dp).glass(CircleShape)
+            .clickable { onSet((value - step).coerceIn(0, 100)) }.padding(8.dp))
+        Slider(drag ?: (value / 100f), { drag = it },
+            onValueChangeFinished = { drag?.let { onSet((it * 100).toInt()) }; drag = null },
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White.copy(alpha = 0.9f), inactiveTrackColor = Color(0x33FFFFFF)),
+            modifier = Modifier.weight(1f).padding(horizontal = 6.dp))
+        Text("${drag?.let { (it * 100).toInt() } ?: value}", color = RC.sub, fontSize = 12.sp, modifier = Modifier.width(28.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Icon(Icons.Filled.Add, "Subir volumen", tint = RC.text, modifier = Modifier.size(36.dp).glass(CircleShape)
+            .clickable { onSet((value + step).coerceIn(0, 100)) }.padding(8.dp))
+    }
+}
+
+/** Para comparar textos sin acentos ni mayúsculas. */
+private fun norm(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 
 private data class RAlbum(val id: String, val name: String, val artist: String, val art: String?, val tracks: Int, val year: Int = 0)
 private data class RArtist(val id: String, val name: String, val albums: Int)
@@ -190,7 +225,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     val st = remember { RState() }
     remember { RemotePrefs.init(ctx); 0 }
-    var tab by remember { mutableStateOf(1) }           // 0 sonando · 1 biblioteca · 2 bocinas
+    var tab by remember { mutableStateOf(1) }           // 0 sonando · 1 biblioteca · 2 bocinas · 3 alarmas
     val nav = remember { LibNav() }
     var reload by remember { mutableStateOf(0) }
     // atrás: dentro de la biblioteca regresa a donde estabas; desde Sonando/Bocinas vuelve a la biblioteca
@@ -302,6 +337,11 @@ fun NasRemoteScreen(onClose: () -> Unit) {
     }
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
+        // fondo: la portada de lo que suena, borrosa, como en Apple Music
+        Box(Modifier.align(Alignment.TopStart).padding(start = 0.dp).size(260.dp).blur(90.dp).background(RC.accent.copy(alpha = 0.35f), CircleShape))
+        Box(Modifier.align(Alignment.BottomEnd).size(300.dp).blur(110.dp).background(RC.accent2.copy(alpha = 0.25f), CircleShape))
+        st.art?.let { AsyncImage(it, null, contentScale = ContentScale.Crop, alpha = 0.55f, modifier = Modifier.fillMaxSize().blur(80.dp)) }
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0x66140F2B), Color(0xCC140F2B), Color(0xF0140F2B)))))
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top + androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.ArrowBack, "Cerrar", tint = RC.text, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { handleBack() }.padding(10.dp))
@@ -315,7 +355,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             LaunchedEffect(st.error) { if (st.error != null && st.host != null) { delay(5000); st.error = null } }
             st.error?.let {
                 Text(it, color = Color(0xFFFFB4C8), fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(10.dp)).background(Color(0x33FF4F7A)).clickable { if (st.host == null) askIp = true else st.error = null }.padding(10.dp).fillMaxWidth())
+                    .glass(RoundedCornerShape(14.dp)).background(Color(0x22FF4F7A)).clickable { if (st.host == null) askIp = true else st.error = null }.padding(10.dp).fillMaxWidth())
             }
             Box(Modifier.weight(1f)) {
                 val h = st.host
@@ -323,6 +363,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                     0 -> NowPlayingTab(st, ::call)
                     1 -> LibraryTab(h, nav, ::playUris, ::playExpr, ::enqueue, st.state == "play" || st.state == "pause")
                     2 -> SpeakersTab(st, ::call)
+                    3 -> AlarmsTab(h)
                 }
             }
             if (askIp) TextAsk("Dirección del NAS", "Escribe la IP de tu NAS (la ves en el NAS en Panel de control → Ajustes de red).",
@@ -330,7 +371,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 onDone = { ip -> askIp = false; if (ip.isNotBlank()) { AirPlayBridge.saveHost(ctx, ip.trim()); reload++ } }, onDismiss = { askIp = false })
             // lo que suena, chiquito, cuando no estás en «Sonando»
             if (tab != 0 && st.title.isNotBlank()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(Color(0x553A2580))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 4.dp).glass(RoundedCornerShape(20.dp), strong = true)
                     .clickable { tab = 0 }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(RC.card), contentAlignment = Alignment.Center) {
                         if (st.art != null) AsyncImage(st.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -349,12 +390,14 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 }
             }
             // pestañas
-            Row(Modifier.fillMaxWidth().background(Color(0x33000000)).padding(vertical = 6.dp)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom)),
+            Row(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom))
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp).fillMaxWidth()
+                .glass(RoundedCornerShape(30.dp), strong = true).padding(vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly) {
                 TabBtn(Icons.Filled.PlayArrow, "Sonando", tab == 0) { tab = 0 }
                 TabBtn(Icons.Filled.Album, "Biblioteca", tab == 1) { tab = 1 }
                 TabBtn(Icons.Filled.Speaker, "Bocinas (${st.outputs.count { it.selected }})", tab == 2) { tab = 2 }
+                TabBtn(Icons.Filled.Alarm, "Alarmas", tab == 3) { tab = 3 }
             }
         }
     }
@@ -362,10 +405,11 @@ fun NasRemoteScreen(onClose: () -> Unit) {
 
 @Composable
 private fun TabBtn(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
-    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 4.dp),
+    Column(Modifier.clip(RoundedCornerShape(20.dp)).background(if (on) Color.White.copy(alpha = 0.14f) else Color.Transparent)
+        .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = if (on) RC.accent else RC.sub, modifier = Modifier.size(24.dp))
-        Text(label, color = if (on) RC.accent else RC.sub, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
+        Text(label, color = if (on) RC.accent else RC.sub, fontSize = 11.sp, maxLines = 1, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
     }
 }
 
@@ -374,7 +418,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     var volDrag by remember { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(Modifier.weight(1f, fill = false).fillMaxWidth(0.82f).aspectRatio(1f, matchHeightConstraintsFirst = true).clip(RoundedCornerShape(24.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth(0.82f).aspectRatio(1f, matchHeightConstraintsFirst = true).glass(RoundedCornerShape(26.dp)), contentAlignment = Alignment.Center) {
             if (st.art != null) AsyncImage(st.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size(80.dp))
         }
@@ -395,7 +439,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         val len = st.len.coerceAtLeast(1)
         Slider(dragging ?: (st.pos.toFloat() / len).coerceIn(0f, 1f), { dragging = it },
             onValueChangeFinished = { dragging?.let { call("PUT", "/api/player/seek?position_ms=${(it * len).toLong()}", null) }; dragging = null },
-            colors = SliderDefaults.colors(thumbColor = RC.accent, activeTrackColor = RC.accent, inactiveTrackColor = RC.card))
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White.copy(alpha = 0.9f), inactiveTrackColor = Color(0x33FFFFFF)))
         Row(Modifier.fillMaxWidth()) {
             Text(fmt(st.pos), color = RC.sub, fontSize = 11.sp); Spacer(Modifier.weight(1f)); Text(fmt(st.len), color = RC.sub, fontSize = 11.sp)
         }
@@ -403,7 +447,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
             Icon(Icons.Filled.Shuffle, "Aleatorio", tint = if (st.shuffle) RC.accent else RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape)
                 .clickable { st.shuffle = !st.shuffle; call("PUT", "/api/player/shuffle?state=${st.shuffle}", null) }.padding(10.dp))
             Icon(Icons.Filled.SkipPrevious, "Anterior", tint = RC.text, modifier = Modifier.size(52.dp).clip(CircleShape).clickable { call("PUT", "/api/player/previous", null) }.padding(8.dp))
-            Box(Modifier.size(76.dp).clip(CircleShape).background(Brush.linearGradient(listOf(RC.accent, RC.accent2)))
+            Box(Modifier.size(76.dp).glass(CircleShape, strong = true).background(Brush.linearGradient(listOf(RC.accent.copy(alpha = 0.75f), RC.accent2.copy(alpha = 0.75f))))
                 .clickable { call("PUT", if (st.state == "play") "/api/player/pause" else "/api/player/play", null); st.state = if (st.state == "play") "pause" else "play" },
                 contentAlignment = Alignment.Center) {
                 Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(40.dp))
@@ -415,11 +459,8 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         }
         Text(when { st.shuffle && st.repeat != "off" -> "Aleatorio · repetir"; st.shuffle -> "Aleatorio"; st.repeat == "all" -> "Repetir todo"; st.repeat == "single" -> "Repetir esta canción"; else -> "" },
             color = RC.accent, fontSize = 11.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.VolumeUp, null, tint = RC.sub, modifier = Modifier.size(20.dp))
-            Slider(volDrag ?: (st.volume / 100f), { volDrag = it },
-                onValueChangeFinished = { volDrag?.let { val v = (it * 100).toInt(); st.volume = v; call("PUT", "/api/player/volume?volume=$v", null) }; volDrag = null },
-                colors = SliderDefaults.colors(thumbColor = RC.text, activeTrackColor = RC.text, inactiveTrackColor = RC.card), modifier = Modifier.weight(1f).padding(start = 8.dp))
+        VolumeControl(st.volume, Modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) { v ->
+            st.volume = v; call("PUT", "/api/player/volume?volume=$v", null)
         }
     }
 }
@@ -436,7 +477,7 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RemotePrefs.profiles.keys.sorted().forEach { name ->
                     Text(name, color = RC.text, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
-                        modifier = Modifier.clip(CircleShape).background(Color(0x33B98CFF))
+                        modifier = Modifier.glass(CircleShape)
                             .combinedClickable(onLongClick = { deleting = name }) {
                                 // aplicar: prender/apagar y poner el volumen guardado de cada bocina
                                 val prof = RemotePrefs.profiles[name] ?: return@combinedClickable
@@ -457,9 +498,9 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
             Text("Toca para encender o apagar · ✏️ para ponerle apodo. Puedes usar varias a la vez.", color = RC.sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
         }
         items(st.outputs, key = { it.id }) { o ->
-            var v by remember(o.id) { mutableStateOf<Float?>(null) }
             val nick = RemotePrefs.nameOf(o.id, o.name)
-            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(16.dp)).background(if (o.selected) Color(0x33B98CFF) else RC.card)
+            Column(Modifier.fillMaxWidth().padding(vertical = 5.dp).glass(RoundedCornerShape(20.dp), strong = o.selected)
+                .background(if (o.selected) RC.accent.copy(alpha = 0.12f) else Color.Transparent)
                 .clickable {
                     call("PUT", "/api/outputs/${o.id}", JSONObject().put("selected", !o.selected).toString())
                     val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = o.copy(selected = !o.selected)
@@ -480,13 +521,10 @@ private fun SpeakersTab(st: RState, call: (String, String, String?) -> Unit) {
                     Icon(Icons.Filled.Edit, "Apodo", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { renaming = o }.padding(9.dp))
                     Icon(if (o.selected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, null, tint = if (o.selected) RC.accent else RC.sub)
                 }
-                if (o.selected) Slider(v ?: (o.volume / 100f), { v = it },
-                    onValueChangeFinished = { v?.let { f ->
-                        val vol = (f * 100).toInt()
-                        call("PUT", "/api/outputs/${o.id}", JSONObject().put("volume", vol).toString())
-                        val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = st.outputs[i].copy(volume = vol)
-                    }; v = null },
-                    colors = SliderDefaults.colors(thumbColor = RC.accent, activeTrackColor = RC.accent, inactiveTrackColor = Color(0x33FFFFFF)))
+                if (o.selected) VolumeControl(o.volume, Modifier.fillMaxWidth().padding(top = 8.dp)) { vol ->
+                    call("PUT", "/api/outputs/${o.id}", JSONObject().put("volume", vol).toString())
+                    val i = st.outputs.indexOfFirst { it.id == o.id }; if (i >= 0) st.outputs[i] = st.outputs[i].copy(volume = vol)
+                }
             }
         }
         if (st.outputs.isEmpty()) item { Text("El NAS no ve bocinas todavía.", color = RC.sub, modifier = Modifier.padding(16.dp)) }
@@ -657,6 +695,23 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
 
     val inside = openAlbum != null || openArtist != null || openPlaylist != null || openYear != null
     fun goBack() = nav.back()
+    // buscador dentro de cada sección + orden alfabético
+    var filter by remember(page, openAlbum, openArtist, openPlaylist, openYear) { mutableStateOf("") }
+    val f = norm(filter.trim())
+    val sortByName = !inside && page in setOf("albums", "artists", "lists")
+    val fAlbums = albums.filter { f.isEmpty() || norm(it.name).contains(f) || norm(it.artist).contains(f) }.let { l -> if (sortByName) l.sortedBy { norm(it.name) } else l }
+    val fArtists = artists.filter { f.isEmpty() || norm(it.name).contains(f) }.let { l -> if (sortByName) l.sortedBy { norm(it.name) } else l }
+    val fTracks = tracks.filter { f.isEmpty() || norm(it.title).contains(f) || norm(it.artist).contains(f) || norm(it.album).contains(f) }
+    val fPlaylists = playlists.filter { f.isEmpty() || norm(it.name).contains(f) }.let { l -> if (sortByName) l.sortedBy { norm(it.name) } else l }
+    val showAlpha = query.isBlank() && !inside && f.isEmpty() && page in setOf("songs", "artists", "albums", "lists", "favs")
+    fun lettersOf(names: List<String>): Map<String, Int> { val m = LinkedHashMap<String, Int>(); names.forEachIndexed { i, n -> m.putIfAbsent(letterOf(n), i) }; return m }
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    val alphaScope = rememberCoroutineScope()
+    @Composable fun Alpha(names: List<String>, grid: Boolean) {
+        if (showAlpha && names.size > 25) AlphabetScroller(lettersOf(names), textColor = RC.text, activeColor = RC.accent, dimColor = RC.sub.copy(alpha = 0.35f),
+            panelColor = Color(0x55FFFFFF)) { t -> alphaScope.launch { if (grid) gridState.scrollToItem(t) else listState.scrollToItem(t) } }
+    }
 
     Column(Modifier.fillMaxSize()) {
         // encabezado
@@ -683,7 +738,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
             Text("Biblioteca", color = RC.text, fontWeight = FontWeight.Black, fontSize = 32.sp, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
         }
         if (!inside && page == null) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp).clip(RoundedCornerShape(14.dp)).background(RC.card).padding(horizontal = 12.dp, vertical = 10.dp),
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp).glass(RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Search, null, tint = RC.sub, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
@@ -695,28 +750,42 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                 if (query.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RC.sub, modifier = Modifier.size(20.dp).clickable { query = "" })
             }
         }
+        if ((inside || page != null) && query.isBlank() && page != "years" || openYear != null) {
+            val title = openAlbum?.name ?: openPlaylist?.name ?: openYear?.toString() ?: openArtist?.name ?: SHELVES.firstOrNull { it.key == page }?.label.orEmpty()
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).glass(RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Search, null, tint = RC.sub, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.weight(1f)) {
+                    if (filter.isEmpty()) Text("Buscar en $title", color = RC.sub, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    BasicTextField(filter, { filter = it }, singleLine = true, textStyle = TextStyle(color = RC.text, fontSize = 14.sp),
+                        cursorBrush = SolidColor(RC.accent), modifier = Modifier.fillMaxWidth())
+                }
+                if (filter.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RC.sub, modifier = Modifier.size(18.dp).clickable { filter = "" })
+            }
+        }
         if (loading) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp) }
         msg?.let { Text(it, color = RC.sub, fontSize = 14.sp, modifier = Modifier.padding(20.dp)) }
 
         // menú principal estilo biblioteca de música
         if (!inside && page == null && query.isBlank()) {
             LazyColumn(Modifier.fillMaxSize()) {
-                items(SHELVES, key = { it.key }) { sh ->
-                    Row(Modifier.fillMaxWidth().clickable { page = sh.key }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                item { Column(Modifier.padding(horizontal = 14.dp, vertical = 4.dp).glass(RoundedCornerShape(22.dp))) { SHELVES.forEachIndexed { idx, sh ->
+                    Row(Modifier.fillMaxWidth().clickable { page = sh.key }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(sh.color.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
                             Icon(sh.icon, null, tint = sh.color, modifier = Modifier.size(20.dp)) }
                         Spacer(Modifier.width(14.dp))
                         Text(sh.label, color = RC.text, fontSize = 18.sp, modifier = Modifier.weight(1f))
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = RC.sub)
                     }
-                    Box(Modifier.padding(start = 64.dp).fillMaxWidth().height(1.dp).background(Color(0x14FFFFFF)))
-                }
+                    if (idx < SHELVES.lastIndex) Box(Modifier.padding(start = 62.dp).fillMaxWidth().height(1.dp).background(Color(0x1AFFFFFF)))
+                } } }
                 if (recentShelf.isNotEmpty()) item {
                     Text("Agregadas recientemente", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp))
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
                         recentShelf.forEachIndexed { i, t ->
                             Column(Modifier.width(140.dp).padding(6.dp).clip(RoundedCornerShape(14.dp)).clickable { playExpr("$MUSIC order by time_modified desc", i, false) }.padding(4.dp)) {
-                                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+                                Box(Modifier.fillMaxWidth().aspectRatio(1f).glass(RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                                     if (t.art != null) AsyncImage(t.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                                     else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size(40.dp))
                                 }
@@ -735,7 +804,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
         if (page == "years" && !inside && query.isBlank()) {
             LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
                 items(years, key = { "y" + it.first }) { (y, n) ->
-                    Column(Modifier.padding(6.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(Color(0x558FD3FF), Color(0x33B98CFF))))
+                    Column(Modifier.padding(6.dp).glass(RoundedCornerShape(18.dp)).background(Brush.linearGradient(listOf(Color(0x338FD3FF), Color(0x22B98CFF))))
                         .clickable { openYear = y }.padding(vertical = 18.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("$y", color = RC.text, fontWeight = FontWeight.Black, fontSize = 24.sp)
                         Text("$n álbumes · ver canciones", color = RC.sub, fontSize = 12.sp)
@@ -747,41 +816,48 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
 
         // listas
         if (page == "lists" && !inside && query.isBlank()) {
-            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                items(playlists, key = { "pl" + it.id }) { pl ->
+            Box(Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize().padding(start = 10.dp, end = if (showAlpha) 22.dp else 10.dp), state = listState) {
+                items(fPlaylists, key = { "pl" + it.id }) { pl ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { openPlaylist = pl }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(RC.card), contentAlignment = Alignment.Center) { Icon(Icons.Filled.QueueMusic, null, tint = RC.accent) }
+                        Box(Modifier.size(46.dp).glass(RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Filled.QueueMusic, null, tint = RC.accent) }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) { Text(pl.name, color = RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1); Text("${pl.count} canciones", color = RC.sub, fontSize = 12.sp) }
                         Icon(Icons.Filled.Shuffle, "Aleatorio", tint = RC.sub, modifier = Modifier.size(38.dp).clip(CircleShape).clickable { play("library:playlist:${pl.id}", 0, true) }.padding(9.dp))
                     }
                 }
             }
+            Alpha(fPlaylists.map { it.name }, false)
+            }
             return@Column
         }
 
         // álbumes en cuadrícula (álbumes, recientes, un año, un artista)
         if (albums.isNotEmpty() && artists.isEmpty() && tracks.isEmpty() && query.isBlank()) {
-            LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-                items(albums, key = { it.id }) { a -> AlbumCard(a) { openAlbum = a } }
+            Box(Modifier.fillMaxSize()) {
+                LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize().padding(start = 10.dp, end = if (showAlpha) 22.dp else 10.dp), state = gridState) {
+                    items(fAlbums, key = { it.id }) { a -> AlbumCard(a) { openAlbum = a } }
+                }
+                Alpha(fAlbums.map { it.name }, true)
             }
             return@Column
         }
 
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 10.dp)) {
-            if (artists.isNotEmpty()) {
+        Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().padding(start = 10.dp, end = if (showAlpha) 22.dp else 10.dp), state = listState) {
+            if (fArtists.isNotEmpty()) {
                 if (query.isNotBlank()) item { Section("Artistas") }
-                items(artists, key = { "ar" + it.id }) { ar ->
+                items(fArtists, key = { "ar" + it.id }) { ar ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { query = ""; openArtist = ar }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(46.dp).clip(CircleShape).background(RC.card), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = RC.sub) }
+                        Box(Modifier.size(46.dp).glass(CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Filled.Person, null, tint = RC.sub) }
                         Spacer(Modifier.width(12.dp))
                         Column { Text(ar.name, color = RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold); Text("${ar.albums} álbumes", color = RC.sub, fontSize = 12.sp) }
                     }
                 }
             }
-            if (albums.isNotEmpty()) {
+            if (fAlbums.isNotEmpty()) {
                 if (query.isNotBlank()) item { Section("Álbumes") }
-                items(albums, key = { "al" + it.id }) { a ->
+                items(fAlbums, key = { "al" + it.id }) { a ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { query = ""; openArtist = null; openAlbum = a }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(a.art, 50)
                         Spacer(Modifier.width(12.dp))
@@ -789,13 +865,14 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                     }
                 }
             }
-            if (tracks.isNotEmpty()) {
+            if (fTracks.isNotEmpty()) {
                 if (query.isNotBlank()) item { Section("Canciones") }
-                itemsIndexed(tracks, key = { i, t -> "tr$i" + t.uri }) { i, t ->
+                itemsIndexed(fTracks, key = { i, t -> "tr$i" + t.uri }) { i, t ->
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                         .clickable {
                             val a = openAlbum; val pl = openPlaylist
                             when {
+                                f.isNotEmpty() -> play(fTracks.joinToString(",") { it.uri }, i, false)
                                 a != null -> play("library:album:${a.id}", i, false)
                                 pl != null -> play("library:playlist:${pl.id}", i, false)
                                 query.isBlank() && page == "songs" -> playExpr("$MUSIC order by title", i, false)
@@ -821,6 +898,8 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
             }
             item { Spacer(Modifier.height(20.dp)) }
         }
+        if (page == "artists") Alpha(fArtists.map { it.name }, false) else Alpha(fTracks.map { it.title }, false)
+        }
     }
     queueFor?.let { t ->
         androidx.compose.material3.AlertDialog(onDismissRequest = { queueFor = null },
@@ -835,7 +914,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
 
 @Composable
 private fun Cover(url: String?, size: Int) {
-    Box(Modifier.size(size.dp).clip(RoundedCornerShape(8.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(size.dp).glass(RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
         if (url != null) AsyncImage(url, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size((size / 2).dp))
     }
@@ -844,7 +923,7 @@ private fun Cover(url: String?, size: Int) {
 @Composable
 private fun AlbumCard(a: RAlbum, onClick: () -> Unit) {
     Column(Modifier.padding(6.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(4.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(12.dp)).background(RC.card), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).glass(RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
             if (a.art != null) AsyncImage(a.art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             else Icon(Icons.Filled.Album, null, tint = RC.sub, modifier = Modifier.size(48.dp))
         }
