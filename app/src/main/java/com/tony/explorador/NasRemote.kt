@@ -659,7 +659,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                         val aa = JSONObject(api(host, "GET", "/api/library/artists?media_kind=music")).items()
                         ar = (0 until aa.length()).map { aa.getJSONObject(it) }.map { RArtist(it.optString("id"), it.optString("name"), it.optInt("album_count")) }
                     }
-                    page == "songs" -> tr = tracksExpr("$MUSIC order by title")
+                    page == "songs" -> tr = tracksExpr("$MUSIC order by title", 20000)
                     page == "lists" -> {
                         val ls = JSONObject(api(host, "GET", "/api/library/playlists")).items()
                         pl = (0 until ls.length()).map { ls.getJSONObject(it) }.filter { it.optString("type") != "folder" }
@@ -669,7 +669,7 @@ private fun LibraryTab(host: String, nav: LibNav, play: (String, Int, Boolean) -
                     page == "top" -> tr = tracksExpr("$MUSIC and play_count > 0 order by play_count desc", 100)
                     page == "years" -> ys = albumsOf(JSONObject(api(host, "GET", "/api/library/albums?media_kind=music")).items(), host)
                         .filter { it.year > 0 }.groupingBy { it.year }.eachCount().toList().sortedByDescending { it.first }
-                    page == "favs" -> tr = tracksExpr("$MUSIC and rating >= 80 order by title")
+                    page == "favs" -> tr = tracksExpr("$MUSIC and rating >= 80 order by title", 20000)
                 }
                 listOf(al, ar, tr, pl, ys, recentTr)
             }
