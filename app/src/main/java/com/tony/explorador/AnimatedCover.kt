@@ -89,8 +89,24 @@ object AnimatedCovers {
     }
     /** «.animadas/Canción.mp4» junto a la canción. */
     fun besideSong(path: String): File = File(File(File(path).parentFile, HIDDEN), File(path).nameWithoutExtension + ".mp4")
-    /** «.animadas/cover.mp4»: para todo el álbum de esa carpeta. */
-    fun besideAlbum(path: String): File = File(File(File(path).parentFile, HIDDEN), "cover.mp4")
+    private fun safe(t: String) = t.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]+"), "_").trim('_').take(60)
+    /** «.animadas/album_<nombre>.mp4»: solo para las canciones de ESE álbum dentro de esa carpeta. */
+    fun besideAlbum(path: String, album: String?): File = File(File(File(path).parentFile, HIDDEN),
+        album?.takeIf { it.isNotBlank() && it != UNKNOWN_ALBUM }?.let { "album_${safe(it)}.mp4" } ?: "cover.mp4")
+    private fun legacyAlbum(path: String) = File(File(File(path).parentFile, HIDDEN), "cover.mp4")
+
+    /** Una carátula «de carpeta» (cover.mp4) solo vale si en esa carpeta hay un solo álbum. */
+    private val singleAlbumCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    private var singleAlbumVersion = -1
+    private fun folderIsOneAlbum(folder: File): Boolean {
+        if (singleAlbumVersion != version) { singleAlbumCache.clear(); singleAlbumVersion = version }
+        return singleAlbumCache.getOrPut(folder.absolutePath) {
+            val songs = runCatching { LibraryStore.songs.toList() }.getOrDefault(emptyList())
+            val here = songs.filter { File(it.path).parentFile?.absolutePath == folder.absolutePath && it.kindIsAudio() }
+            here.isNotEmpty() && here.map { it.album.lowercase(Locale.ROOT) }.distinct().size == 1
+        }
+    }
+    private fun Song.kindIsAudio() = File(path).kind() != FileKind.VIDEO
     fun isHidden(f: File) = f.parentFile?.name == HIDDEN
 
     /** Las que antes se guardaban sueltas («Canción.animada.mp4») se pasan a la carpeta oculta. */
@@ -99,7 +115,7 @@ object AnimatedCovers {
         val old = File(audio.parentFile, audio.nameWithoutExtension + ".animada.mp4")
         if (old.isFile) { hiddenDir(path); if (!besideSong(path).exists()) old.renameTo(besideSong(path)) }
         val oldAlbum = File(audio.parentFile, "cover.animada.mp4")
-        if (oldAlbum.isFile) { hiddenDir(path); if (!besideAlbum(path).exists()) oldAlbum.renameTo(besideAlbum(path)) }
+        if (oldAlbum.isFile) { hiddenDir(path); if (!legacyAlbum(path).exists()) oldAlbum.renameTo(legacyAlbum(path)) }
     }
 
     fun find(path: String, album: String?): File? {
@@ -109,12 +125,22 @@ object AnimatedCovers {
         runCatching { migrate(path) }
         besideSong(path).takeIf { it.isFile }?.let { return it }
         songFile(path).takeIf { it.isFile }?.let { return it }
-        besideAlbum(path).takeIf { it.isFile }?.let { return it }
-        album?.takeIf { it.isNotBlank() && it != UNKNOWN_ALBUM }?.let { a -> albumFile(a).takeIf { it.isFile }?.let { return it } }
+        val validAlbum = album?.takeIf { it.isNotBlank() && it != UNKNOWN_ALBUM }
+        if (validAlbum != null) besideAlbum(path, validAlbum).takeIf { it.isFile }?.let { return it }
+        validAlbum?.let { a -> albumFile(a).takeIf { it.isFile }?.let { return it } }
         val folder = audio.parentFile ?: return null
         VIDEO_EXT.forEach { ext -> File(folder, "${audio.nameWithoutExtension}.$ext").takeIf { it.isFile }?.let { return it } }
-        FOLDER_NAMES.forEach { n -> VIDEO_EXT.forEach { ext -> File(folder, "$n.$ext").takeIf { it.isFile }?.let { return it } } }
-        return null
+        // las de «toda la carpeta» solo si la carpeta es de un solo álbum (si no, se le pegaba a canciones ajenas)
+        val legacy = legacyAlbum(path)
+        val folderVideos = listOf(legacy) + FOLDER_NAMES.flatMap { n -> VIDEO_EXT.map { ext -> File(folder, "$n.$ext") } }
+        val hit = folderVideos.firstOrNull { it.isFile } ?: return null
+        if (!folderIsOneAlbum(folder)) return null
+        // la vieja «cover.mp4» se renombra con su álbum para que ya no se confunda
+        if (hit == legacy && validAlbum != null) {
+            val named = besideAlbum(path, validAlbum)
+            if (!named.exists() && legacy.renameTo(named)) return named
+        }
+        return hit
     }
 
     /**
@@ -132,7 +158,8 @@ object AnimatedCovers {
                 val a = s.album
                 if (a.isNotBlank() && a != UNKNOWN_ALBUM && albumsDone.add(a.lowercase(Locale.ROOT))) {
                     val af = albumFile(a)
-                    if (af.isFile && !besideAlbum(s.path).exists()) { hiddenDir(s.path); if (af.renameTo(besideAlbum(s.path)) || af.copyTo(besideAlbum(s.path)).exists()) { af.delete(); n++ } }
+                    val dst = besideAlbum(s.path, a)
+                    if (af.isFile && !dst.exists()) { hiddenDir(s.path); if (af.renameTo(dst) || af.copyTo(dst).exists()) { af.delete(); n++ } }
                 }
             }
         }
@@ -145,7 +172,7 @@ object AnimatedCovers {
 
     /** Ahora se guarda en la carpeta de la canción, junto a ella (como las letras). */
     private fun target(path: String, album: String?, forAlbum: Boolean): File =
-        if (forAlbum) besideAlbum(path) else besideSong(path)
+        if (forAlbum) besideAlbum(path, album) else besideSong(path)
 
     /** Importa un video elegido: lo MUEVE a la carpeta de la canción (si no se puede mover, lo copia). */
     suspend fun importFrom(context: Context, uri: Uri, path: String, album: String?, forAlbum: Boolean): Boolean = withContext(Dispatchers.IO) {
@@ -406,8 +433,10 @@ object AnimatedScanner {
             val byTitle = songs.filterNot { isVideoPath(it.path) }.groupBy { CoverScanner.norm(it.title + " " + it.artist) }
             videos.filter { it.name.contains(".animada.", true) && !AnimatedCovers.isHidden(it) }.forEach { v ->
                 val base = CoverScanner.norm(v.name.substringBefore(".animada.", v.nameWithoutExtension))
-                val song = byName[base]?.firstOrNull() ?: byTitle[base]?.firstOrNull()
-                    ?: byTitle.entries.firstOrNull { (k, _) -> k.isNotBlank() && (k.contains(base) || base.contains(k)) }?.value?.firstOrNull()
+                // coincidencia exacta; la parecida solo si es una sola canción y el nombre es largo
+                val loose = if (base.length >= 8) byTitle.entries.filter { (k, _) -> k.length >= 8 && (" $k ".contains(" $base ") || " $base ".contains(" $k ")) } else emptyList()
+                val song = byName[base]?.singleOrNull() ?: byTitle[base]?.singleOrNull()
+                    ?: loose.singleOrNull()?.value?.singleOrNull()
                     ?: return@forEach
                 val dest = AnimatedCovers.besideSong(song.path)
                 if (dest.absolutePath == v.absolutePath) return@forEach
