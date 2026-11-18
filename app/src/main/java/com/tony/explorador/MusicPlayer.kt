@@ -70,6 +70,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lyrics
@@ -191,7 +193,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
 
-    if (isNebulaSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
+    if (isNebulaSkin || isBocinaSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
     val vintage = LibraryStore.musicSkin == MusicSkin.VINTAGE
     Surface(
         tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth(),
@@ -317,10 +319,12 @@ fun MusicPlayerScreen(
     val info by rememberTrackInfo(player.currentMediaItem?.mediaId)
     val colors = info?.colors ?: DefaultCoverColors
     val nebula = isNebulaSkin
-    val top by animateColorAsState(if (nebula) Nebula.Night else colors.top, tween(900), label = "top")
-    val bottom by animateColorAsState(if (nebula) Nebula.Deep else colors.bottom, tween(900), label = "bottom")
-    val accent by animateColorAsState(if (nebula) Nebula.Pink else colors.accent, tween(900), label = "accent")
-    val onAccent by animateColorAsState(if (nebula) Color.White else colors.onAccent, tween(900), label = "onAccent")
+    val bocina = isBocinaSkin
+    val top by animateColorAsState(if (nebula) Nebula.Night else if (bocina) Bocina.Top else colors.top, tween(900), label = "top")
+    val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else colors.bottom, tween(900), label = "bottom")
+    val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else colors.accent, tween(900), label = "accent")
+    val onAccent by animateColorAsState(if (nebula || bocina) Color.White else colors.onAccent, tween(900), label = "onAccent")
+    val beat = if (bocina) rememberBocinaBeat(player.isPlaying) else null
     val twinkle by androidx.compose.animation.core.rememberInfiniteTransition(label = "tw").animateFloat(0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "twv")
 
@@ -393,6 +397,7 @@ fun MusicPlayerScreen(
         // Fondo: la misma portada, muy difuminada (en Nebula: cielo nocturno con estrellas)
         val cover = info?.cover
         if (nebula) NebulaBackground()
+        else if (beat != null) BocinaBackground(accent, beat)
         else if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Crossfade(targetState = cover, animationSpec = tween(900), label = "bg") { bmp ->
                 Image(
@@ -402,7 +407,7 @@ fun MusicPlayerScreen(
                 )
             }
         }
-        Box(
+        if (!bocina) Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.60f)))
             )
@@ -423,7 +428,8 @@ fun MusicPlayerScreen(
                         fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(46.dp))
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
-                } else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                } else if (bocina) BocinaTopBar(album, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
+                else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { closeAnimated() }) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
                     }
@@ -468,13 +474,17 @@ fun MusicPlayerScreen(
                                     QueuePanel(player, accent, title, artist, thumbSpace = QueueThumb + QueueThumbX)
                                 }
                                 // la portada viaja de su lugar grande a la esquina de la lista
-                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else minOf(maxWidth, maxHeight)
-                                val topGap = if (nebula) side * 0.16f else 0.dp
-                                val decoAlpha = if (nebula) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                // Bocina: la bocina ocupa casi todo y la portada queda en su centro
+                                val speakerR = minOf(maxWidth * 0.40f, maxHeight * 0.40f)
+                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f else minOf(maxWidth, maxHeight)
+                                val topGap = if (nebula) side * 0.16f else if (bocina) (maxHeight - side) / 2 - 6.dp else 0.dp
+                                val decoAlpha = if (nebula || bocina) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
                                 // dónde está la portada grande (para la animación de cerrar)
                                 if (p < 0.01f) Box(Modifier.offset((maxWidth - side) / 2, topGap).size(side)
                                     .onGloballyPositioned { coverRect = it.boundsInRoot() })
-                                if (decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
+                                if (bocina && beat != null && decoAlpha > 0f) BocinaStage(beat, accent, decoAlpha,
+                                    cx = maxWidth / 2, cy = topGap + side / 2, radius = speakerR)
+                                if (nebula && decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
                                 CoverArt(
@@ -521,7 +531,7 @@ fun MusicPlayerScreen(
                                     },
                                     onMenu = { menuOpen = true },
                                 )
-                                if (decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
+                                if (nebula && decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverFront(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha, twinkle)
                                 }
                             }
@@ -652,6 +662,42 @@ fun MusicPlayerScreen(
                             }
                         },
                         modifier = Modifier.padding(top = 4.dp)
+                    )
+                } else if (bocina) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        BocinaRoundButton(Icons.Filled.Shuffle, "Aleatorio", if (player.shuffleModeEnabled) accent else Color.White, 50.dp) {
+                            player.shuffleModeEnabled = !player.shuffleModeEnabled }
+                        BocinaRoundButton(Icons.Filled.SkipPrevious, "Anterior", size = 56.dp) { player.seekToPrevious() }
+                        BocinaPlayButton(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, accent, beat, 80.dp) {
+                            if (player.isPlaying) player.pause() else player.play() }
+                        BocinaRoundButton(Icons.Filled.SkipNext, "Siguiente", size = 56.dp, enabled = player.hasNextMediaItem()) { player.seekToNextMediaItem() }
+                        BocinaRoundButton(if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, "Repetir",
+                            if (player.repeatMode != Player.REPEAT_MODE_OFF) accent else Color.White, 50.dp) {
+                            player.repeatMode = when (player.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                        }
+                    }
+                    BocinaBottomNav(
+                        selected = 1, accent = accent,
+                        icons = listOf(
+                            Icons.Filled.Tune to "Ajustes",
+                            Icons.Filled.GraphicEq to "Reproductor",
+                            Icons.AutoMirrored.Filled.QueueMusic to "Lista",
+                            Icons.Filled.Equalizer to "Ecualizador",
+                        ),
+                        onSelect = { i ->
+                            when (i) {
+                                0 -> MusicUi.settingsOpen = true
+                                1 -> { lyricsMode = false; toCover() }
+                                2 -> { lyricsMode = false; toQueue() }
+                                3 -> { MusicUi.settingsPage = "eq"; MusicUi.settingsOpen = true }
+                            }
+                        },
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 } else Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),

@@ -112,7 +112,7 @@ private enum class SPage(val title: String) {
 fun MusicSettingsScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     remember { AudioFx.init(ctx); 0 }
-    var page by remember { mutableStateOf(SPage.Main) }
+    var page by remember { mutableStateOf(if (MusicUi.settingsPage == "eq") SPage.Eq else SPage.Main).also { MusicUi.settingsPage = null } }
     BackHandler { if (page != SPage.Main) page = SPage.Main else onClose() }
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B1038), Color(0xFF120B26), Color(0xFF080512))))) {
         NebulaBackground(Modifier.fillMaxSize())
@@ -396,6 +396,7 @@ private fun VisualPage() {
 private fun ThemePage() {
     val previews = mapOf(
         MusicSkin.NEBULA to listOf(Color(0xFF1B1038), Color(0xFF8B5CF6), Color(0xFFFF4F9A)),
+        MusicSkin.BOCINA to listOf(Color(0xFF0D1E3A), Color(0xFF3FA0FF), Color(0xFFBFE2FF)),
         MusicSkin.LAVANDA to listOf(Color(0xFFF7F4FD), Color(0xFFB79BF2), Color(0xFF4F7BFF)),
         MusicSkin.WALKMAN to listOf(Color(0xFF120A1C), Color(0xFFFF8A1F), Color(0xFF7B2FF7)),
         MusicSkin.MEDIA_PLAYER to listOf(Color(0xFF0B1630), Color(0xFF3FA9F5), Color(0xFF9CDBFF)),

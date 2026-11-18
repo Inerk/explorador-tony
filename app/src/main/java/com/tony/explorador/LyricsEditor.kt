@@ -88,6 +88,8 @@ object MusicUi {
     var syncLyricsFor by mutableStateOf<String?>(null)
     /** Ajustes de música abiertos. */
     var settingsOpen by mutableStateOf(false)
+    /** Página de Ajustes donde abrir (ej. "eq"); se limpia al abrir. */
+    var settingsPage by mutableStateOf<String?>(null)
     /** El reproductor se cierra con la portada volando a la miniatura (la pantalla ya se desvaneció). */
     var flyClose by mutableStateOf(false)
     /** Cada vez que sube: la biblioteca muestra la lista donde suena la canción y baja hasta ella. */
