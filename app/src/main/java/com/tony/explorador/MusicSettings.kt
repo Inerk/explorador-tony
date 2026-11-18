@@ -253,7 +253,7 @@ private fun MainPage(onOpen: (SPage) -> Unit, onClose: () -> Unit) {
             BigTile(Icons.Filled.Equalizer, "Ecualizador", if (AudioFx.eqOn) AudioFx.preset else "Apagado", Modifier.weight(1f)) { onOpen(SPage.Eq) }
             BigTile(Icons.Filled.SettingsInputAntenna, "Efectos", listOf(AudioFx.bassOn, AudioFx.virtOn, AudioFx.vocalOn, AudioFx.loudOn).count { it }
                 .let { if (it == 0) "Apagados" else "$it activos" }, Modifier.weight(1f)) { onOpen(SPage.Fx) }
-            BigTile(Icons.Filled.Waves, "Visualizador", SeekStyles.firstOrNull { it.first == LibraryStore.seekStyle }?.second ?: "Barra", Modifier.weight(1f)) { onOpen(SPage.Visual) }
+            BigTile(Icons.Filled.Waves, "Visualizador", SeekStyles.firstOrNull { it.first == LibraryStore.seekStyle }?.second?.substringBefore(" (") ?: "Barra", Modifier.weight(1f)) { onOpen(SPage.Visual) }
         }
         SettingRow(Icons.AutoMirrored.Filled.VolumeUp, "Volumen más fuerte", "Sube el volumen de las canciones bajitas",
             on = AudioFx.loudOn, onToggle = { AudioFx.setLoud(it) }, last = true)
