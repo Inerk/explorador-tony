@@ -91,6 +91,10 @@ class BocinaBeat {
     var frame by mutableLongStateOf(0L)
     var bass = 0f
     var level = 0f
+    /** Posición de la canción (ms) en este cuadro y su mapa de ritmo, si ya está listo. */
+    var posMs = 0L
+    var path: String? = null
+    var map: BeatMap.Analysis? = null
     var kick = 0f
     var time = 0f
     val bands = FloatArray(SpectrumAnalyzer.BANDS)
@@ -127,15 +131,24 @@ class BocinaBeat {
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
-fun rememberBocinaBeat(playing: Boolean): BocinaBeat {
+fun rememberBocinaBeat(playing: Boolean, player: androidx.media3.common.Player? = null): BocinaBeat {
     val beat = remember { BocinaBeat() }
     val isPlaying by rememberUpdatedState(playing)
+    val pl by rememberUpdatedState(player)
     LaunchedEffect(Unit) {
         var last = 0L
         while (true) withFrameNanos { now ->
             val dt = if (last == 0L) 0.016f else ((now - last) / 1e9f).coerceIn(0f, 0.05f)
             last = now
-            beat.update(SpectrumAnalyzer.peek(), isPlaying, dt)
+            // con el mapa de ritmo se lee lo que suena en la posición exacta de la canción (no con reloj aparte)
+            val p = pl
+            val path = p?.currentMediaItem?.mediaId
+            val map = BeatMap.get(path)
+            if (p != null) beat.posMs = p.currentPosition
+            beat.path = path; beat.map = map
+            if (map != null && p != null && p.hasNextMediaItem()) BeatMap.get(p.getMediaItemAt(p.nextMediaItemIndex).mediaId)
+            val data = map?.frameAt(beat.posMs) ?: SpectrumAnalyzer.peek()
+            beat.update(data, isPlaying, dt)
             beat.frame = now
         }
     }

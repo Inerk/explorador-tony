@@ -325,7 +325,7 @@ fun MusicPlayerScreen(
     val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else if (guitar) Guitar.Deep else colors.bottom, tween(900), label = "bottom")
     val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else if (guitar) guitarAccent(colors.accent) else colors.accent, tween(900), label = "accent")
     val onAccent by animateColorAsState(if (nebula || bocina || guitar) Color.White else colors.onAccent, tween(900), label = "onAccent")
-    val beat = if (bocina || guitar) rememberBocinaBeat(player.isPlaying) else null
+    val beat = if (bocina || guitar) rememberBocinaBeat(player.isPlaying, player) else null
     val sim = if (guitar && beat != null) rememberGuitarSim(beat, player.isPlaying) else null
     val twinkle by androidx.compose.animation.core.rememberInfiniteTransition(label = "tw").animateFloat(0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "twv")
@@ -399,7 +399,7 @@ fun MusicPlayerScreen(
         // Fondo: la misma portada, muy difuminada (en Nebula: cielo nocturno con estrellas)
         val cover = info?.cover
         if (nebula) NebulaBackground()
-        else if (guitar && beat != null) GuitarBackground(accent, beat)
+        else if (guitar && beat != null) GuitarBackground(accent, beat, sim)
         else if (beat != null) BocinaBackground(accent, beat)
         else if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Crossfade(targetState = cover, animationSpec = tween(900), label = "bg") { bmp ->

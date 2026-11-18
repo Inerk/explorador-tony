@@ -116,7 +116,16 @@ object SpectrumAnalyzer : TeeAudioProcessor.AudioBufferSink {
     @Volatile private var lastShown: FloatArray? = null
 
     /** Como [current] pero sin consumir nada: varias cosas pueden leerlo a la vez (barra de avance, ecualizador). */
+    /** De dónde sacar la canción y su posición para leer el mapa de ritmo (lo pone el servicio de reproducción). */
+    @Volatile var position: (() -> Pair<String?, Long>?)? = null
+
     fun peek(): FloatArray? {
+        // primero el mapa de ritmo: va amarrado a la posición exacta de la canción
+        try {
+            position?.invoke()?.let { (path, pos) ->
+                BeatMap.get(path)?.frameAt(pos)?.let { lastShown = it; return it }
+            }
+        } catch (_: Exception) { }
         val target = System.nanoTime() - DELAY_NANOS
         synchronized(lock) {
             var latest: Frame? = null

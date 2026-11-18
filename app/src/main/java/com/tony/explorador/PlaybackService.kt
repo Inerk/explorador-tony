@@ -64,6 +64,10 @@ class PlaybackService : MediaSessionService() {
         LibraryStore.init(this)
         // ecualizador y efectos de sonido
         AudioFx.attach(this, player.audioSessionId)
+        val pl = player
+        SpectrumAnalyzer.position = {
+            if (android.os.Looper.myLooper() == pl.applicationLooper) pl.currentMediaItem?.mediaId to pl.currentPosition else null
+        }
 
         // Recuperar lo que estaba sonando la última vez (sin darle play)
         LibraryStore.loadPlayback()?.let { saved ->
@@ -117,6 +121,7 @@ class PlaybackService : MediaSessionService() {
         handler.removeCallbacks(saver)
         savePlayback()
         AudioFx.release()
+        SpectrumAnalyzer.position = null
         session?.run {
             player.release()
             release()
