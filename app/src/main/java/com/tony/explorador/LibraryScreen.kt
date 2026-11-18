@@ -337,7 +337,7 @@ fun LibraryScreen(
                 HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) { Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.Text) }
             }
-        } else if (Retro.isNebula) NebulaListHeader(pageTitle(page), songs.size, onBack = { pop() }, onRefresh = { scope.launch { LibraryStore.scan() } })
+        } else if (Retro.isNebula || Retro.isLavanda) NebulaListHeader(pageTitle(page), songs.size, onBack = { pop() }, onRefresh = { scope.launch { LibraryStore.scan() } })
         else Box(Modifier.fillMaxWidth().background(Retro.metal).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
@@ -364,7 +364,7 @@ fun LibraryScreen(
             }
         }
         // franja naranja
-        if (!clean && !Retro.isNebula) Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
+        if (!clean && !Retro.isNebula && !Retro.isLavanda) Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
         if (LibraryStore.scanning) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Retro.Orange, trackColor = Retro.Panel)
         }
@@ -645,7 +645,7 @@ private fun RecentCard(song: Song, modifier: Modifier, onClick: () -> Unit) {
 
 @Composable
 private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, extra: @Composable () -> Unit = {}) {
-    if (Retro.isNebula) { NebulaPlayBar(songs, onPlay, extra); return }
+    if (Retro.isNebula || Retro.isLavanda) { NebulaPlayBar(songs, onPlay, extra); return }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.clip(CircleShape).background(Retro.Orange).clickable(enabled = songs.isNotEmpty()) { onPlay(songs, 0, false) }
@@ -729,11 +729,14 @@ private fun rememberSongSearch(songs: List<Song>, q: String, field: String): Sea
 @Composable
 private fun LibSearchField(value: String, onChange: (String) -> Unit, hint: String) {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
-    val neb = Retro.isNebula
+    val neb = Retro.isNebula || Retro.isLavanda
+    val light = Retro.isLavanda
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (neb) 8.dp else 6.dp).height(if (neb) 52.dp else 44.dp)
             .clip(RoundedCornerShape(if (neb) 26.dp else 14.dp))
-            .then(if (neb) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.06f))))
+            .then(if (neb && light) Modifier.shadow(8.dp, RoundedCornerShape(26.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
+                .background(Color.White.copy(alpha = 0.85f)).border(1.dp, Color.White, RoundedCornerShape(26.dp))
+            else if (neb) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.06f))))
                 .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(26.dp))
                 else Modifier.background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Text.copy(alpha = 0.09f)))
             .padding(horizontal = if (neb) 18.dp else 12.dp),
@@ -918,6 +921,14 @@ private fun SongListInner(
                     LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
                         item { header() }
                         itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
+                            if (Retro.isLavanda && view != "cards") Box(Modifier.padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp)
+                                .shadow(3.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x227C4DDB), spotColor = Color(0x227C4DDB))
+                                .clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.78f))) {
+                                SongRow(song = song, rank = if (showCounts) i + 1 else null,
+                                    count = if (showCounts) LibraryStore.playCounts[song.path] ?: 0 else null,
+                                    onClick = { onPlay(songs, i, false) }, onAdd = { onAdd(listOf(song)) },
+                                    onRemove = onRemove?.let { { it(song) } }, style = "compact")
+                            } else
                             SongRow(
                                 song = song,
                                 rank = if (showCounts) i + 1 else null,
@@ -936,8 +947,9 @@ private fun SongListInner(
                 val first = if (isGrid) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex
                 letters.entries.lastOrNull { it.value <= first + 1 }?.key
             } }
-            if (alphabet && songs.size > 25) AlphabetScroller(letters, current = if (Retro.isNebula) currentLetter else null, glass = Retro.isNebula,
-                activeColor = if (Retro.isNebula) Nebula.Purple else Retro.Orange, textColor = Retro.Text, dimColor = Retro.SubText.copy(alpha = 0.4f)) { target ->
+            val glassy = Retro.isNebula || Retro.isLavanda
+            if (alphabet && songs.size > 25) AlphabetScroller(letters, current = if (glassy) currentLetter else null, glass = glassy,
+                activeColor = if (Retro.isLavanda) Color(0xFF4F7BFF) else if (Retro.isNebula) Nebula.Purple else Retro.Orange, textColor = Retro.Text, dimColor = Retro.SubText.copy(alpha = 0.4f)) { target ->
                 scope.launch { if (isGrid) gridState.scrollToItem(target) else listState.scrollToItem(target) }
             }
         }
@@ -1485,7 +1497,9 @@ fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text
             // tira delgada; el área para tocar es un poquito más ancha que lo que se ve
             Modifier.align(Alignment.CenterEnd).padding(top = 8.dp, bottom = 8.dp, end = if (glass) 4.dp else 0.dp)
                 .fillMaxHeight(if (glass) 0.86f else 0.92f).width(if (glass) 26.dp else 22.dp)
-                .then(if (glass) Modifier.clip(RoundedCornerShape(13.dp))
+                .then(if (glass && Retro.isLavanda) Modifier.shadow(6.dp, RoundedCornerShape(13.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
+                    .clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.9f)).padding(vertical = 6.dp)
+                else if (glass) Modifier.clip(RoundedCornerShape(13.dp))
                     .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))))
                     .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(13.dp)).padding(vertical = 6.dp) else Modifier)
                 .pointerInput(Unit) {
@@ -2131,9 +2145,23 @@ private fun NasFolderPicker(onClose: () -> Unit) {
 
 @Composable
 private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRefresh: () -> Unit) {
+    val light = Retro.isLavanda
     Box(Modifier.fillMaxWidth()) {
+        // Lavanda: ondas suaves de colores arriba a la derecha
+        if (light) androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            val w = size.width; val h = size.height
+            fun wave(y0: Float, y1: Float, c: List<Color>) {
+                val p = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.35f, 0f); cubicTo(w * 0.55f, h * y0, w * 0.75f, h * y1 * 0.6f, w, h * y1); lineTo(w, 0f); close()
+                }
+                drawPath(p, Brush.linearGradient(c, androidx.compose.ui.geometry.Offset(w * 0.4f, 0f), androidx.compose.ui.geometry.Offset(w, h * y1)))
+            }
+            wave(0.9f, 1.25f, listOf(Color(0x55B9A4FF), Color(0x558FC8FF)))
+            wave(0.55f, 0.85f, listOf(Color(0x66E3D6FF), Color(0x77A9C9FF)))
+            wave(0.25f, 0.45f, listOf(Color(0x88FFFFFF), Color(0x55C9B5FF)))
+        }
         // el planeta que asoma arriba a la derecha
-        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+        else androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
             val c = androidx.compose.ui.geometry.Offset(size.width * 1.02f, -size.height * 0.9f)
             val r = size.height * 2.2f
             drawCircle(Brush.radialGradient(listOf(Nebula.Purple.copy(alpha = 0.45f), Color.Transparent), c, r * 1.35f), r * 1.35f, c)
@@ -2146,8 +2174,9 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
             NebulaSquareButton(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", onBack)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("♪ " + java.text.NumberFormat.getIntegerInstance(Locale.US).format(count) + " canciones", color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
+                Text(title, color = if (light) Color(0xFF15122B) else Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("♪ " + java.text.NumberFormat.getIntegerInstance(Locale.US).format(count) + " canciones",
+                    color = if (light) Color(0xFF2A2540) else Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
             }
             NebulaSquareButton(Icons.Filled.Refresh, "Volver a buscar", onRefresh)
         }
@@ -2156,18 +2185,28 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
 
 @Composable
 private fun NebulaSquareButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
-        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f))))
-        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = Color.White, modifier = Modifier.size(24.dp))
+    val light = Retro.isLavanda
+    Box(Modifier.size(48.dp)
+        .then(if (light) Modifier.shadow(8.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
+            .clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.92f))
+        else Modifier.clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f))))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp)))
+        .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = if (light) Color(0xFF15122B) else Color.White, modifier = Modifier.size(24.dp))
     }
 }
+
+/** Botón secundario (Aleatorio, vista): cristal oscuro en Nebula, blanco con sombra en Lavanda. */
+private fun Modifier.glassPill(light: Boolean, border: Float = 0.28f): Modifier =
+    if (light) this.shadow(8.dp, CircleShape, ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB)).clip(CircleShape).background(Color.White.copy(alpha = 0.92f))
+    else this.clip(CircleShape).background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))))
+        .border(1.5.dp, Color.White.copy(alpha = border), CircleShape)
 
 @Composable
 private fun NebulaPlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, extra: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1.1f).height(52.dp).shadow(14.dp, CircleShape, ambientColor = Nebula.Purple, spotColor = Nebula.Purple).clip(CircleShape)
-            .background(Brush.horizontalGradient(listOf(Color(0xFF4F7BFF), Color(0xFF8B5CF6), Color(0xFFC85CFF))))
+            .background(Brush.horizontalGradient(if (Retro.isLavanda) listOf(Color(0xFF1E9BFF), Color(0xFF5B6CFF), Color(0xFFB04CF5)) else listOf(Color(0xFF4F7BFF), Color(0xFF8B5CF6), Color(0xFFC85CFF))))
             .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
             .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, 0, false) }, verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center) {
@@ -2176,18 +2215,16 @@ private fun NebulaPlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) 
             Text("Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         }
         Spacer(Modifier.width(10.dp))
-        Row(Modifier.weight(1f).height(52.dp).clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))))
-            .border(1.5.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+        val light = Retro.isLavanda
+        val ink = if (light) Color(0xFF15122B) else Color.White
+        Row(Modifier.weight(1f).height(52.dp).glassPill(light)
             .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, (songs.indices).random(), true) }, verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center) {
-            Icon(Icons.Filled.Shuffle, null, tint = Color.White)
+            Icon(Icons.Filled.Shuffle, null, tint = ink)
             Spacer(Modifier.width(8.dp))
-            Text("Aleatorio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Aleatorio", color = ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
         Spacer(Modifier.width(10.dp))
-        Box(Modifier.size(52.dp).clip(CircleShape)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) { extra() }
+        Box(Modifier.size(52.dp).glassPill(light, 0.18f), contentAlignment = Alignment.Center) { extra() }
     }
 }
