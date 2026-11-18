@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             ExploradorTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppRoot()
+                    if (IS_CONTROL_APP) ControlRoot() else AppRoot()
                 }
             }
         }
@@ -87,6 +87,10 @@ class MainActivity : ComponentActivity() {
 
 /** true en «Nebula Música» (la app de música aparte). */
 val IS_MUSIC_APP = BuildConfig.FLAVOR == "musica"
+/** true en «Control Nebula» (solo el control remoto del NAS). */
+val IS_CONTROL_APP = BuildConfig.FLAVOR == "control"
+/** Las apps que se actualizan desde el NAS. */
+val IS_NAS_APP = IS_MUSIC_APP || IS_CONTROL_APP
 
 @Composable
 fun ExploradorTheme(content: @Composable () -> Unit) {
@@ -274,7 +278,7 @@ fun AppRoot() {
                     else -> UpdateState.Idle
                 }
             } catch (e: Exception) {
-                if (manual) UpdateCenter.state = UpdateState.Error(if (IS_MUSIC_APP) "Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})" else "Revisa tu conexión a internet.\n(${e.message})")
+                if (manual) UpdateCenter.state = UpdateState.Error(if (IS_NAS_APP) "Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})" else "Revisa tu conexión a internet.\n(${e.message})")
             }
         }
     }
@@ -516,6 +520,43 @@ fun AppRoot() {
             onDismiss = { UpdateCenter.state = UpdateState.Idle },
         )
     }
+}
+
+/** Control Nebula: solo el control remoto del NAS, sin explorador ni permisos de archivos. */
+@Composable
+fun ControlRoot() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val versionName = remember { currentVersionName(context) }
+    fun checkUpdates(manual: Boolean) {
+        scope.launch {
+            if (manual) UpdateCenter.state = UpdateState.Checking
+            try {
+                val info = fetchLatestForThisApp()
+                UpdateCenter.state = when {
+                    info.versionCode > currentVersionCode(context) -> UpdateState.Available(info)
+                    manual -> UpdateState.UpToDate
+                    else -> UpdateState.Idle
+                }
+            } catch (e: Exception) {
+                if (manual) UpdateCenter.state = UpdateState.Error("Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})")
+            }
+        }
+    }
+    LaunchedEffect(Unit) { checkUpdates(manual = false) }
+    AppNav.checkUpdates = { checkUpdates(manual = true) }
+    AppVersion.name = versionName
+    NasRemoteScreen { (context as? android.app.Activity)?.moveTaskToBack(true) }
+    UpdateDialog(
+        state = UpdateCenter.state,
+        currentName = versionName,
+        onDownload = { info -> UpdateCenter.download(context, info) },
+        onInstall = { apk ->
+            if (canInstallApks(context)) { UpdateCenter.state = UpdateState.Idle; installApk(context, apk) }
+            else { UpdateCenter.state = UpdateState.NeedsPermission(apk); openInstallPermissionSettings(context) }
+        },
+        onDismiss = { UpdateCenter.state = UpdateState.Idle },
+    )
 }
 
 @Composable

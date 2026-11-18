@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.foundation.clickable
@@ -374,6 +375,8 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 }
                 if (st.searching) CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 else Icon(Icons.Filled.Refresh, "Buscar otra vez", tint = RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { reload++ }.padding(10.dp))
+                if (IS_CONTROL_APP) Icon(Icons.Filled.CloudDownload, "Buscar actualización", tint = if (UpdateCenter.state is UpdateState.Available) RC.accent else RC.sub,
+                    modifier = Modifier.size(44.dp).clip(CircleShape).clickable { AppNav.checkUpdates() }.padding(10.dp))
             }
             LaunchedEffect(st.error) { if (st.error != null && st.host != null) { delay(5000); st.error = null } }
             st.error?.let {

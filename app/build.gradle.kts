@@ -7,6 +7,7 @@ plugins {
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 // la app de música se compila en el NAS: su número de versión lo lleva el NAS
 val musicaBuild = (System.getenv("MUSICA_BUILD") ?: "1").toInt()
+val controlBuild = (System.getenv("CONTROL_BUILD") ?: "1").toInt()
 
 android {
     namespace = "com.tony.explorador"
@@ -63,6 +64,14 @@ android {
             // solo para teléfonos de 64 bits (todos los actuales): sin las piezas para emuladores y celulares viejos
             ndk { abiFilters += "arm64-v8a" }
         }
+        // Control Nebula: solo el control remoto del NAS (se compila en el NAS)
+        create("control") {
+            dimension = "app"
+            applicationIdSuffix = ".control"
+            versionCode = controlBuild
+            versionName = "1.0.$controlBuild"
+            ndk { abiFilters += "arm64-v8a" }
+        }
     }
     lint {
         checkReleaseBuilds = false
@@ -115,6 +124,10 @@ dependencies {
 androidComponents {
     onVariants(selector().withFlavor("app" to "musica")) { v ->
         v.packaging.jniLibs.excludes.add("**/libmlkit_google_ocr_pipeline.so")
-        v.packaging.resources.excludes.add("assets/mlkit-google-ocr-models/**")
+    }
+    // Control Nebula tampoco traduce letras
+    onVariants(selector().withFlavor("app" to "control")) { v ->
+        v.packaging.jniLibs.excludes.add("**/libmlkit_google_ocr_pipeline.so")
+        v.packaging.jniLibs.excludes.add("**/libtranslate_jni.so")
     }
 }

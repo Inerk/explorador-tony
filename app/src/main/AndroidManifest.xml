@@ -25,7 +25,7 @@
     <!-- Tienda Nebula: para saber si ya están instaladas las apps de la tienda -->
     <queries>
         <package android:name="com.tony.explorador.musica" />
-        <package android:name="mx.tony.lapazdeemily" />
+        <package android:name="com.tony.explorador.control" />
     </queries>
 
     <application
@@ -55,19 +55,6 @@
         </activity>
 
 
-        <!-- Tercer icono: abre directo el control remoto de las bocinas -->
-        <activity-alias
-            android:name=".RemoteAlias"
-            android:targetActivity=".MainActivity"
-            android:exported="true"
-            android:label="Control Nebula"
-            android:icon="@mipmap/ic_remote"
-            android:roundIcon="@mipmap/ic_remote">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
 
         <receiver android:name=".NasAlarmReceiver" android:exported="false">
             <intent-filter>

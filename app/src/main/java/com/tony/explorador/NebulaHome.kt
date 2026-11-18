@@ -215,7 +215,7 @@ fun NebulaHome(
                 }
                 LocationRow(null, "NAS · Música", "Control remoto de tus bocinas", onRemote)
                 LocationRow(Icons.Filled.Home, "Casa", "Focos, aires, teles y aspiradora", onClick = { HomeUi.open = true })
-                LocationRow(Icons.Filled.Storefront, "Tienda Nebula", "Instala Nebula Música y tus otras apps", onClick = { StoreUi.open = true })
+                LocationRow(Icons.Filled.Storefront, "Tienda Nebula", "Nebula Música y Control Nebula", onClick = { StoreUi.open = true })
                 Spacer(Modifier.height(16.dp))
             }
             // barra de abajo

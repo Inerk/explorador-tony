@@ -68,8 +68,8 @@ private class StoreApp(val name: String, val desc: String, val pkg: String, val 
 private val STORE_APPS = listOf(
     StoreApp("Nebula Música", "Tu música sola, sin el explorador. Se actualiza desde el NAS.", "com.tony.explorador.musica",
         "http://192.168.3.74:8087", R.mipmap.ic_music_fg, "🎵"),
-    StoreApp("La paz de Emily", "Tu juego de torres: protege la paz de Emily.", "mx.tony.lapazdeemily",
-        "http://192.168.3.74:8086", null, "🌸"),
+    StoreApp("Control Nebula", "Control remoto del NAS: bocinas, biblioteca y alarmas.", "com.tony.explorador.control",
+        "http://192.168.3.74:8088", R.mipmap.ic_remote_fg, "🔊"),
 )
 
 private class Remote(val code: Long, val name: String, val apk: String, val notes: String, val size: Long)
@@ -168,7 +168,10 @@ fun NebulaStoreScreen(onClose: () -> Unit) {
                         .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp)).padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
-                                if (a.icon != null) { Image(painterResource(R.mipmap.ic_music_bg), null, Modifier.fillMaxSize()); Image(painterResource(a.icon), null, Modifier.fillMaxSize()) }
+                                if (a.icon != null) {
+                                    Image(painterResource(if (a.icon == R.mipmap.ic_music_fg) R.mipmap.ic_music_bg else R.mipmap.ic_launcher_bg), null, Modifier.fillMaxSize())
+                                    Image(painterResource(a.icon), null, Modifier.fillMaxSize())
+                                }
                                 else Text(a.emoji, fontSize = 32.sp)
                             }
                             Spacer(Modifier.width(14.dp))
