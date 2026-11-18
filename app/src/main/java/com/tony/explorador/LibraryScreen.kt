@@ -70,6 +70,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -1942,6 +1944,8 @@ private fun YearsPage(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> U
 @Composable
 private fun FolderBrowser(path: String?, songs: List<Song>, onOpen: (String) -> Unit, onPlay: (List<Song>, Int, Boolean) -> Unit,
                           onAdd: (List<Song>) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    remember { FolderMix.load(ctx); 0 }
     // todo sale de la lista de canciones (sin leer el disco): rápido aunque tengas miles
     val (folders, here) = remember(path, songs) {
         if (path == null) {
@@ -1964,9 +1968,34 @@ private fun FolderBrowser(path: String?, songs: List<Song>, onOpen: (String) -> 
     if (path == null && folders.size == 1) { FolderBrowser(folders.first().first, songs, onOpen, onPlay, onAdd); return }
     SongList(here, onPlay, onAdd, empty = if (folders.isEmpty()) "No hay música aquí." else "", header = {
         Column {
+            // varias carpetas a la vez: se eligen con el círculo y se tocan juntas
+            val picked = FolderMix.selected
+            if (picked.isNotEmpty()) {
+                val mix = remember(picked.toList(), songs) { FolderMix.songsOf(songs) }
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Retro.Orange.copy(alpha = 0.14f)).padding(12.dp)) {
+                    Text("${picked.size} carpetas elegidas · ${mix.size} canciones", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(picked.joinToString(" · ") { File(it).name }, color = Retro.SubText, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("▶ Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Retro.Orange).clickable(enabled = mix.isNotEmpty()) { onPlay(mix, 0, false) }
+                                .padding(horizontal = 14.dp, vertical = 8.dp))
+                        Text("🔀 Aleatorio", color = Retro.Text, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Retro.Text.copy(alpha = 0.10f)).clickable(enabled = mix.isNotEmpty()) { onPlay(mix, (mix.indices).random(), true) }
+                                .padding(horizontal = 14.dp, vertical = 8.dp))
+                        Text("Quitar todas", color = Retro.SubText, fontSize = 13.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).clickable { FolderMix.clear(ctx) }.padding(horizontal = 10.dp, vertical = 8.dp))
+                    }
+                }
+            } else if (folders.isNotEmpty()) Text("Toca el círculo de cada carpeta para elegir varias y escucharlas juntas.",
+                color = Retro.SubText, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             folders.forEach { (dir, n) ->
-                Row(Modifier.fillMaxWidth().clickable { onOpen(dir) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                val on = dir in picked
+                Row(Modifier.fillMaxWidth().clickable { onOpen(dir) }.padding(start = 6.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (on) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, if (on) "Quitar carpeta" else "Elegir carpeta",
+                        tint = if (on) Retro.Orange else Retro.SubText, modifier = Modifier.size(44.dp).clip(CircleShape)
+                            .clickable { FolderMix.toggle(ctx, dir) }.padding(10.dp))
                     if (Retro.isLavanda) SoftIcon(Icons.Filled.Folder, Retro.Orange, 40.dp)
                     else Icon(Icons.Filled.Folder, null, tint = Retro.Orange, modifier = Modifier.size(40.dp))
                     Spacer(Modifier.width(12.dp))
@@ -1981,6 +2010,28 @@ private fun FolderBrowser(path: String?, songs: List<Song>, onOpen: (String) -> 
     })
 }
 
+
+/** Carpetas elegidas para escucharse juntas (se recuerdan). */
+object FolderMix {
+    val selected = androidx.compose.runtime.mutableStateListOf<String>()
+    private var loaded = false
+    private fun prefs(c: android.content.Context) = c.getSharedPreferences("carpetas_mezcla", android.content.Context.MODE_PRIVATE)
+    fun load(c: android.content.Context) {
+        if (loaded) return; loaded = true
+        selected.clear(); selected.addAll(prefs(c).getStringSet("sel", emptySet()).orEmpty().sorted())
+    }
+    private fun save(c: android.content.Context) = prefs(c).edit().putStringSet("sel", selected.toSet()).apply()
+    fun toggle(c: android.content.Context, dir: String) {
+        if (dir in selected) selected.remove(dir)
+        else { selected.removeAll { it.startsWith(dir.trimEnd('/') + "/") }; if (selected.none { dir.startsWith(it.trimEnd('/') + "/") }) selected.add(dir) }
+        save(c)
+    }
+    fun clear(c: android.content.Context) { selected.clear(); save(c) }
+    fun songsOf(all: List<Song>): List<Song> {
+        val pre = selected.map { it.trimEnd('/') + "/" }
+        return all.filter { s -> !isVideoPath(s.path) && pre.any { s.path.startsWith(it) } }.sortedBy { it.path.lowercase(Locale.ROOT) }
+    }
+}
 
 /** Círculo que late con la música: marca la canción que suena (elegante, sin barras). */
 @Composable

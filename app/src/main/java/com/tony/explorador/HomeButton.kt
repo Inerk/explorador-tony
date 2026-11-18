@@ -63,6 +63,7 @@ fun NotificationDot(modifier: Modifier = Modifier, size: androidx.compose.ui.uni
  */
 @Composable
 fun HomeButton(onClick: () -> Unit, modifier: Modifier = Modifier, @Suppress("UNUSED_PARAMETER") dark: Boolean = true) {
+    if (IS_MUSIC_APP) return   // Nebula Música no tiene explorador: el botón de la galaxia no sirve ahí
     val press = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     Box(
