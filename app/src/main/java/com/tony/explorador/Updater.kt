@@ -43,6 +43,8 @@ data class UpdateInfo(
     val notes: String,
     val apkUrl: String,
     val size: Long,
+    /** encabezados para bajar el APK (la clave cuando viene por internet) */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 sealed interface UpdateState {
@@ -68,21 +70,35 @@ object AppVersion { var name = "" }
 /** Nebula Música se actualiza desde el NAS (solo dentro del Wi-Fi de la casa). */
 private val NAS_UPDATES get() = if (IS_CONTROL_APP) "http://192.168.3.74:8088" else "http://192.168.3.74:8087"
 
+/** Primero en la casa (rápido, sin clave); si no se puede, por internet con la clave. */
 suspend fun fetchNasRelease(): UpdateInfo = withContext(Dispatchers.IO) {
-    val conn = (URL("$NAS_UPDATES/version.json").openConnection() as HttpURLConnection).apply {
-        connectTimeout = 5_000; readTimeout = 8_000
+    val sources = buildList {
+        add(NAS_UPDATES to emptyMap<String, String>())
+        if (BuildConfig.NAS_NET.isNotBlank() && BuildConfig.NAS_KEY.isNotBlank()) add(BuildConfig.NAS_NET to mapOf("X-Clave-Nebula" to BuildConfig.NAS_KEY))
     }
-    try {
-        if (conn.responseCode != 200) error("El NAS respondió ${conn.responseCode}")
-        val j = JSONObject(conn.inputStream.bufferedReader().readText())
-        UpdateInfo(
-            versionCode = j.getLong("code"),
-            tag = "v" + j.optString("name", j.getLong("code").toString()),
-            notes = j.optString("notas", "").trim(),
-            apkUrl = "$NAS_UPDATES/" + j.getString("apk"),
-            size = j.optLong("size"),
-        )
-    } finally { conn.disconnect() }
+    var last: Throwable? = null
+    for ((base, headers) in sources) {
+        val r = runCatching {
+            val conn = (URL("$base/version.json").openConnection() as HttpURLConnection).apply {
+                connectTimeout = if (headers.isEmpty()) 3_000 else 10_000; readTimeout = 10_000
+                headers.forEach { (k, v) -> setRequestProperty(k, v) }
+            }
+            try {
+                if (conn.responseCode != 200) error("El NAS respondió ${conn.responseCode}")
+                val j = JSONObject(conn.inputStream.bufferedReader().readText())
+                UpdateInfo(
+                    versionCode = j.getLong("code"),
+                    tag = "v" + j.optString("name", j.getLong("code").toString()),
+                    notes = j.optString("notas", "").trim(),
+                    apkUrl = "$base/" + j.getString("apk"),
+                    size = j.optLong("size"),
+                    headers = headers,
+                )
+            } finally { conn.disconnect() }
+        }
+        r.onSuccess { return@withContext it }.onFailure { last = it }
+    }
+    throw last ?: IllegalStateException("No se pudo hablar con el NAS")
 }
 
 /** Pregunta a GitHub (o al NAS en la app de música) cuál es la última versión publicada. */
@@ -139,6 +155,7 @@ suspend fun downloadApk(context: Context, info: UpdateInfo, onProgress: (Float) 
                 connectTimeout = 15_000
                 readTimeout = 30_000
                 setRequestProperty("User-Agent", "ExploradorTony")
+                info.headers.forEach { (k, v) -> setRequestProperty(k, v) }
             }
             val code = conn.responseCode
             if (code in 300..399 && hops < 5) {

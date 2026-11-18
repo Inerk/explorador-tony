@@ -312,7 +312,7 @@ fun AppRoot() {
                     else -> UpdateState.Idle
                 }
             } catch (e: Exception) {
-                if (manual) UpdateCenter.state = UpdateState.Error(if (IS_NAS_APP) "Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})" else "Revisa tu conexión a internet.\n(${e.message})")
+                if (manual) UpdateCenter.state = UpdateState.Error(if (IS_NAS_APP) "No se pudo hablar con el NAS (ni en la casa ni por internet).\n(${e.message})" else "Revisa tu conexión a internet.\n(${e.message})")
             }
         }
     }
@@ -577,7 +577,7 @@ fun ControlRoot() {
                     else -> UpdateState.Idle
                 }
             } catch (e: Exception) {
-                if (manual) UpdateCenter.state = UpdateState.Error("Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})")
+                if (manual) UpdateCenter.state = UpdateState.Error("No se pudo hablar con el NAS (ni en la casa ni por internet).\n(${e.message})")
             }
         }
     }

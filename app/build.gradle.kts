@@ -8,6 +8,8 @@ val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 // la app de música se compila en el NAS: su número de versión lo lleva el NAS
 val musicaBuild = (System.getenv("MUSICA_BUILD") ?: "1").toInt()
 val controlBuild = (System.getenv("CONTROL_BUILD") ?: "1").toInt()
+// clave para actualizar fuera de casa: solo existe en el NAS (no se sube a GitHub)
+val nasKey = System.getenv("NEBULA_KEY") ?: ""
 
 android {
     namespace = "com.tony.explorador"
@@ -19,6 +21,8 @@ android {
         targetSdk = 35
         versionCode = runNumber
         versionName = "1.0.$runNumber"
+        buildConfigField("String", "NAS_KEY", "\"$nasKey\"")
+        buildConfigField("String", "NAS_NET", "\"\"")
     }
 
     signingConfigs {
@@ -61,6 +65,7 @@ android {
             applicationIdSuffix = ".musica"
             versionCode = musicaBuild
             versionName = "1.0.$musicaBuild"
+            buildConfigField("String", "NAS_NET", "\"https://nas-claude.tailc36e88.ts.net:10000/musica\"")
             // solo para teléfonos de 64 bits (todos los actuales): sin las piezas para emuladores y celulares viejos
             ndk { abiFilters += "arm64-v8a" }
         }
@@ -70,6 +75,7 @@ android {
             applicationIdSuffix = ".control"
             versionCode = controlBuild
             versionName = "1.0.$controlBuild"
+            buildConfigField("String", "NAS_NET", "\"https://nas-claude.tailc36e88.ts.net:10000/control\"")
             ndk { abiFilters += "arm64-v8a" }
         }
     }
