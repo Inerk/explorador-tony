@@ -140,7 +140,7 @@ private object Retro {
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
     private val lav get() = LibraryStore.musicSkin == MusicSkin.LAVANDA
-    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN || LibraryStore.musicSkin == MusicSkin.BOCINA || LibraryStore.musicSkin == MusicSkin.GUITAR
+    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN || LibraryStore.musicSkin == MusicSkin.BOCINA || LibraryStore.musicSkin == MusicSkin.GUITAR || LibraryStore.musicSkin == MusicSkin.NAVIDAD
     val isNebula get() = neb
     val isWmp get() = wmp
     val isVintage get() = vin

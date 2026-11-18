@@ -193,7 +193,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
 
-    if (isNebulaSkin || isBocinaSkin || isGuitarSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
+    if (isNebulaSkin || isBocinaSkin || isGuitarSkin || isXmasSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
     val vintage = LibraryStore.musicSkin == MusicSkin.VINTAGE
     Surface(
         tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth(),
@@ -321,11 +321,14 @@ fun MusicPlayerScreen(
     val nebula = isNebulaSkin
     val bocina = isBocinaSkin
     val guitar = isGuitarSkin
-    val top by animateColorAsState(if (nebula) Nebula.Night else if (bocina) Bocina.Top else if (guitar) Guitar.Night else colors.top, tween(900), label = "top")
-    val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else if (guitar) Guitar.Deep else colors.bottom, tween(900), label = "bottom")
-    val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else if (guitar) guitarAccent(colors.accent) else colors.accent, tween(900), label = "accent")
-    val onAccent by animateColorAsState(if (nebula || bocina || guitar) Color.White else colors.onAccent, tween(900), label = "onAccent")
-    val beat = if (bocina || guitar) rememberBocinaBeat(player.isPlaying, player) else null
+    val xmas = isXmasSkin
+    val top by animateColorAsState(if (nebula) Nebula.Night else if (bocina) Bocina.Top else if (guitar) Guitar.Night else if (xmas) Xmas.Sky else colors.top, tween(900), label = "top")
+    val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else if (guitar) Guitar.Deep else if (xmas) Xmas.Deep else colors.bottom, tween(900), label = "bottom")
+    val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else if (guitar) guitarAccent(colors.accent)
+        else if (xmas) xmasAccent(colors.accent) else colors.accent, tween(900), label = "accent")
+    val onAccent by animateColorAsState(if (nebula || bocina || guitar || xmas) Color.White else colors.onAccent, tween(900), label = "onAccent")
+    val beat = if (bocina || guitar || xmas) rememberBocinaBeat(player.isPlaying, player) else null
+    val xfx = if (xmas && beat != null) rememberXmasFx(beat, player.isPlaying) else null
     val sim = if (guitar && beat != null) rememberGuitarSim(beat, player.isPlaying) else null
     val twinkle by androidx.compose.animation.core.rememberInfiniteTransition(label = "tw").animateFloat(0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "twv")
@@ -356,7 +359,18 @@ fun MusicPlayerScreen(
     val screenW = with(androidx.compose.ui.platform.LocalDensity.current) {
         androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp.toPx()
     }
-    Box(Modifier.fillMaxSize()) {
+    // Navidad: la nieve sigue tu dedo y al tocar salen destellos (solo mira los toques, no los quita)
+    Box(Modifier.fillMaxSize().then(if (xfx != null) Modifier.pointerInput(xfx) {
+        awaitPointerEventScope {
+            while (true) {
+                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val c = e.changes.firstOrNull() ?: continue
+                val nx = c.position.x / size.width.coerceAtLeast(1); val ny = c.position.y / size.height.coerceAtLeast(1)
+                if (c.pressed && !c.previousPressed) xfx.burst(nx, ny)
+                xfx.touch(nx, ny, c.pressed)
+            }
+        }
+    } else Modifier)) {
     Box(
         Modifier.fillMaxSize()
             .pointerInput(Unit) {
@@ -400,6 +414,7 @@ fun MusicPlayerScreen(
         val cover = info?.cover
         if (nebula) NebulaBackground()
         else if (guitar && beat != null) GuitarBackground(accent, beat, sim)
+        else if (xfx != null && beat != null) XmasBackground(accent, beat, xfx)
         else if (beat != null) BocinaBackground(accent, beat)
         else if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Crossfade(targetState = cover, animationSpec = tween(900), label = "bg") { bmp ->
@@ -410,7 +425,7 @@ fun MusicPlayerScreen(
                 )
             }
         }
-        if (!bocina && !guitar) Box(
+        if (!bocina && !guitar && !xmas) Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.60f)))
             )
@@ -432,6 +447,7 @@ fun MusicPlayerScreen(
                     Spacer(Modifier.width(46.dp))
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
                 } else if (bocina) BocinaTopBar(album, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
+                else if (xmas) XmasTopBar(beat, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
                 else if (guitar) GuitarTopBar(title, artist, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
                 else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { closeAnimated() }) {
@@ -480,15 +496,18 @@ fun MusicPlayerScreen(
                                 // la portada viaja de su lugar grande a la esquina de la lista
                                 // Bocina: la bocina ocupa casi todo y la portada queda en su centro
                                 val speakerR = minOf(maxWidth * 0.36f, maxHeight * 0.38f)
-                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f
+                                val ringR = minOf(maxWidth * 0.40f, maxHeight * 0.44f)
+                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f else if (xmas) ringR * 1.52f
                                     else if (guitar) minOf(maxWidth * 0.42f, maxHeight * 0.34f) else minOf(maxWidth, maxHeight)
-                                val topGap = if (nebula) side * 0.16f else if (bocina) (maxHeight - side) / 2 - 6.dp else if (guitar) 6.dp else 0.dp
-                                val decoAlpha = if (nebula || bocina || guitar) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                val topGap = if (nebula) side * 0.16f else if (bocina || xmas) (maxHeight - side) / 2 - 6.dp else if (guitar) 6.dp else 0.dp
+                                val decoAlpha = if (nebula || bocina || guitar || xmas) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
                                 if (guitar && sim != null && beat != null && decoAlpha > 0f) GuitarStage(sim, beat, decoAlpha,
                                     y0 = topGap + side * 0.9f, y1 = maxHeight - 2.dp,
                                     coverRect = Offset(((maxWidth - side) / 2).value, topGap.value) to side.value, accent = accent)
                                 // Bocina y Guitar: deslizar en cualquier parte (no solo en la portada) cambia de canción
-                                if ((bocina || guitar) && p < 0.01f) {
+                                if (xmas && beat != null && decoAlpha > 0f) XmasStageBack(beat, accent, decoAlpha,
+                                    cx = maxWidth / 2, cy = topGap + side / 2, ringR = ringR)
+                                if ((bocina || guitar || xmas) && p < 0.01f) {
                                     Box(Modifier.fillMaxSize().pointerInput(Unit) {
                                         var total = 0f
                                         detectHorizontalDragGestures(
@@ -510,7 +529,7 @@ fun MusicPlayerScreen(
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
                                 CoverArt(
-                                    circle = bocina,
+                                    circle = bocina || xmas,
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
                                     animated = animatedCover,
@@ -554,6 +573,7 @@ fun MusicPlayerScreen(
                                     },
                                     onMenu = { menuOpen = true },
                                 )
+                                if (xmas && beat != null && decoAlpha > 0f) XmasRingFront(beat, decoAlpha, cx = maxWidth / 2, cy = topGap + side / 2, ringR = ringR)
                                 if (nebula && decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverFront(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha, twinkle)
                                 }
@@ -686,6 +706,32 @@ fun MusicPlayerScreen(
                         },
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                } else if (xmas) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        XmasSquareButton(Icons.Filled.Shuffle, "Aleatorio", if (player.shuffleModeEnabled) Xmas.Ice else Color.White.copy(alpha = 0.85f), 52.dp) {
+                            player.shuffleModeEnabled = !player.shuffleModeEnabled }
+                        XmasSquareButton(Icons.Filled.SkipPrevious, "Anterior", size = 56.dp) { player.seekToPrevious() }
+                        XmasPlayButton(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, beat, 80.dp) {
+                            if (player.isPlaying) player.pause() else player.play() }
+                        XmasSquareButton(Icons.Filled.SkipNext, "Siguiente", size = 56.dp, enabled = player.hasNextMediaItem()) { player.seekToNextMediaItem() }
+                        XmasSquareButton(if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, "Repetir",
+                            if (player.repeatMode != Player.REPEAT_MODE_OFF) Xmas.Ice else Color.White.copy(alpha = 0.85f), 52.dp) {
+                            player.repeatMode = when (player.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                        }
+                    }
+                    XmasBottomNav(onSelect = { i ->
+                        when (i) {
+                            0 -> { lyricsMode = false; toQueue() }
+                            1 -> MusicUi.settingsOpen = true
+                            2 -> { MusicUi.settingsPage = "eq"; MusicUi.settingsOpen = true }
+                            3 -> lyricsMode = !lyricsMode
+                        }
+                    }, modifier = Modifier.padding(horizontal = 4.dp))
                 } else if (guitar) {
                     Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
@@ -819,6 +865,7 @@ fun MusicPlayerScreen(
             }
         }
     }
+    if (xfx != null && beat != null) XmasSnowOverlay(xfx, beat, (1f - (if (screenW > 0f) aside.value / screenW else 0f) * 1.6f).coerceIn(0f, 1f))
     // portada volando hacia el mini reproductor
     val flyF = maxOf(closeFly.value, if (screenW > 0f) (aside.value / screenW).coerceIn(0f, 1f) else 0f)
     val from = coverRect

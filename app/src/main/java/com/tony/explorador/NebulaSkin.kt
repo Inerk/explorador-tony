@@ -52,7 +52,7 @@ import kotlin.random.Random
 object Nebula {
     private val orange get() = LibraryStore.musicSkin == MusicSkin.WALKMAN
     /** Tema Bocina: las listas usan este mismo diseño pero en azul. */
-    private val blue get() = LibraryStore.musicSkin == MusicSkin.BOCINA
+    private val blue get() = LibraryStore.musicSkin == MusicSkin.BOCINA || LibraryStore.musicSkin == MusicSkin.NAVIDAD
     val Pink get() = if (orange) Color(0xFFFF8A1F) else if (blue) Color(0xFF3FA0FF) else Color(0xFFFF4F9A)
     val PinkLight get() = if (orange) Color(0xFFFFB45C) else if (blue) Color(0xFF9CD3FF) else Color(0xFFFF8CC6)
     val Purple get() = if (orange) Color(0xFF7B2FF7) else if (blue) Color(0xFF2F6BFF) else Color(0xFF8B5CF6)

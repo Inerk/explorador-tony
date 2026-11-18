@@ -231,8 +231,6 @@ private fun DrawScope.img(b: ImageBitmap, x: Float, y: Float, w: Float, h: Float
 @Composable
 fun GuitarBackground(accent: Color, beat: BocinaBeat, sim: GuitarSim? = null, modifier: Modifier = Modifier) {
     val arena = ImageBitmap.imageResource(R.drawable.gn_arena)
-    val crowdA = ImageBitmap.imageResource(R.drawable.gn_publico_a)
-    val crowdB = ImageBitmap.imageResource(R.drawable.gn_publico_b)
     val crowdC = ImageBitmap.imageResource(R.drawable.gn_publico_c)
     val crowdFar = ImageBitmap.imageResource(R.drawable.gn_publico_lejos)
     val hands = listOf(R.drawable.gn_mano_rock, R.drawable.gn_mano_paz, R.drawable.gn_mano_rock2, R.drawable.gn_mano_abierta,
@@ -290,46 +288,40 @@ fun GuitarBackground(accent: Color, beat: BocinaBeat, sim: GuitarSim? = null, mo
         drawRect(Brush.verticalGradient(listOf(Color.Transparent, Guitar.Night.copy(alpha = 0.9f)), floorY - ah * 0.12f, floorY + h * 0.03f),
             Offset(0f, floorY - ah * 0.12f), Size(w, h))
 
-        // público en 3 capas: lejos (chico, arriba, oscuro) → cerca (grande, abajo, brillante)
-        val jump = beat.bass * 6.dp.toPx() + beat.kick * 5.dp.toPx()
+        // público discreto en 2 filas (atrás más chico y oscuro; adelante un poco más grande), sin manos gigantes
+        val jump = beat.bass * 4.dp.toPx() + beat.kick * 3.dp.toPx()
         fun row(b: ImageBitmap, x: Float, top: Float, width: Float, alpha: Float, j: Float) =
             img(b, x, top - jump * j, width, width * b.height / b.width, alpha)
-        // 1) lejos: pegado al escenario
-        val farW = w * 0.62f
-        row(crowdFar, -farW * 0.10f, floorY - farW * crowdFar.height / crowdFar.width * 0.55f, farW, 0.55f, 0.2f)
-        row(crowdFar, w - farW * 0.90f, floorY - farW * crowdFar.height / crowdFar.width * 0.50f, farW, 0.55f, 0.2f)
-        drawRect(Guitar.Night.copy(alpha = 0.25f), Offset(0f, floorY - h * 0.02f), Size(w, h * 0.06f))
-        // 2) en medio
-        val midW = w * 0.85f; val midTop = floorY + h * 0.03f
-        row(crowdC, -midW * 0.25f, midTop, midW, 0.75f, 0.5f)
-        row(crowdC, w - midW * 0.72f, midTop + h * 0.006f, midW, 0.75f, 0.5f)
-        // manos y barras de luz de la gente de en medio/cerca, que se mecen arriba de sus cabezas
-        val nearW = w * 1.30f
-        val nearTop = midTop + h * 0.10f
-        val people = listOf(0.04f, 0.12f, 0.20f, 0.80f, 0.88f, 0.96f)
+        val farW = w * 0.60f
+        val farTop = floorY - farW * crowdFar.height / crowdFar.width * 0.55f
+        row(crowdFar, -farW * 0.08f, farTop, farW, 0.45f, 0.3f)
+        row(crowdFar, w - farW * 0.92f, farTop + h * 0.004f, farW, 0.45f, 0.3f)
+        val midW = w * 0.72f; val midTop = floorY + h * 0.01f
+        val midH = midW * crowdC.height / crowdC.width
+        // manos y barras de luz chiquitas, del tamaño de la gente de esa fila
+        val people = listOf(0.06f, 0.16f, 0.27f, 0.73f, 0.84f, 0.94f)
         people.forEachIndexed { i, fx ->
             val ph = i * 1.37f
-            val up = (sin(t * 3.2f + ph) * 0.5f + 0.5f) * (0.4f + beat.level) * 9.dp.toPx() + beat.kick * 7.dp.toPx() * (if (i % 2 == 0) 1f else 0.6f)
-            val x = w * fx; val baseY = nearTop + h * 0.02f
+            val up = (sin(t * 3.2f + ph) * 0.5f + 0.5f) * (0.3f + beat.level) * 4.dp.toPx() + beat.kick * 3.dp.toPx()
+            val x = w * fx; val baseY = midTop + midH * 0.35f
             if (i % 2 == 0) {
-                val hand = hands[i % hands.size]; val hw = w * 0.13f; val hh = hw * hand.height / hand.width
-                img(hand, x - hw / 2, baseY - hh - up, hw, hh, 0.95f)
+                val hand = hands[i % hands.size]; val hw = w * 0.045f; val hh = hw * hand.height / hand.width
+                img(hand, x - hw / 2, baseY - hh - up, hw, hh, 0.7f)
             } else {
-                val st = sticks[i % sticks.size]; val sw = w * 0.05f; val sh = sw * st.height / st.width
-                val ang = sin(t * 2.6f + ph) * (14f + beat.level * 18f)
+                val st = sticks[i % sticks.size]; val sw = w * 0.018f; val sh = sw * st.height / st.width
+                val ang = sin(t * 2.6f + ph) * (12f + beat.level * 14f)
                 withTransform({ rotate(ang, Offset(x, baseY - up)) }) {
-                    drawCircle(Brush.radialGradient(listOf(Guitar.Purple.copy(alpha = 0.35f), Color.Transparent), Offset(x, baseY - up - sh * 0.5f), sh * 0.6f),
-                        sh * 0.6f, Offset(x, baseY - up - sh * 0.5f), blendMode = BlendMode.Plus)
-                    img(st, x - sw / 2, baseY - up - sh, sw, sh)
+                    drawCircle(Brush.radialGradient(listOf(Guitar.Purple.copy(alpha = 0.3f), Color.Transparent), Offset(x, baseY - up - sh * 0.5f), sh * 0.7f),
+                        sh * 0.7f, Offset(x, baseY - up - sh * 0.5f), blendMode = BlendMode.Plus)
+                    img(st, x - sw / 2, baseY - up - sh, sw, sh, 0.9f)
                 }
             }
         }
-        // 3) cerca: los más grandes y más abajo, a los lados de la pista
-        row(crowdA, -nearW * 0.40f, nearTop, nearW, 1f, 1f)
-        row(crowdB, w - nearW * 0.60f, nearTop + h * 0.008f, nearW, 1f, 0.85f)
+        row(crowdC, -midW * 0.22f, midTop, midW, 0.7f, 0.7f)
+        row(crowdC, w - midW * 0.78f, midTop + h * 0.004f, midW, 0.7f, 0.7f)
+        val fadeTop = midTop + midH * 0.55f
 
         // se funde suave hacia abajo (sin cortes) y una sombra arriba para leer el nombre
-        val fadeTop = nearTop + nearW * crowdA.height / crowdA.width * 0.75f
         drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Guitar.Night.copy(alpha = 0.85f), 1f to Guitar.Deep, startY = fadeTop, endY = fadeTop + h * 0.10f),
             Offset(0f, fadeTop), Size(w, h - fadeTop))
         drawRect(Brush.verticalGradient(listOf(Guitar.Deep.copy(alpha = 0.55f), Color.Transparent), 0f, h * 0.16f), Offset.Zero, Size(w, h * 0.16f))

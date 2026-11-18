@@ -406,6 +406,7 @@ private val skinInfo = mapOf(
     MusicSkin.NEBULA to SkinInfo("Nebula", "Noche morada y rosa neón"),
     MusicSkin.BOCINA to SkinInfo("Bocina", "Bocina, aro y ondas al ritmo"),
     MusicSkin.GUITAR to SkinInfo("Guitar Nebula", "Escenario y notas que bajan"),
+    MusicSkin.NAVIDAD to SkinInfo("Navidad Nebula", "Noche nevada que sigue tu dedo"),
     MusicSkin.LAVANDA to SkinInfo("Lavanda", "Claro y suave, morado"),
     MusicSkin.ORIGINAL to SkinInfo("Original", "Toma el color de la portada"),
     MusicSkin.MEDIA_PLAYER to SkinInfo("Media Player", "Azul cristal"),
@@ -457,6 +458,10 @@ private fun ThemeCard(sk: MusicSkin, modifier: Modifier) {
 private fun SkinPreview(sk: MusicSkin, modifier: Modifier) {
     val marco = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.bocina_marco)
     val stage = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.gn_escenario)
+    val town = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.nv_pueblo)
+    val ring = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.nv_aro)
+    val logo = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.nv_logo)
+    val tree = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.nv_arbol)
     val gems = listOf(R.drawable.gn_gema_verde, R.drawable.gn_gema_roja, R.drawable.gn_gema_amarilla, R.drawable.gn_gema_azul, R.drawable.gn_gema_naranja)
         .map { androidx.compose.ui.graphics.ImageBitmap.imageResource(it) }
     Canvas(modifier) {
@@ -544,6 +549,24 @@ private fun SkinPreview(sk: MusicSkin, modifier: Modifier) {
                 seek(h * 0.79f, Color(0xFFA35CFF))
                 controls(h * 0.88f, Color.White, Brush.radialGradient(listOf(Color(0xFF2B1F5C), Color(0xFF120D2C))), square = true, btn = Color(0xFF231F45))
                 drawCircle(Color(0xFFA35CFF), w * 0.1f, Offset(w * 0.5f, h * 0.88f), style = Stroke(2.dp.toPx()))
+            }
+            MusicSkin.NAVIDAD -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF07122E), Color(0xFF0A1C45), Color(0xFF12306A))))
+                val tw = w * 2.2f; val th = tw * town.height / town.width
+                drawImage(town, dstOffset = IntOffset((-w * 0.6f).toInt(), (h * 0.36f).toInt()), dstSize = IntSize(tw.toInt(), th.toInt()))
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF0A1C45), Color.Transparent), h * 0.36f, h * 0.36f + th * 0.45f), Offset(0f, h * 0.36f), androidx.compose.ui.geometry.Size(w, th * 0.45f))
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF9FC3EE), Color(0xFF0A1C45)), h * 0.36f + th * 0.9f, h), Offset(0f, h * 0.36f + th * 0.9f), androidx.compose.ui.geometry.Size(w, h))
+                val trw = w * 0.5f; val trh = trw * tree.height / tree.width
+                drawImage(tree, dstOffset = IntOffset((-trw * 0.25f).toInt(), (h * 0.36f + th * 0.9f - trh * 0.8f).toInt()), dstSize = IntSize(trw.toInt(), trh.toInt()))
+                val lw = w * 0.5f; val lh = lw * logo.height / logo.width
+                drawImage(logo, dstOffset = IntOffset(((w - lw) / 2).toInt(), (h * 0.04f).toInt()), dstSize = IntSize(lw.toInt(), lh.toInt()))
+                val cy = h * 0.3f; val r = w * 0.34f
+                coverArt(w / 2 - r * 0.76f, cy - r * 0.76f, r * 1.52f, round = true, c1 = Color(0xFF3DFFC8), c2 = Color(0xFF1A3A8A))
+                drawImage(ring, dstOffset = IntOffset((w / 2 - r).toInt(), (cy - r).toInt()), dstSize = IntSize((r * 2).toInt(), (r * 2).toInt()))
+                repeat(40) { val rr = kotlin.random.Random(it * 13); drawCircle(Color.White.copy(alpha = 0.5f + rr.nextFloat() * 0.5f), 1f + rr.nextFloat() * 2f, Offset(rr.nextFloat() * w, rr.nextFloat() * h)) }
+                seek(h * 0.72f, Color(0xFFCDEBFF))
+                controls(h * 0.82f, Color.White, Brush.radialGradient(listOf(Color(0xFF2A67C0), Color(0xFF0D2552))), square = true, btn = Color(0xFF1F4E92))
+                rr(Color(0xFF1F4E92), w * 0.08f, h * 0.91f, w * 0.84f, h * 0.05f)
             }
             MusicSkin.LAVANDA -> {
                 drawRect(Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF1EBFC))))
