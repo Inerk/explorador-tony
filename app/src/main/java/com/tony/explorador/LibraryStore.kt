@@ -87,7 +87,7 @@ object LibraryStore {
         private set
     var avatarVersion by mutableStateOf(0)
         private set
-    var musicSkin by mutableStateOf(MusicSkin.WALKMAN)
+    var musicSkin by mutableStateOf(MusicSkin.NEBULA)
         private set
 
     val avatarFile get() = File(appContext.filesDir, "avatar.jpg")
@@ -554,6 +554,7 @@ object LibraryStore {
             put("user", userName)
             put("avatar", avatar)
             put("musicSkin", musicSkin.name)
+            put("disenoNebula", true)
             put("windowSkin", windowSkin.name)
             put("wallpaper", wallpaper)
             put("explorerView", explorerView)
@@ -595,6 +596,8 @@ object LibraryStore {
         o.optString("user").takeIf { it.isNotBlank() }?.let { userName = it }
         avatar = o.optInt("avatar", 0)
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }
+        // el diseño Nebula nuevo se pone una vez a todos; después cada quien elige
+        if (!o.optBoolean("disenoNebula")) musicSkin = MusicSkin.NEBULA
         o.optString("windowSkin").let { t -> WindowSkin.entries.firstOrNull { it.name == t }?.let { windowSkin = it } }
         o.optString("wallpaper").takeIf { it.isNotBlank() }?.let { wallpaper = it }
         o.optString("explorerView").takeIf { it.isNotBlank() }?.let { explorerView = it }

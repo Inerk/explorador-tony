@@ -125,6 +125,10 @@ androidComponents {
     onVariants(selector().withFlavor("app" to "musica")) { v ->
         v.packaging.jniLibs.excludes.add("**/libmlkit_google_ocr_pipeline.so")
     }
+    // DriveNebula ya no trae el reproductor: sin el traductor de letras (pesa ~50 MB entre todos los procesadores)
+    onVariants(selector().withFlavor("app" to "nebula")) { v ->
+        v.packaging.jniLibs.excludes.add("**/libtranslate_jni.so")
+    }
     // Control Nebula tampoco traduce letras
     onVariants(selector().withFlavor("app" to "control")) { v ->
         v.packaging.jniLibs.excludes.add("**/libmlkit_google_ocr_pipeline.so")

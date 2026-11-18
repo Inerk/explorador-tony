@@ -69,6 +69,8 @@ object AppNav {
     var openWeb: () -> Unit = {}
     /** Buscar actualización a mano (botón de Nebula Música). */
     var checkUpdates: () -> Unit = {}
+    /** Canción que mandó DriveNebula para abrir en Nebula Música. */
+    var openPath by androidx.compose.runtime.mutableStateOf<String?>(null)
     var openFile: (java.io.File) -> Unit = {}
     /** Sube cuando la app se abre desde el icono «Música Tony». */
     /** Cuando un archivo cambia de nombre y está en la cola del reproductor. */

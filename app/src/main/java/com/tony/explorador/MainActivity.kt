@@ -79,7 +79,10 @@ class MainActivity : ComponentActivity() {
 
     /** Si se abrió desde el icono «Música Tony», entra directo a la música. */
     private fun checkMusicLaunch(intent: android.content.Intent?) {
-        if (IS_MUSIC_APP) { AppNav.musicLaunch++; return }
+        if (IS_MUSIC_APP) {
+            intent?.getStringExtra("abrir_ruta")?.let { AppNav.openPath = it }
+            AppNav.musicLaunch++; return
+        }
         if (intent?.component?.className?.endsWith("MusicAlias") == true) AppNav.musicLaunch++
         if (intent?.component?.className?.endsWith("RemoteAlias") == true) RemoteUi.open = true
     }
@@ -89,6 +92,20 @@ class MainActivity : ComponentActivity() {
 val IS_MUSIC_APP = BuildConfig.FLAVOR == "musica"
 /** true en «Control Nebula» (solo el control remoto del NAS). */
 val IS_CONTROL_APP = BuildConfig.FLAVOR == "control"
+/** DriveNebula (la completa): la música se abre en Nebula Música. */
+val IS_DRIVE_APP get() = !IS_MUSIC_APP && !IS_CONTROL_APP
+
+/** Abre Nebula Música (con la canción que estaba sonando); si no está instalada, manda a la Tienda. */
+fun openMusicApp(c: android.content.Context, path: String?) {
+    val i = c.packageManager.getLaunchIntentForPackage("com.tony.explorador.musica")
+    if (i == null) {
+        android.widget.Toast.makeText(c, "Instala Nebula Música desde la Tienda Nebula", android.widget.Toast.LENGTH_LONG).show()
+        StoreUi.open = true; return
+    }
+    path?.let { i.putExtra("abrir_ruta", it) }
+    i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    c.startActivity(i)
+}
 /** Las apps que se actualizan desde el NAS. */
 val IS_NAS_APP = IS_MUSIC_APP || IS_CONTROL_APP
 
@@ -172,6 +189,13 @@ fun AppRoot() {
     val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
     val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }
     fun open(o: Overlay) {
+        // DriveNebula ya no trae el reproductor: la música vive en Nebula Música
+        if (IS_DRIVE_APP && (o == Overlay.Library || o == Overlay.Music || o == Overlay.CoverFlow)) {
+            val path = controller?.takeIf { it.mediaItemCount > 0 }?.currentMediaItem?.mediaId
+            controller?.pause()
+            openMusicApp(context, path)
+            return
+        }
         overlays.remove(o); overlays.add(o)
         overlayStates[o] = androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
     }
@@ -221,6 +245,16 @@ fun AppRoot() {
     }
     // en la app de música, si no queda nada abierto, vuelve la biblioteca
     LaunchedEffect(overlays.isEmpty()) { if (IS_MUSIC_APP && overlays.isEmpty()) open(Overlay.Library) }
+    // Nebula Música: abrir la canción que mandó DriveNebula (con las demás de su carpeta)
+    LaunchedEffect(AppNav.openPath, controller) {
+        val p = AppNav.openPath ?: return@LaunchedEffect
+        val c = controller ?: return@LaunchedEffect
+        AppNav.openPath = null
+        val f = java.io.File(p)
+        val list = f.parentFile?.listFiles()?.filter { it.isFile && it.kind() == FileKind.AUDIO }?.sortedBy { it.name.lowercase() } ?: listOf(f)
+        playMusic(c, list, list.indexOfFirst { it.path == f.path }.coerceAtLeast(0))
+        open(Overlay.Music)
+    }
     var folderRequest by remember { mutableStateOf<File?>(null) }
     var libraryRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
     fun goTo(kind: String, value: String) {

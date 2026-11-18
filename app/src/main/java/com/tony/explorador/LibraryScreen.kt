@@ -110,6 +110,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -335,7 +336,8 @@ fun LibraryScreen(
                 HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) { Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.Text) }
             }
-        } else Box(Modifier.fillMaxWidth().background(Retro.metal).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
+        } else if (Retro.isNebula) NebulaListHeader(pageTitle(page), songs.size, onBack = { pop() }, onRefresh = { scope.launch { LibraryStore.scan() } })
+        else Box(Modifier.fillMaxWidth().background(Retro.metal).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -361,7 +363,7 @@ fun LibraryScreen(
             }
         }
         // franja naranja
-        if (!clean) Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
+        if (!clean && !Retro.isNebula) Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Retro.Orange, Retro.OrangeLight, Retro.Orange))))
         if (LibraryStore.scanning) {
             LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Retro.Orange, trackColor = Retro.Panel)
         }
@@ -642,6 +644,7 @@ private fun RecentCard(song: Song, modifier: Modifier, onClick: () -> Unit) {
 
 @Composable
 private fun PlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, extra: @Composable () -> Unit = {}) {
+    if (Retro.isNebula) { NebulaPlayBar(songs, onPlay, extra); return }
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(
             Modifier.clip(CircleShape).background(Retro.Orange).clickable(enabled = songs.isNotEmpty()) { onPlay(songs, 0, false) }
@@ -725,9 +728,14 @@ private fun rememberSongSearch(songs: List<Song>, q: String, field: String): Sea
 @Composable
 private fun LibSearchField(value: String, onChange: (String) -> Unit, hint: String) {
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val neb = Retro.isNebula
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(44.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Text.copy(alpha = 0.09f)).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (neb) 8.dp else 6.dp).height(if (neb) 52.dp else 44.dp)
+            .clip(RoundedCornerShape(if (neb) 26.dp else 14.dp))
+            .then(if (neb) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.06f))))
+                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(26.dp))
+                else Modifier.background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Text.copy(alpha = 0.09f)))
+            .padding(horizontal = if (neb) 18.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Filled.Search, null, tint = Retro.SubText, modifier = Modifier.size(20.dp))
@@ -923,7 +931,12 @@ private fun SongListInner(
                     }
                 }
             }
-            if (alphabet && songs.size > 25) AlphabetScroller(letters) { target ->
+            val currentLetter by remember(letters) { derivedStateOf {
+                val first = if (isGrid) gridState.firstVisibleItemIndex else listState.firstVisibleItemIndex
+                letters.entries.lastOrNull { it.value <= first + 1 }?.key
+            } }
+            if (alphabet && songs.size > 25) AlphabetScroller(letters, current = if (Retro.isNebula) currentLetter else null, glass = Retro.isNebula,
+                activeColor = if (Retro.isNebula) Nebula.Purple else Retro.Orange, textColor = Retro.Text, dimColor = Retro.SubText.copy(alpha = 0.4f)) { target ->
                 scope.launch { if (isGrid) gridState.scrollToItem(target) else listState.scrollToItem(target) }
             }
         }
@@ -1454,7 +1467,8 @@ fun letterOf(text: String): String {
 
 @Composable
 fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text, activeColor: Color = Retro.Orange,
-                     dimColor: Color = Retro.SubText.copy(alpha = 0.4f), panelColor: Color = Retro.Panel.copy(alpha = 0.7f), onJump: (Int) -> Unit) {
+                     dimColor: Color = Retro.SubText.copy(alpha = 0.4f), panelColor: Color = Retro.Panel.copy(alpha = 0.7f),
+                     current: String? = null, glass: Boolean = false, onJump: (Int) -> Unit) {
     var active by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     fun jump(y: Float, h: Int) {
@@ -1468,8 +1482,11 @@ fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text
     Box(Modifier.fillMaxSize()) {
         Column(
             // tira delgada; el área para tocar es un poquito más ancha que lo que se ve
-            Modifier.align(Alignment.CenterEnd).padding(top = 8.dp, bottom = 8.dp)
-                .fillMaxHeight(0.92f).width(22.dp)
+            Modifier.align(Alignment.CenterEnd).padding(top = 8.dp, bottom = 8.dp, end = if (glass) 4.dp else 0.dp)
+                .fillMaxHeight(if (glass) 0.86f else 0.92f).width(if (glass) 26.dp else 22.dp)
+                .then(if (glass) Modifier.clip(RoundedCornerShape(13.dp))
+                    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))))
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(13.dp)).padding(vertical = 6.dp) else Modifier)
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -1484,9 +1501,17 @@ fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text
                     }
                 },
             verticalArrangement = Arrangement.SpaceEvenly,
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = if (glass) Alignment.CenterHorizontally else Alignment.End
         ) {
             LETTERS.forEach { l ->
+                if (glass) {
+                    val on = l == (active ?: current)
+                    Box(Modifier.size(18.dp).clip(CircleShape).background(if (on) activeColor else Color.Transparent), contentAlignment = Alignment.Center) {
+                        Text(l, fontSize = 9.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = when {
+                            on -> Color.White; l in firstIndex -> textColor; else -> dimColor })
+                    }
+                    return@forEach
+                }
                 Text(
                     l, fontSize = 8.sp, lineHeight = 9.sp, fontWeight = FontWeight.Bold,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -2097,4 +2122,70 @@ private fun NasFolderPicker(onClose: () -> Unit) {
         },
         confirmButton = { androidx.compose.material3.TextButton(enabled = path.isNotEmpty(), onClick = { NasSync.useFolder(path); onClose() }) { Text("Usar esta carpeta") } },
         dismissButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("Cancelar") } })
+}
+
+
+// ───────── Diseño Nebula de las listas (cristal, planeta y botones con brillo) ─────────
+
+@Composable
+private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRefresh: () -> Unit) {
+    Box(Modifier.fillMaxWidth()) {
+        // el planeta que asoma arriba a la derecha
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            val c = androidx.compose.ui.geometry.Offset(size.width * 1.05f, -size.height * 0.55f)
+            val r = size.height * 1.25f
+            drawCircle(Brush.radialGradient(listOf(Nebula.Purple.copy(alpha = 0.45f), Color.Transparent), c, r * 1.35f), r * 1.35f, c)
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF1A0F3D), Color(0xFF2B1666)), c, r), r, c)
+            drawCircle(Brush.sweepGradient(listOf(Nebula.Violet, Nebula.Pink, Color(0xFF8FD3FF), Nebula.Violet), c), r, c,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx()))
+        }
+        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+            .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            NebulaSquareButton(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", onBack)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("♪ " + java.text.NumberFormat.getIntegerInstance(Locale.US).format(count) + " canciones", color = Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
+            }
+            NebulaSquareButton(Icons.Filled.Refresh, "Volver a buscar", onRefresh)
+        }
+    }
+}
+
+@Composable
+private fun NebulaSquareButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp))
+        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f))))
+        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, label, tint = Color.White, modifier = Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun NebulaPlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, extra: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1.1f).height(52.dp).shadow(14.dp, CircleShape, ambientColor = Nebula.Purple, spotColor = Nebula.Purple).clip(CircleShape)
+            .background(Brush.horizontalGradient(listOf(Color(0xFF4F7BFF), Color(0xFF8B5CF6), Color(0xFFC85CFF))))
+            .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+            .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, 0, false) }, verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center) {
+            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Row(Modifier.weight(1f).height(52.dp).clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))))
+            .border(1.5.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+            .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, (songs.indices).random(), true) }, verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center) {
+            Icon(Icons.Filled.Shuffle, null, tint = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text("Aleatorio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.size(52.dp).clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape), contentAlignment = Alignment.Center) { extra() }
+    }
 }
