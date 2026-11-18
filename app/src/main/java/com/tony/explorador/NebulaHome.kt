@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.SdStorage
@@ -214,6 +215,7 @@ fun NebulaHome(
                 }
                 LocationRow(null, "NAS · Música", "Control remoto de tus bocinas", onRemote)
                 LocationRow(Icons.Filled.Home, "Casa", "Focos, aires, teles y aspiradora", onClick = { HomeUi.open = true })
+                LocationRow(Icons.Filled.Storefront, "Tienda Nebula", "Instala Nebula Música y tus otras apps", onClick = { StoreUi.open = true })
                 Spacer(Modifier.height(16.dp))
             }
             // barra de abajo

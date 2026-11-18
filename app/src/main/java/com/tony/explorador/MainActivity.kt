@@ -502,6 +502,11 @@ fun AppRoot() {
             exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
             HomeControlScreen { HomeUi.open = false }
         }
+        androidx.compose.animation.AnimatedVisibility(StoreUi.open && !IS_MUSIC_APP,
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()) {
+            NebulaStoreScreen { StoreUi.open = false }
+        }
 
         UpdateDialog(
             state = UpdateCenter.state,
