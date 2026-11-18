@@ -92,10 +92,10 @@ import kotlinx.coroutines.launch
  */
 
 private object SC {
-    val accent = Color(0xFF8B5CF6)
-    val accent2 = Color(0xFFB57BFF)
+    val accent get() = Nebula.Purple
+    val accent2 get() = Nebula.Violet
     val text = Color.White
-    val sub = Color(0xFFB9ABDA)
+    val sub get() = Nebula.Sub
     val line = Color.White.copy(alpha = 0.08f)
 }
 
@@ -114,7 +114,7 @@ fun MusicSettingsScreen(onClose: () -> Unit) {
     remember { AudioFx.init(ctx); 0 }
     var page by remember { mutableStateOf(if (MusicUi.settingsPage == "eq") SPage.Eq else SPage.Main).also { MusicUi.settingsPage = null } }
     BackHandler { if (page != SPage.Main) page = SPage.Main else onClose() }
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF1B1038), Color(0xFF120B26), Color(0xFF080512))))) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Nebula.Top, Nebula.Night, Nebula.Deep)))) {
         NebulaBackground(Modifier.fillMaxSize())
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             SettingsHeader(page) { if (page != SPage.Main) page = SPage.Main else onClose() }
@@ -146,8 +146,8 @@ private fun SettingsHeader(page: SPage, onBack: () -> Unit) {
         Canvas(Modifier.matchParentSizeSafe()) {
             val c = Offset(size.width * 1.02f, -size.height * 0.9f); val r = size.height * 2.1f
             drawCircle(Brush.radialGradient(listOf(SC.accent.copy(alpha = 0.40f), Color.Transparent), c, r * 1.35f), r * 1.35f, c)
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF1A0F3D), Color(0xFF2B1666)), c, r), r, c)
-            drawCircle(Brush.sweepGradient(listOf(SC.accent2, Color(0xFFFF4F9A), Color(0xFF8FD3FF), SC.accent2), c), r, c,
+            drawCircle(Brush.radialGradient(listOf(Nebula.Night, Nebula.Purple.copy(alpha = 0.5f)), c, r), r, c)
+            drawCircle(Brush.sweepGradient(listOf(SC.accent2, Nebula.Pink, Color(0xFF8FD3FF), SC.accent2), c), r, c,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -180,7 +180,7 @@ private fun Toggle(on: Boolean, onChange: (Boolean) -> Unit) {
 private fun SectionCard(icon: ImageVector, title: String, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).card().padding(vertical = 8.dp)) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(28.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(SC.accent, Color(0xFF5B7CFF)))),
+            Box(Modifier.size(28.dp).clip(RoundedCornerShape(9.dp)).background(Brush.linearGradient(listOf(SC.accent, Nebula.Blue))),
                 contentAlignment = Alignment.Center) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(17.dp)) }
             Spacer(Modifier.width(10.dp))
             Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -314,7 +314,7 @@ private fun PresetChip(name: String, modifier: Modifier) {
     val on = AudioFx.eqOn && AudioFx.preset == name
     Text(name, color = Color.White, fontSize = 11.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, maxLines = 1,
         textAlign = androidx.compose.ui.text.style.TextAlign.Center, overflow = TextOverflow.Ellipsis,
-        modifier = modifier.clip(CircleShape).background(if (on) Brush.linearGradient(listOf(SC.accent, Color(0xFF5B7CFF))) else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.05f))))
+        modifier = modifier.clip(CircleShape).background(if (on) Brush.linearGradient(listOf(SC.accent, Nebula.Blue)) else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.05f))))
             .clickable { AudioFx.usePreset(name) }.padding(vertical = 8.dp, horizontal = 4.dp))
 }
 
@@ -331,7 +331,7 @@ private fun BandSlider(value: Int, min: Int, max: Int, modifier: Modifier, onCha
         val frac = (max - value).toFloat() / (max - min)
         val y = size.height * frac; val zero = size.height * (max.toFloat() / (max - min))
         drawLine(Color.White.copy(alpha = 0.12f), Offset(cx, 0f), Offset(cx, size.height), w, StrokeCap.Round)
-        drawLine(Brush.verticalGradient(listOf(Color(0xFFFF4F9A), SC.accent, Color(0xFF5B7CFF))), Offset(cx, zero), Offset(cx, y), w, StrokeCap.Round)
+        drawLine(Brush.verticalGradient(listOf(Nebula.Pink, SC.accent, Nebula.Blue)), Offset(cx, zero), Offset(cx, y), w, StrokeCap.Round)
         drawCircle(SC.accent2.copy(alpha = 0.35f), 11.dp.toPx(), Offset(cx, y))
         drawCircle(Color.White, 7.dp.toPx(), Offset(cx, y))
     }

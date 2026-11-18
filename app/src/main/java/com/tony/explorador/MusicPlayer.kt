@@ -1285,7 +1285,7 @@ private fun NebulaMiniPlayerBar(player: Player, cover: android.graphics.Bitmap?,
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
         .then(if (light) Modifier.shadow(12.dp, shape, ambientColor = Color(0x447C4DDB), spotColor = Color(0x447C4DDB)) else Modifier).clip(shape)
         .background(if (light) androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFFF4F0FF).copy(alpha = 0.95f)))
-            else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2A1F55).copy(alpha = 0.92f), Color(0xFF16102E).copy(alpha = 0.95f))))
+            else androidx.compose.ui.graphics.Brush.verticalGradient(if (isBocinaSkin) listOf(Color(0xFF22375A).copy(alpha = 0.92f), Color(0xFF0E1A30).copy(alpha = 0.95f)) else listOf(Color(0xFF2A1F55).copy(alpha = 0.92f), Color(0xFF16102E).copy(alpha = 0.95f))))
         .border(1.dp, if (light) androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White, Color(0x33B79BF2)))
             else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.28f), Nebula.Purple.copy(alpha = 0.25f))), shape)
         .clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
