@@ -555,7 +555,7 @@ private fun SkinPreview(sk: MusicSkin, modifier: Modifier) {
                 val tw = w * 2.2f; val th = tw * town.height / town.width
                 drawImage(town, dstOffset = IntOffset((-w * 0.6f).toInt(), (h * 0.36f).toInt()), dstSize = IntSize(tw.toInt(), th.toInt()))
                 drawRect(Brush.verticalGradient(listOf(Color(0xFF0A1C45), Color.Transparent), h * 0.36f, h * 0.36f + th * 0.45f), Offset(0f, h * 0.36f), androidx.compose.ui.geometry.Size(w, th * 0.45f))
-                drawRect(Brush.verticalGradient(listOf(Color(0xFF9FC3EE), Color(0xFF0A1C45)), h * 0.36f + th * 0.9f, h), Offset(0f, h * 0.36f + th * 0.9f), androidx.compose.ui.geometry.Size(w, h))
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF5F86C0), Color(0xFF13285A), Color(0xFF07122E)), h * 0.36f + th * 0.9f, h), Offset(0f, h * 0.36f + th * 0.9f), androidx.compose.ui.geometry.Size(w, h))
                 val trw = w * 0.5f; val trh = trw * tree.height / tree.width
                 drawImage(tree, dstOffset = IntOffset((-trw * 0.25f).toInt(), (h * 0.36f + th * 0.9f - trh * 0.8f).toInt()), dstSize = IntSize(trw.toInt(), trh.toInt()))
                 val lw = w * 0.5f; val lh = lw * logo.height / logo.width

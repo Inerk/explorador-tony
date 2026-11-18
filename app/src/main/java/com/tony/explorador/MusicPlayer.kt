@@ -496,7 +496,7 @@ fun MusicPlayerScreen(
                                 // la portada viaja de su lugar grande a la esquina de la lista
                                 // Bocina: la bocina ocupa casi todo y la portada queda en su centro
                                 val speakerR = minOf(maxWidth * 0.36f, maxHeight * 0.38f)
-                                val ringR = minOf(maxWidth * 0.40f, maxHeight * 0.44f)
+                                val ringR = minOf(maxWidth * 0.36f, maxHeight * 0.42f)
                                 val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f else if (xmas) ringR * 1.52f
                                     else if (guitar) minOf(maxWidth * 0.42f, maxHeight * 0.34f) else minOf(maxWidth, maxHeight)
                                 val topGap = if (nebula) side * 0.16f else if (bocina || xmas) (maxHeight - side) / 2 - 6.dp else if (guitar) 6.dp else 0.dp

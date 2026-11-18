@@ -171,34 +171,39 @@ fun XmasBackground(accent: Color, beat: BocinaBeat, fx: XmasFx, modifier: Modifi
             val tw = 0.35f + 0.65f * ((sin(t * (1.2f + p * 2f) + p * 20f) + 1f) / 2f)
             drawCircle(Color.White.copy(alpha = 0.7f * tw), (0.7f + s * 1.3f).dp.toPx(), Offset(x * w, y * h))
         }
-        // aurora que ondula y brilla más con la música
+        // aurora: cortinas de luz suaves que ondulan y brillan más con la música
+        val step = 3.dp.toPx()
         for (k in 0 until 2) {
-            val base = h * (0.10f + k * 0.06f); val amp = h * 0.03f
-            val top = Path(); val steps = 40
-            for (s in 0..steps) {
-                val x = w * s / steps
+            val base = h * (0.09f + k * 0.05f); val amp = h * 0.025f
+            val c = if (k == 0) Color(0xFF3DFFC8) else Color(0xFF7A8CFF)
+            val a = (0.10f + beat.level * 0.12f + beat.bass * 0.06f)
+            var x = 0f
+            while (x <= w) {
                 val y = base + sin(x / w * 5f + t * (0.35f + k * 0.2f) + k) * amp + sin(x / w * 11f - t * 0.5f) * amp * 0.3f
-                if (s == 0) top.moveTo(x, y) else top.lineTo(x, y)
+                val len = h * (0.07f + 0.04f * (0.5f + 0.5f * sin(x / w * 17f + t * 0.8f + k)))
+                val fade = (0.35f + 0.65f * sin(PI.toFloat() * x / w)).coerceAtLeast(0f)
+                drawLine(Brush.verticalGradient(0f to Color.Transparent, 0.25f to c.copy(alpha = a * fade), 1f to Color.Transparent, startY = y - len * 0.25f, endY = y + len),
+                    Offset(x, y - len * 0.25f), Offset(x, y + len), step * 1.1f, blendMode = BlendMode.Plus)
+                x += step
             }
-            top.lineTo(w, base + h * 0.14f); top.lineTo(0f, base + h * 0.14f); top.close()
-            val c = if (k == 0) Color(0xFF3DFFC8) else Color(0xFF6B8CFF)
-            val a = 0.16f + beat.level * 0.18f + beat.bass * 0.08f
-            drawPath(top, Brush.verticalGradient(listOf(Color.Transparent, c.copy(alpha = a), Color.Transparent), base - amp, base + h * 0.14f), blendMode = BlendMode.Plus)
         }
         drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.18f), Color.Transparent), Offset(w / 2, h * 0.3f), w * 0.8f), w * 0.8f, Offset(w / 2, h * 0.3f))
 
         // el pueblito con la aurora (se funde con el cielo); las ventanas brillan más con la música
         val tw = w * 2.2f; val th = tw * town.height / town.width; val ty = h * 0.40f
+        // el pueblito se desvanece hacia arriba con una máscara (sin cuadro de otro color)
+        drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, ty, w, ty + th), androidx.compose.ui.graphics.Paint())
         img(town, (w - tw) / 2f, ty, tw, th, 0.95f)
-        drawRect(Brush.verticalGradient(listOf(Xmas.Sky, Color.Transparent), ty, ty + th * 0.45f), Offset(0f, ty), Size(w, th * 0.45f))
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), ty, ty + th * 0.5f), Offset(0f, ty), Size(w, th), blendMode = BlendMode.DstIn)
+        drawContext.canvas.restore()
         drawRect(Xmas.Warm.copy(alpha = 0.05f + beat.level * 0.10f), Offset(0f, ty + th * 0.5f), Size(w, th * 0.5f), blendMode = BlendMode.Plus)
         // piso nevado y lomas abajo
         val ground = ty + th * 0.92f
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF9FC3EE), Color(0xFF2B4E8C), Xmas.Night), ground, h), Offset(0f, ground), Size(w, h - ground))
+        drawRect(Brush.verticalGradient(0f to Color(0xFF6E93C9), 0.12f to Color(0xFF274A86), 0.5f to Color(0xFF13285A), 1f to Xmas.Night, startY = ground, endY = h), Offset(0f, ground), Size(w, h - ground))
         for (k in 0 until 3) {
             val cx = w * (0.15f + k * 0.38f); val cy = h * (1.02f - (k % 2) * 0.02f); val r = w * (0.45f + k * 0.05f)
             withTransform({ scale(1f, 0.22f, Offset(cx, cy)) }) {
-                drawCircle(Brush.radialGradient(listOf(Xmas.Snow.copy(alpha = 0.95f), Color(0xFFB9D6F5).copy(alpha = 0.7f), Color.Transparent), Offset(cx, cy - r * 0.2f), r), r, Offset(cx, cy))
+                drawCircle(Brush.radialGradient(listOf(Xmas.Snow.copy(alpha = 0.75f), Color(0xFF8FB4E6).copy(alpha = 0.5f), Color.Transparent), Offset(cx, cy - r * 0.2f), r), r, Offset(cx, cy))
             }
         }
         // árbol, regalos y farol a la izquierda; el farol titila con la música
@@ -233,9 +238,9 @@ fun XmasBackground(accent: Color, beat: BocinaBeat, fx: XmasFx, modifier: Modifi
         img(holly, p1.x - hw * 0.5f, p1.y - hh * 0.2f, hw, hh)
         // esfera de cristal colgando que se mece con los bajos
         val ang = sin(t * 1.4f) * 8f + beat.bass * 6f
-        val anchor = Offset(w * 0.13f, h * 0.075f)
+        val anchor = Offset(w * 0.27f, h * 0.045f)
         rotate(ang, anchor) {
-            val bc = Offset(anchor.x, anchor.y + h * 0.09f); val br = w * 0.075f
+            val bc = Offset(anchor.x, anchor.y + h * 0.075f); val br = w * 0.06f
             drawLine(Color.White.copy(alpha = 0.5f), anchor, Offset(bc.x, bc.y - br), 1.dp.toPx())
             drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.25f), Xmas.Blue.copy(alpha = 0.25f), Color(0xFF0E2A5C).copy(alpha = 0.6f)), bc, br), br, bc)
             drawCircle(Xmas.Ice.copy(alpha = 0.7f), br, bc, style = Stroke(1.2.dp.toPx()))
@@ -253,7 +258,7 @@ fun DrawScope.drawXmasStageBack(beat: BocinaBeat, accent: Color, alpha: Float, c
     val haloR = ringR * (1.5f + beat.bass * 0.2f)
     drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = (0.30f + beat.bass * 0.3f) * alpha), Color.Transparent), Offset(cx, cy), haloR), haloR, Offset(cx, cy))
     // barras a los lados
-    val n = 9; val gap = 7.dp.toPx(); val bw = 3.5.dp.toPx()
+    val n = 7; val gap = 6.dp.toPx(); val bw = 3.dp.toPx()
     for (side in listOf(-1f, 1f)) for (i in 0 until n) {
         val x = cx + side * (ringR * 1.10f + i * gap)
         val band = beat.bandAt(i / (n - 1f) * 0.85f)
