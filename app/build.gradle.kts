@@ -60,6 +60,8 @@ android {
             applicationIdSuffix = ".musica"
             versionCode = musicaBuild
             versionName = "1.0.$musicaBuild"
+            // solo para teléfonos de 64 bits (todos los actuales): sin las piezas para emuladores y celulares viejos
+            ndk { abiFilters += "arm64-v8a" }
         }
     }
     lint {
@@ -107,4 +109,12 @@ dependencies {
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+}
+
+// Nebula Música no usa la búsqueda de texto en fotos: fuera esas piezas (unos 12 MB)
+androidComponents {
+    onVariants(selector().withFlavor("app" to "musica")) { v ->
+        v.packaging.jniLibs.excludes.add("**/libmlkit_google_ocr_pipeline.so")
+        v.packaging.resources.excludes.add("assets/mlkit-google-ocr-models/**")
+    }
 }

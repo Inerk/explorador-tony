@@ -62,6 +62,29 @@ fun currentVersionCode(context: Context): Long =
 fun currentVersionName(context: Context): String =
     context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
 
+/** Nebula Música se actualiza desde el NAS (solo dentro del Wi-Fi de la casa). */
+private const val NAS_UPDATES = "http://192.168.3.74:8087"
+
+suspend fun fetchNasRelease(): UpdateInfo = withContext(Dispatchers.IO) {
+    val conn = (URL("$NAS_UPDATES/version.json").openConnection() as HttpURLConnection).apply {
+        connectTimeout = 5_000; readTimeout = 8_000
+    }
+    try {
+        if (conn.responseCode != 200) error("El NAS respondió ${conn.responseCode}")
+        val j = JSONObject(conn.inputStream.bufferedReader().readText())
+        UpdateInfo(
+            versionCode = j.getLong("code"),
+            tag = "v" + j.optString("name", j.getLong("code").toString()),
+            notes = j.optString("notas", "").trim(),
+            apkUrl = "$NAS_UPDATES/" + j.optString("apk", "Nebula-Musica.apk"),
+            size = j.optLong("size"),
+        )
+    } finally { conn.disconnect() }
+}
+
+/** Pregunta a GitHub (o al NAS en la app de música) cuál es la última versión publicada. */
+suspend fun fetchLatestForThisApp(): UpdateInfo = if (IS_MUSIC_APP) fetchNasRelease() else fetchLatestRelease()
+
 /** Pregunta a GitHub cuál es la última versión publicada. */
 suspend fun fetchLatestRelease(): UpdateInfo = withContext(Dispatchers.IO) {
     val conn = (URL(LATEST_URL).openConnection() as HttpURLConnection).apply {

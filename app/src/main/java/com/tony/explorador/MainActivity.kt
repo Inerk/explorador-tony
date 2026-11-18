@@ -266,7 +266,7 @@ fun AppRoot() {
         scope.launch {
             if (manual) UpdateCenter.state = UpdateState.Checking
             try {
-                val info = fetchLatestRelease()
+                val info = fetchLatestForThisApp()
                 UpdateBadge.available = info.versionCode > currentVersionCode(context)
                 UpdateCenter.state = when {
                     info.versionCode > currentVersionCode(context) -> UpdateState.Available(info)
@@ -274,7 +274,7 @@ fun AppRoot() {
                     else -> UpdateState.Idle
                 }
             } catch (e: Exception) {
-                if (manual) UpdateCenter.state = UpdateState.Error("Revisa tu conexión a internet.\n(${e.message})")
+                if (manual) UpdateCenter.state = UpdateState.Error(if (IS_MUSIC_APP) "Las actualizaciones vienen del NAS: conéctate al Wi-Fi de la casa.\n(${e.message})" else "Revisa tu conexión a internet.\n(${e.message})")
             }
         }
     }
@@ -289,7 +289,7 @@ fun AppRoot() {
         }
     }
 
-    LaunchedEffect(Unit) { if (!IS_MUSIC_APP) checkUpdates(manual = false) }
+    LaunchedEffect(Unit) { checkUpdates(manual = false) }
     // búsqueda automática de carátulas (si está activada), un ratito después de abrir
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(20_000)
