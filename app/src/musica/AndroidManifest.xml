@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools">
     <application>
         <!-- En la app de música solo hay un icono: el de la música -->
-        <activity-alias android:name=".MusicAlias" tools:node="remove" />
         <activity-alias android:name=".RemoteAlias" tools:node="remove" />
     </application>
 </manifest>

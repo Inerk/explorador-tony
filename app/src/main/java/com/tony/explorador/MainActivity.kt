@@ -290,6 +290,8 @@ fun AppRoot() {
     }
 
     LaunchedEffect(Unit) { checkUpdates(manual = false) }
+    AppNav.checkUpdates = { checkUpdates(manual = true) }
+    AppVersion.name = versionName
     // búsqueda automática de carátulas (si está activada), un ratito después de abrir
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(20_000)

@@ -563,7 +563,9 @@ private fun MainMenu(
         Entry("Sincronizar con NAS", if (NasSync.running) "sincronizando…" else "", Icons.Filled.CloudSync, LibPage.Nas),
         Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null, action = { skinDialog = true }),
         Entry("Ajustes", "", Icons.Filled.Settings, null, action = { MusicUi.settingsOpen = true }),
-    )
+    ) + (if (IS_MUSIC_APP) listOf(Entry("Buscar actualización",
+        when (UpdateCenter.state) { is UpdateState.Checking -> "buscando…"; is UpdateState.Available -> "¡hay nueva!"; else -> "v" + AppVersion.name },
+        Icons.Filled.CloudDownload, null, action = { AppNav.checkUpdates() })) else emptyList())
     val accent = Retro.Orange
     val divider = Retro.Text.copy(alpha = 0.10f)
 

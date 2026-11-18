@@ -62,6 +62,9 @@ fun currentVersionCode(context: Context): Long =
 fun currentVersionName(context: Context): String =
     context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
 
+/** Versión instalada (para mostrarla en el botón de actualizar). */
+object AppVersion { var name = "" }
+
 /** Nebula Música se actualiza desde el NAS (solo dentro del Wi-Fi de la casa). */
 private const val NAS_UPDATES = "http://192.168.3.74:8087"
 

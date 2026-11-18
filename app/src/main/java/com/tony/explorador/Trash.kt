@@ -67,6 +67,8 @@ import java.io.File
 object AppNav {
     var openTrash: () -> Unit = {}
     var openWeb: () -> Unit = {}
+    /** Buscar actualización a mano (botón de Nebula Música). */
+    var checkUpdates: () -> Unit = {}
     var openFile: (java.io.File) -> Unit = {}
     /** Sube cuando la app se abre desde el icono «Música Tony». */
     /** Cuando un archivo cambia de nombre y está en la cola del reproductor. */
