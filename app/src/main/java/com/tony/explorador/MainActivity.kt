@@ -526,7 +526,11 @@ fun AppRoot() {
             if (LibraryStore.lyricsPlace == "float") FloatingLyricsWindow(c, Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = 56.dp))
             MusicUi.syncLyricsFor?.let { p -> LyricsSyncEditor(p, c) { MusicUi.syncLyricsFor = null } }
         }
-        if (MusicUi.settingsOpen) MusicSettingsDialog { MusicUi.settingsOpen = false }
+        androidx.compose.animation.AnimatedVisibility(MusicUi.settingsOpen,
+            enter = androidx.compose.animation.slideInHorizontally { it / 3 } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutHorizontally { it / 3 } + androidx.compose.animation.fadeOut()) {
+            MusicSettingsScreen { MusicUi.settingsOpen = false }
+        }
 
         // lo que se está mandando a la TV
         CastControlBar(Modifier.align(androidx.compose.ui.Alignment.BottomCenter))

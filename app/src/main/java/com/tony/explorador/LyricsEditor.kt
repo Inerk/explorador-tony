@@ -94,6 +94,8 @@ object MusicUi {
     var revealTick by mutableStateOf(0)
     /** Abrir la página de carpetas donde se busca música (desde Ajustes). */
     var openScanFolders by mutableStateOf(false)
+    /** Abrir la página de sincronizar con el NAS (desde Ajustes). */
+    var openNasSync by mutableStateOf(false)
     /** La ventana flotante de letra se escondió (vuelve con la siguiente canción). */
     var floatHiddenFor by mutableStateOf<String?>(null)
     var floatOffset by mutableStateOf(Offset.Zero)

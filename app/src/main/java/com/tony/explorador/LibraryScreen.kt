@@ -279,6 +279,9 @@ fun LibraryScreen(
     LaunchedEffect(MusicUi.revealTick) {
         if (MusicUi.revealTick > 0 && page == LibPage.Menu) { setDrawer(false); push(LibPage.Songs) }
     }
+    LaunchedEffect(MusicUi.openNasSync) {
+        if (MusicUi.openNasSync) { MusicUi.openNasSync = false; setDrawer(false); push(LibPage.Nas) }
+    }
     // Ajustes → «Carpetas donde buscar música»
     LaunchedEffect(MusicUi.openScanFolders) {
         if (MusicUi.openScanFolders) { MusicUi.openScanFolders = false; setDrawer(false); push(LibPage.Folders) }

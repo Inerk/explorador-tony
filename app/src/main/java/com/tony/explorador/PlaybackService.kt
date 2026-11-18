@@ -62,6 +62,8 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         LibraryStore.init(this)
+        // ecualizador y efectos de sonido
+        AudioFx.attach(this, player.audioSessionId)
 
         // Recuperar lo que estaba sonando la última vez (sin darle play)
         LibraryStore.loadPlayback()?.let { saved ->
@@ -86,6 +88,7 @@ class PlaybackService : MediaSessionService() {
                 savePlayback()
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) { savePlayback() }
+            override fun onAudioSessionIdChanged(audioSessionId: Int) { AudioFx.attach(this@PlaybackService, audioSessionId) }
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) { savePlayback() }
         })
         handler.postDelayed(saver, 5000)
@@ -113,6 +116,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         handler.removeCallbacks(saver)
         savePlayback()
+        AudioFx.release()
         session?.run {
             player.release()
             release()
