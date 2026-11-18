@@ -317,7 +317,10 @@ fun GuitarBackground(accent: Color, beat: BocinaBeat, sim: GuitarSim? = null, mo
         img(crowdB, w - cw * 0.78f, h * 0.475f - jump * 0.8f, cw, chB, 0.95f)
         val chC = w * 0.5f * crowdC.height / crowdC.width
         img(crowdC, w * 0.25f, h * 0.53f - jump * 0.6f, w * 0.5f, chC, 0.5f)
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Guitar.Deep.copy(alpha = 0.9f)), h * 0.56f, h * 0.74f), Offset(0f, h * 0.56f), Size(w, h * 0.44f))
+        // se funde suave hacia abajo (sin cortes) y una sombra arriba para leer el nombre
+        drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.45f to Guitar.Night.copy(alpha = 0.85f), 1f to Guitar.Deep, startY = h * 0.44f, endY = h * 0.62f),
+            Offset(0f, h * 0.44f), Size(w, h * 0.56f))
+        drawRect(Brush.verticalGradient(listOf(Guitar.Deep.copy(alpha = 0.55f), Color.Transparent), 0f, h * 0.16f), Offset.Zero, Size(w, h * 0.16f))
 
         // confeti que cae cuando la canción está prendida
         sim?.confetti?.forEach { c ->
