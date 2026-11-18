@@ -79,10 +79,14 @@ class MainActivity : ComponentActivity() {
 
     /** Si se abrió desde el icono «Música Tony», entra directo a la música. */
     private fun checkMusicLaunch(intent: android.content.Intent?) {
+        if (IS_MUSIC_APP) { AppNav.musicLaunch++; return }
         if (intent?.component?.className?.endsWith("MusicAlias") == true) AppNav.musicLaunch++
         if (intent?.component?.className?.endsWith("RemoteAlias") == true) RemoteUi.open = true
     }
 }
+
+/** true en «Nebula Música» (la app de música aparte). */
+val IS_MUSIC_APP = BuildConfig.FLAVOR == "musica"
 
 @Composable
 fun ExploradorTheme(content: @Composable () -> Unit) {
@@ -207,7 +211,12 @@ fun AppRoot() {
     }
     AppNav.openTrash = { open(Overlay.Trash) }
     AppNav.openWeb = { open(Overlay.Web) }
-    fun goHome() { overlays.toList().forEach { close(it) }; homeSignal++ }
+    fun goHome() {
+        overlays.toList().forEach { close(it) }; homeSignal++
+        if (IS_MUSIC_APP) open(Overlay.Library)   // la app de música no tiene explorador: su inicio es la biblioteca
+    }
+    // en la app de música, si no queda nada abierto, vuelve la biblioteca
+    LaunchedEffect(overlays.isEmpty()) { if (IS_MUSIC_APP && overlays.isEmpty()) open(Overlay.Library) }
     var folderRequest by remember { mutableStateOf<File?>(null) }
     var libraryRequest by remember { mutableStateOf<Pair<String, String>?>(null) }
     fun goTo(kind: String, value: String) {
@@ -280,7 +289,7 @@ fun AppRoot() {
         }
     }
 
-    LaunchedEffect(Unit) { checkUpdates(manual = false) }
+    LaunchedEffect(Unit) { if (!IS_MUSIC_APP) checkUpdates(manual = false) }
     // búsqueda automática de carátulas (si está activada), un ratito después de abrir
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(20_000)
@@ -407,9 +416,9 @@ fun AppRoot() {
                             }
                             open(Overlay.Music)
                         },
-                        onClose = { close(o) },
+                        onClose = { if (IS_MUSIC_APP) (context as? android.app.Activity)?.moveTaskToBack(true) else close(o) },
                         miniPlayer = { if (controller != null) MiniPlayer(controller, onOpen = { open(Overlay.Music) }) },
-                        onHome = { goHome() },
+                        onHome = { if (IS_MUSIC_APP) (context as? android.app.Activity)?.moveTaskToBack(true) else goHome() },
                         resetSignal = libraryReset,
                         openRequest = libraryRequest,
                         onRequestHandled = { libraryRequest = null },

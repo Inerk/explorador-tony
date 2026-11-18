@@ -21,11 +21,11 @@ jobs:
       - name: Compilar
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleNebulaRelease --stacktrace
       - name: Renombrar APK
         run: |
-          cp app/build/outputs/apk/release/app-release.apk Explorador-Tony-v1.0.${{ github.run_number }}.apk
-          cp app/build/outputs/apk/release/app-release.apk Explorador-Tony.apk
+          cp app/build/outputs/apk/nebula/release/app-nebula-release.apk Explorador-Tony-v1.0.${{ github.run_number }}.apk
+          cp app/build/outputs/apk/nebula/release/app-nebula-release.apk Explorador-Tony.apk
       - name: Publicar versión
         uses: softprops/action-gh-release@v2
         with:

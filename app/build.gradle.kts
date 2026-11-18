@@ -5,6 +5,8 @@ plugins {
 }
 
 val runNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+// la app de música se compila en el NAS: su número de versión lo lleva el NAS
+val musicaBuild = (System.getenv("MUSICA_BUILD") ?: "1").toInt()
 
 android {
     namespace = "com.tony.explorador"
@@ -46,6 +48,19 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    flavorDimensions += "app"
+    productFlavors {
+        // DriveNebula: explorador + todo (se compila en GitHub)
+        create("nebula") { dimension = "app" }
+        // Nebula Música: solo el reproductor (se compila en el NAS)
+        create("musica") {
+            dimension = "app"
+            applicationIdSuffix = ".musica"
+            versionCode = musicaBuild
+            versionName = "1.0.$musicaBuild"
+        }
     }
     lint {
         checkReleaseBuilds = false
