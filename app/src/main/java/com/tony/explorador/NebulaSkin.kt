@@ -51,20 +51,22 @@ import kotlin.random.Random
  */
 object Nebula {
     private val orange get() = LibraryStore.musicSkin == MusicSkin.WALKMAN
-    val Pink get() = if (orange) Color(0xFFFF8A1F) else Color(0xFFFF4F9A)
-    val PinkLight get() = if (orange) Color(0xFFFFB45C) else Color(0xFFFF8CC6)
-    val Purple get() = if (orange) Color(0xFF7B2FF7) else Color(0xFF8B5CF6)
-    val Violet get() = if (orange) Color(0xFFA855F7) else Color(0xFFB57BFF)
-    val Blue get() = if (orange) Color(0xFFFF6A00) else Color(0xFF5B7CFF)
-    val Night get() = if (orange) Color(0xFF120A1C) else Color(0xFF120B26)
-    val Deep get() = if (orange) Color(0xFF050307) else Color(0xFF080512)
-    val Top get() = if (orange) Color(0xFF1A0E26) else Color(0xFF1B1038)
+    /** Tema Bocina: las listas usan este mismo diseño pero en azul. */
+    private val blue get() = LibraryStore.musicSkin == MusicSkin.BOCINA
+    val Pink get() = if (orange) Color(0xFFFF8A1F) else if (blue) Color(0xFF3FA0FF) else Color(0xFFFF4F9A)
+    val PinkLight get() = if (orange) Color(0xFFFFB45C) else if (blue) Color(0xFF9CD3FF) else Color(0xFFFF8CC6)
+    val Purple get() = if (orange) Color(0xFF7B2FF7) else if (blue) Color(0xFF2F6BFF) else Color(0xFF8B5CF6)
+    val Violet get() = if (orange) Color(0xFFA855F7) else if (blue) Color(0xFF7FB8FF) else Color(0xFFB57BFF)
+    val Blue get() = if (orange) Color(0xFFFF6A00) else if (blue) Color(0xFF1E88E5) else Color(0xFF5B7CFF)
+    val Night get() = if (orange) Color(0xFF120A1C) else if (blue) Color(0xFF0B1A33) else Color(0xFF120B26)
+    val Deep get() = if (orange) Color(0xFF050307) else if (blue) Color(0xFF060D1B) else Color(0xFF080512)
+    val Top get() = if (orange) Color(0xFF1A0E26) else if (blue) Color(0xFF11264A) else Color(0xFF1B1038)
     /** Retro naranja: play con aro naranja y centro oscuro. */
     val ringPlay get() = orange
     val Glass = Color.White.copy(alpha = 0.07f)
     val GlassLine = Color.White.copy(alpha = 0.12f)
     val Text = Color.White
-    val Sub = Color(0xFFB9ABDA)
+    val Sub get() = if (blue) Color(0xFF9FB6D6) else Color(0xFFB9ABDA)
 }
 
 val isNebulaSkin get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN

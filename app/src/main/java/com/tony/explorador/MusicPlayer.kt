@@ -475,7 +475,7 @@ fun MusicPlayerScreen(
                                 }
                                 // la portada viaja de su lugar grande a la esquina de la lista
                                 // Bocina: la bocina ocupa casi todo y la portada queda en su centro
-                                val speakerR = minOf(maxWidth * 0.40f, maxHeight * 0.40f)
+                                val speakerR = minOf(maxWidth * 0.36f, maxHeight * 0.38f)
                                 val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f else minOf(maxWidth, maxHeight)
                                 val topGap = if (nebula) side * 0.16f else if (bocina) (maxHeight - side) / 2 - 6.dp else 0.dp
                                 val decoAlpha = if (nebula || bocina) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f

@@ -211,18 +211,19 @@ fun DrawScope.drawBocinaStage(
     val haloR = radius * (1.55f + bass * 0.25f)
     drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = (0.30f + bass * 0.35f) * alpha), Color.Transparent), Offset(cx, cy), haloR), haloR, Offset(cx, cy))
 
-    // onda de barras que cruza la pantalla (graves junto a la bocina, agudos hacia las orillas)
-    val n = 30
-    val gap = (w / 2f) / n
-    val maxH = radius * 0.42f
+    // onda de barras que sale de la bocina hacia las orillas (graves junto a la bocina, agudos afuera)
+    val start = radius * 0.80f
+    val span = (w / 2f - start).coerceAtLeast(radius * 0.3f)
+    val n = 16
+    val gap = span / n
+    val maxH = radius * 0.62f
     for (side in listOf(-1f, 1f)) for (i in 0 until n) {
-        val d = i / (n - 1f)                         // 0 = centro, 1 = orilla
-        val x = cx + side * (i + 0.5f) * gap
-        if (x < -gap || x > w + gap) continue
-        val band = beat.bandAt(d * 0.9f + 0.05f)
-        val wig = 0.55f + 0.45f * sin(t * 7f + i * 0.9f + side)
-        val env = (1f - d * 0.75f)
-        val hh = (maxH * (0.06f + band * 1.1f * wig) * env).coerceAtLeast(2.dp.toPx())
+        val d = i / (n - 1f)                         // 0 = junto a la bocina, 1 = orilla
+        val x = cx + side * (start + (i + 0.5f) * gap)
+        val band = beat.bandAt(d * 0.85f + 0.02f)
+        val wig = 0.6f + 0.4f * sin(t * 7f + i * 0.9f + side)
+        val env = (1f - d * 0.65f)
+        val hh = (maxH * (0.05f + band * 1.6f * wig + beat.bass * 0.25f * (1f - d)) * env).coerceIn(2.dp.toPx(), maxH)
         val a = (0.35f + 0.65f * (1f - d)) * alpha
         drawLine(accent.copy(alpha = 0.18f * a), Offset(x, cy - hh), Offset(x, cy + hh), gap * 0.75f, StrokeCap.Round)
         drawLine(light.copy(alpha = 0.95f * a), Offset(x, cy - hh), Offset(x, cy + hh), gap * 0.28f, StrokeCap.Round)
