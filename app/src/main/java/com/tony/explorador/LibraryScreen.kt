@@ -732,23 +732,23 @@ private fun LibSearchField(value: String, onChange: (String) -> Unit, hint: Stri
     val neb = Retro.isNebula || Retro.isLavanda
     val light = Retro.isLavanda
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (neb) 8.dp else 6.dp).height(if (neb) 52.dp else 44.dp)
-            .clip(RoundedCornerShape(if (neb) 26.dp else 14.dp))
-            .then(if (neb && light) Modifier.shadow(8.dp, RoundedCornerShape(26.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
-                .background(Color.White.copy(alpha = 0.85f)).border(1.dp, Color.White, RoundedCornerShape(26.dp))
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).height(if (neb) 42.dp else 44.dp)
+            .clip(RoundedCornerShape(if (neb) 21.dp else 14.dp))
+            .then(if (neb && light) Modifier.shadow(5.dp, RoundedCornerShape(21.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
+                .background(Color.White.copy(alpha = 0.85f)).border(1.dp, Color.White, RoundedCornerShape(21.dp))
             else if (neb) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.13f), Color.White.copy(alpha = 0.06f))))
-                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(26.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(21.dp))
                 else Modifier.background(if (Retro.isLavanda) Color(0xFFECE5FA) else Retro.Text.copy(alpha = 0.09f)))
-            .padding(horizontal = if (neb) 18.dp else 12.dp),
+            .padding(horizontal = if (neb) 14.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Filled.Search, null, tint = Retro.SubText, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            if (value.isEmpty()) Text(hint, color = Retro.SubText, fontSize = 16.sp, maxLines = 1)
+            if (value.isEmpty()) Text(hint, color = Retro.SubText, fontSize = if (neb) 14.sp else 16.sp, maxLines = 1)
             androidx.compose.foundation.text.BasicTextField(
                 value, onChange, singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = Retro.Text, fontSize = 16.sp),
+                textStyle = androidx.compose.ui.text.TextStyle(color = Retro.Text, fontSize = if (neb) 14.sp else 16.sp),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Retro.Orange),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { focus.clearFocus() }),
@@ -2170,13 +2170,13 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx()))
         }
         Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-            .padding(start = 14.dp, end = 14.dp, top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             NebulaSquareButton(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", onBack)
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, color = if (light) Color(0xFF15122B) else Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, color = if (light) Color(0xFF15122B) else Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("♪ " + java.text.NumberFormat.getIntegerInstance(Locale.US).format(count) + " canciones",
-                    color = if (light) Color(0xFF2A2540) else Color.White.copy(alpha = 0.8f), fontSize = 15.sp)
+                    color = if (light) Color(0xFF5A5470) else Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
             }
             NebulaSquareButton(Icons.Filled.Refresh, "Volver a buscar", onRefresh)
         }
@@ -2186,13 +2186,13 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
 @Composable
 private fun NebulaSquareButton(icon: ImageVector, label: String, onClick: () -> Unit) {
     val light = Retro.isLavanda
-    Box(Modifier.size(48.dp)
-        .then(if (light) Modifier.shadow(8.dp, RoundedCornerShape(16.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
-            .clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.92f))
-        else Modifier.clip(RoundedCornerShape(16.dp)).background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f))))
-            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(16.dp)))
+    Box(Modifier.size(38.dp)
+        .then(if (light) Modifier.shadow(6.dp, RoundedCornerShape(13.dp), ambientColor = Color(0x337C4DDB), spotColor = Color(0x337C4DDB))
+            .clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.92f))
+        else Modifier.clip(RoundedCornerShape(13.dp)).background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f))))
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(13.dp)))
         .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = if (light) Color(0xFF15122B) else Color.White, modifier = Modifier.size(24.dp))
+        Icon(icon, label, tint = if (light) Color(0xFF15122B) else Color.White, modifier = Modifier.size(19.dp))
     }
 }
 
@@ -2204,27 +2204,27 @@ private fun Modifier.glassPill(light: Boolean, border: Float = 0.28f): Modifier 
 
 @Composable
 private fun NebulaPlayBar(songs: List<Song>, onPlay: (List<Song>, Int, Boolean) -> Unit, extra: @Composable () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1.1f).height(52.dp).shadow(14.dp, CircleShape, ambientColor = Nebula.Purple, spotColor = Nebula.Purple).clip(CircleShape)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1.1f).height(40.dp).shadow(8.dp, CircleShape, ambientColor = Nebula.Purple, spotColor = Nebula.Purple).clip(CircleShape)
             .background(Brush.horizontalGradient(if (Retro.isLavanda) listOf(Color(0xFF1E9BFF), Color(0xFF5B6CFF), Color(0xFFB04CF5)) else listOf(Color(0xFF4F7BFF), Color(0xFF8B5CF6), Color(0xFFC85CFF))))
             .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
             .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, 0, false) }, verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("Reproducir", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Reproducir", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
         Spacer(Modifier.width(10.dp))
         val light = Retro.isLavanda
         val ink = if (light) Color(0xFF15122B) else Color.White
-        Row(Modifier.weight(1f).height(52.dp).glassPill(light)
+        Row(Modifier.weight(1f).height(40.dp).glassPill(light)
             .clickable(enabled = songs.isNotEmpty()) { onPlay(songs, (songs.indices).random(), true) }, verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center) {
-            Icon(Icons.Filled.Shuffle, null, tint = ink)
-            Spacer(Modifier.width(8.dp))
-            Text("Aleatorio", color = ink, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Icon(Icons.Filled.Shuffle, null, tint = ink, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Aleatorio", color = ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
         Spacer(Modifier.width(10.dp))
-        Box(Modifier.size(52.dp).glassPill(light, 0.18f), contentAlignment = Alignment.Center) { extra() }
+        Box(Modifier.size(40.dp).glassPill(light, 0.18f), contentAlignment = Alignment.Center) { extra() }
     }
 }

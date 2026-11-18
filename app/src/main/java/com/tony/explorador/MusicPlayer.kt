@@ -1235,27 +1235,27 @@ fun relativeTime(millis: Long): String {
 @Composable
 private fun NebulaMiniPlayerBar(player: Player, cover: android.graphics.Bitmap?, title: String, artist: String?, progress: Float, onOpen: () -> Unit, light: Boolean = false) {
     val ink = if (light) Color(0xFF15122B) else Color.White
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(22.dp)
     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
         .then(if (light) Modifier.shadow(12.dp, shape, ambientColor = Color(0x447C4DDB), spotColor = Color(0x447C4DDB)) else Modifier).clip(shape)
         .background(if (light) androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFFF4F0FF).copy(alpha = 0.95f)))
             else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF2A1F55).copy(alpha = 0.92f), Color(0xFF16102E).copy(alpha = 0.95f))))
         .border(1.dp, if (light) androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White, Color(0x33B79BF2)))
             else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.28f), Nebula.Purple.copy(alpha = 0.25f))), shape)
-        .clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
+        .clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x33FFFFFF)), contentAlignment = Alignment.Center) {
             if (cover != null) Image(remember(cover) { cover.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             else Icon(Icons.Filled.MusicNote, null, tint = Color.White.copy(alpha = 0.8f))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, color = ink, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!artist.isNullOrBlank()) Text(artist, color = ink.copy(alpha = 0.7f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, color = ink, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!artist.isNullOrBlank()) Text(artist, color = ink.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        NebulaWave(player.isPlaying, Modifier.width(72.dp).height(30.dp))
+        NebulaWave(player.isPlaying, Modifier.width(56.dp).height(24.dp))
         Spacer(Modifier.width(10.dp))
         // botón con aro de color que muestra el avance de la canción
-        Box(Modifier.size(52.dp).clip(CircleShape).clickable { if (player.isPlaying) player.pause() else player.play() }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(CircleShape).clickable { if (player.isPlaying) player.pause() else player.play() }, contentAlignment = Alignment.Center) {
             androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
                 val st = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                 drawCircle(ink.copy(alpha = 0.10f), size.minDimension / 2f - 2.dp.toPx(), style = st)
@@ -1263,9 +1263,9 @@ private fun NebulaMiniPlayerBar(player: Player, cover: android.graphics.Bitmap?,
                     -90f, 360f * progress.coerceAtLeast(0.02f), false, topLeft = androidx.compose.ui.geometry.Offset(2.dp.toPx(), 2.dp.toPx()),
                     size = androidx.compose.ui.geometry.Size(size.width - 4.dp.toPx(), size.height - 4.dp.toPx()), style = st)
             }
-            Icon(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Reproducir o pausar", tint = ink, modifier = Modifier.size(28.dp))
+            Icon(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Reproducir o pausar", tint = ink, modifier = Modifier.size(22.dp))
         }
-        Icon(Icons.Filled.SkipNext, "Siguiente", tint = ink, modifier = Modifier.padding(start = 6.dp).size(40.dp).clip(CircleShape)
+        Icon(Icons.Filled.SkipNext, "Siguiente", tint = ink, modifier = Modifier.padding(start = 4.dp).size(36.dp).clip(CircleShape)
             .clickable(enabled = player.hasNextMediaItem()) { player.seekToNextMediaItem() }.padding(6.dp))
     }
 }
