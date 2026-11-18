@@ -102,6 +102,7 @@ enum class MusicSkin(val label: String) {
     LAVANDA("Lavanda (claro, íconos morados)"),
     NEBULA("Nebula (noche morada y rosa neón)"),
     BOCINA("Bocina (azul neón, se mueve con la música)"),
+    GUITAR("Guitar Nebula (escenario y notas al ritmo)"),
 }
 
 /** Aspecto de la ventanita del reproductor en el escritorio. */

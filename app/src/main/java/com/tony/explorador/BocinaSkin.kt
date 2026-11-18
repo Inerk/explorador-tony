@@ -31,6 +31,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -165,25 +167,8 @@ fun BocinaBackground(accent: Color, beat: BocinaBeat, modifier: Modifier = Modif
             drawPath(streak, glowC.copy(alpha = a), style = Stroke(sw.dp.toPx(), cap = StrokeCap.Round))
         }
 
-        // ondas de luz (como listones) que se mecen
-        val baseY = h * 0.64f
-        val amp = h * (0.025f + beat.level * 0.05f + beat.bass * 0.02f)
-        for (k in 0 until 3) {
-            val ph = t * (0.9f + k * 0.35f) + k * 1.7f
-            val freq = (1.4f + k * 0.45f) * 2f * PI.toFloat() / w
-            val c = lerp(Bocina.Blue, accent, 0.35f + k * 0.2f)
-            val top = Path(); val line = Path()
-            val steps = 48
-            for (s in 0..steps) {
-                val x = w * s / steps
-                val y = baseY + k * h * 0.035f + sin(x * freq + ph) * amp * (1f - k * 0.2f) + sin(x * freq * 0.5f - ph * 0.6f) * amp * 0.5f
-                if (s == 0) { top.moveTo(x, y); line.moveTo(x, y) } else { top.lineTo(x, y); line.lineTo(x, y) }
-            }
-            top.lineTo(w, baseY + h * 0.22f); top.lineTo(0f, baseY + h * 0.22f); top.close()
-            drawPath(top, Brush.verticalGradient(listOf(c.copy(alpha = 0.10f), Color.Transparent), baseY - amp, baseY + h * 0.22f))
-            drawPath(line, c.copy(alpha = 0.10f), style = Stroke(8.dp.toPx()))
-            drawPath(line, lerp(c, Color.White, 0.4f).copy(alpha = 0.38f), style = Stroke(1.2.dp.toPx()))
-        }
+        // una sola onda de luz arriba, como un listón suave que se mece con la música
+        drawBocinaRibbon(accent, beat, h * 0.115f)
 
         // polvito de luz que sube despacio
         dust.forEach { (x, y, s, sp) ->
@@ -192,6 +177,34 @@ fun BocinaBackground(accent: Color, beat: BocinaBeat, modifier: Modifier = Modif
             drawCircle(lerp(Color.White, accent, 0.3f).copy(alpha = 0.35f * tw * s), (0.6f + s * 1.3f).dp.toPx(), Offset(x * w, yy * h))
         }
     }
+}
+
+/** Listón de luz: dos ondas que se cruzan con el espacio entre ellas relleno y un hilo brillante al centro. */
+fun DrawScope.drawBocinaRibbon(accent: Color, beat: BocinaBeat, baseY: Float) {
+    val w = size.width; val t = beat.time
+    val amp = 14.dp.toPx() * (1f + beat.level * 1.6f + beat.bass * 0.8f)
+    val freq = 1.15f * 2f * PI.toFloat() / w
+    val steps = 64
+    val upper = Path(); val lower = Path(); val core = Path(); val band = Path()
+    val ys1 = FloatArray(steps + 1); val ys2 = FloatArray(steps + 1)
+    for (s in 0..steps) {
+        val x = w * s / steps
+        val fade = sin(PI.toFloat() * s / steps).coerceAtLeast(0f)   // más delgada en las orillas
+        ys1[s] = baseY + (sin(x * freq + t * 1.3f) * amp + sin(x * freq * 2.1f - t * 0.8f) * amp * 0.25f) * (0.35f + 0.65f * fade)
+        ys2[s] = baseY + (sin(x * freq + t * 1.3f + 2.4f) * amp * 0.8f) * (0.35f + 0.65f * fade)
+        if (s == 0) { upper.moveTo(x, ys1[s]); lower.moveTo(x, ys2[s]); core.moveTo(x, (ys1[s] + ys2[s]) / 2) }
+        else { upper.lineTo(x, ys1[s]); lower.lineTo(x, ys2[s]); core.lineTo(x, (ys1[s] + ys2[s]) / 2) }
+    }
+    band.moveTo(0f, ys1[0]); for (s in 1..steps) band.lineTo(w * s / steps, ys1[s])
+    for (s in steps downTo 0) band.lineTo(w * s / steps, ys2[s]); band.close()
+    val c1 = lerp(Bocina.Blue, accent, 0.5f); val c2 = lerp(Bocina.Ice, accent, 0.3f)
+    val edge = Brush.horizontalGradient(listOf(Color.Transparent, c1, c2, c1, Color.Transparent))
+    drawPath(band, Brush.horizontalGradient(listOf(Color.Transparent, c1.copy(alpha = 0.22f), c2.copy(alpha = 0.30f), c1.copy(alpha = 0.22f), Color.Transparent)))
+    drawPath(upper, edge, alpha = 0.18f, style = Stroke(10.dp.toPx()))
+    drawPath(lower, edge, alpha = 0.18f, style = Stroke(10.dp.toPx()))
+    drawPath(upper, edge, alpha = 0.75f, style = Stroke(1.4.dp.toPx()))
+    drawPath(lower, edge, alpha = 0.55f, style = Stroke(1.1.dp.toPx()))
+    drawPath(core, Brush.horizontalGradient(listOf(Color.Transparent, Color.White, Color.Transparent)), alpha = 0.35f + beat.bass * 0.4f, style = Stroke(1.dp.toPx()))
 }
 
 /**
@@ -294,37 +307,43 @@ fun BocinaRoundButton(icon: ImageVector, description: String, tint: Color = Colo
             .clip(CircleShape)
             .background(Brush.verticalGradient(listOf(Color(0xFF3A4B69), Color(0xFF1D2A41))))
             .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.06f))), CircleShape)
+            .drawWithContent {
+                drawContent()
+                drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.Transparent), 0f, this.size.height * 0.5f),
+                    this.size.minDimension / 2f)
+            }
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Box(Modifier.align(Alignment.TopCenter).padding(top = size * 0.06f).size(size * 0.62f, size * 0.24f).clip(RoundedCornerShape(50))
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent))))
         Icon(icon, description, tint = if (enabled) tint else tint.copy(alpha = 0.35f), modifier = Modifier.size(size * 0.46f))
     }
 }
 
 @Composable
 fun BocinaPlayButton(icon: ImageVector, accent: Color, beat: BocinaBeat?, size: Dp = 84.dp, onClick: () -> Unit) {
-    Box(Modifier.size(size + 18.dp), contentAlignment = Alignment.Center) {
-        // brillo que late alrededor del botón
-        Canvas(Modifier.fillMaxSize()) {
-            beat?.frame
-            val b = beat?.bass ?: 0f
-            val r = size.toPx() / 2f
-            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.45f + b * 0.3f), Color.Transparent), center, r * (1.25f + b * 0.15f)), r * (1.25f + b * 0.15f))
-        }
-        Box(
-            Modifier.size(size).clip(CircleShape)
-                .background(Brush.radialGradient(listOf(lerp(accent, Color.White, 0.25f), lerp(accent, Color(0xFF0B1B3A), 0.45f), Color(0xFF0E1D38))))
-                .border(1.5.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.7f), accent.copy(alpha = 0.5f))), CircleShape)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(Modifier.align(Alignment.TopCenter).padding(top = size * 0.07f).size(size * 0.62f, size * 0.26f).clip(RoundedCornerShape(50))
-                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.40f), Color.Transparent))))
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.48f))
-        }
-    }
+    Box(
+        Modifier.size(size)
+            // brillo que late alrededor: se dibuja por fuera del botón, sin cortarse
+            .drawBehind {
+                beat?.frame
+                val b = beat?.bass ?: 0f
+                val r = this.size.minDimension / 2f
+                val gr = r * (1.45f + b * 0.2f)
+                drawCircle(Brush.radialGradient(0.55f to accent.copy(alpha = 0.40f + b * 0.3f), 1f to Color.Transparent, center = center, radius = gr), gr)
+            }
+            .clip(CircleShape)
+            .background(Brush.linearGradient(listOf(lerp(accent, Color.White, 0.30f), lerp(accent, Color(0xFF0B1B3A), 0.35f), Color(0xFF0E1D38)),
+                start = Offset.Zero, end = Offset.Infinite))
+            .drawWithContent {
+                drawContent()
+                // reflejo de cristal en la mitad de arriba (dentro del círculo)
+                drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.Transparent), 0f, this.size.height * 0.55f),
+                    this.size.minDimension / 2f)
+            }
+            .border(1.5.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.75f), accent.copy(alpha = 0.6f))), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(size * 0.46f)) }
 }
 
 @Composable

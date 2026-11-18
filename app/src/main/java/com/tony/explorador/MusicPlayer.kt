@@ -193,7 +193,7 @@ fun MiniPlayer(player: Player, onOpen: () -> Unit) {
     val duration = player.duration.coerceAtLeast(1L)
     val progress = (player.currentPosition.toFloat() / duration).coerceIn(0f, 1f) + tick * 0f
 
-    if (isNebulaSkin || isBocinaSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
+    if (isNebulaSkin || isBocinaSkin || isGuitarSkin || LibraryStore.musicSkin == MusicSkin.LAVANDA) { NebulaMiniPlayerBar(player, info?.cover, title, info?.artist, progress, onOpen, light = LibraryStore.musicSkin == MusicSkin.LAVANDA); return }
     val vintage = LibraryStore.musicSkin == MusicSkin.VINTAGE
     Surface(
         tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth(),
@@ -320,11 +320,13 @@ fun MusicPlayerScreen(
     val colors = info?.colors ?: DefaultCoverColors
     val nebula = isNebulaSkin
     val bocina = isBocinaSkin
-    val top by animateColorAsState(if (nebula) Nebula.Night else if (bocina) Bocina.Top else colors.top, tween(900), label = "top")
-    val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else colors.bottom, tween(900), label = "bottom")
-    val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else colors.accent, tween(900), label = "accent")
-    val onAccent by animateColorAsState(if (nebula || bocina) Color.White else colors.onAccent, tween(900), label = "onAccent")
-    val beat = if (bocina) rememberBocinaBeat(player.isPlaying) else null
+    val guitar = isGuitarSkin
+    val top by animateColorAsState(if (nebula) Nebula.Night else if (bocina) Bocina.Top else if (guitar) Guitar.Night else colors.top, tween(900), label = "top")
+    val bottom by animateColorAsState(if (nebula) Nebula.Deep else if (bocina) Bocina.Deep else if (guitar) Guitar.Deep else colors.bottom, tween(900), label = "bottom")
+    val accent by animateColorAsState(if (nebula) Nebula.Pink else if (bocina) bocinaAccent(colors.accent) else if (guitar) guitarAccent(colors.accent) else colors.accent, tween(900), label = "accent")
+    val onAccent by animateColorAsState(if (nebula || bocina || guitar) Color.White else colors.onAccent, tween(900), label = "onAccent")
+    val beat = if (bocina || guitar) rememberBocinaBeat(player.isPlaying) else null
+    val sim = if (guitar && beat != null) rememberGuitarSim(beat, player.isPlaying) else null
     val twinkle by androidx.compose.animation.core.rememberInfiniteTransition(label = "tw").animateFloat(0f, 1f,
         androidx.compose.animation.core.infiniteRepeatable(tween(1400), androidx.compose.animation.core.RepeatMode.Reverse), label = "twv")
 
@@ -397,6 +399,7 @@ fun MusicPlayerScreen(
         // Fondo: la misma portada, muy difuminada (en Nebula: cielo nocturno con estrellas)
         val cover = info?.cover
         if (nebula) NebulaBackground()
+        else if (guitar && beat != null) GuitarBackground(accent, beat)
         else if (beat != null) BocinaBackground(accent, beat)
         else if (cover != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Crossfade(targetState = cover, animationSpec = tween(900), label = "bg") { bmp ->
@@ -407,7 +410,7 @@ fun MusicPlayerScreen(
                 )
             }
         }
-        if (!bocina) Box(
+        if (!bocina && !guitar) Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.60f)))
             )
@@ -429,6 +432,7 @@ fun MusicPlayerScreen(
                     Spacer(Modifier.width(46.dp))
                     IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
                 } else if (bocina) BocinaTopBar(album, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
+                else if (guitar) GuitarTopBar(title, artist, onClose = { closeAnimated() }, onMenu = { menuOpen = true })
                 else Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { closeAnimated() }) {
                         Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Cerrar", modifier = Modifier.size(30.dp))
@@ -476,9 +480,27 @@ fun MusicPlayerScreen(
                                 // la portada viaja de su lugar grande a la esquina de la lista
                                 // Bocina: la bocina ocupa casi todo y la portada queda en su centro
                                 val speakerR = minOf(maxWidth * 0.36f, maxHeight * 0.38f)
-                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f else minOf(maxWidth, maxHeight)
-                                val topGap = if (nebula) side * 0.16f else if (bocina) (maxHeight - side) / 2 - 6.dp else 0.dp
-                                val decoAlpha = if (nebula || bocina) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                val side = if (nebula) minOf(maxWidth * 0.84f, maxHeight * 0.8f) else if (bocina) speakerR * 1.02f
+                                    else if (guitar) minOf(maxWidth * 0.42f, maxHeight * 0.34f) else minOf(maxWidth, maxHeight)
+                                val topGap = if (nebula) side * 0.16f else if (bocina) (maxHeight - side) / 2 - 6.dp else if (guitar) 6.dp else 0.dp
+                                val decoAlpha = if (nebula || bocina || guitar) (1f - p * 2.5f).coerceIn(0f, 1f) else 0f
+                                if (guitar && sim != null && beat != null && decoAlpha > 0f) GuitarStage(sim, beat, decoAlpha,
+                                    y0 = topGap + side * 0.9f, y1 = maxHeight - 2.dp,
+                                    coverRect = Offset(((maxWidth - side) / 2).value, topGap.value) to side.value, accent = accent)
+                                // Bocina y Guitar: deslizar en cualquier parte (no solo en la portada) cambia de canción
+                                if ((bocina || guitar) && p < 0.01f) {
+                                    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                                        var total = 0f
+                                        detectHorizontalDragGestures(
+                                            onDragStart = { total = 0f },
+                                            onDragEnd = {
+                                                val lim = size.width * 0.18f
+                                                if (total < -lim && player.hasNextMediaItem()) player.seekToNextMediaItem()
+                                                else if (total > lim) player.seekToPrevious()
+                                            }
+                                        ) { ch, dx -> ch.consume(); total += dx }
+                                    })
+                                }
                                 // dónde está la portada grande (para la animación de cerrar)
                                 if (p < 0.01f) Box(Modifier.offset((maxWidth - side) / 2, topGap).size(side)
                                     .onGloballyPositioned { coverRect = it.boundsInRoot() })
@@ -488,6 +510,7 @@ fun MusicPlayerScreen(
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
                                 CoverArt(
+                                    circle = bocina,
                                     cover = info?.cover,
                                     video = if (isVideoPath(player.currentMediaItem?.mediaId)) player else null,
                                     animated = animatedCover,
@@ -582,11 +605,11 @@ fun MusicPlayerScreen(
                         }
                     }
                 }
-                // Título y artista
-                Spacer(Modifier.height(12.dp))
+                // Título y artista (en Guitar Nebula van arriba)
+                if (!guitar) Spacer(Modifier.height(12.dp))
                 val path = player.currentMediaItem?.mediaId
                 val fav = path != null && LibraryStore.isFavorite(path)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                if (!guitar) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     // tocar el nombre cierra la letra y regresa a la portada
                     Column(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable(enabled = lyricsMode) { lyricsMode = false }) {
                         Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold,
@@ -663,6 +686,24 @@ fun MusicPlayerScreen(
                         },
                         modifier = Modifier.padding(top = 4.dp)
                     )
+                } else if (guitar) {
+                    Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 14.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        GuitarSquareButton(Icons.Filled.Shuffle, "Aleatorio", if (player.shuffleModeEnabled) Guitar.PurpleLight else Color.White, 52.dp) {
+                            player.shuffleModeEnabled = !player.shuffleModeEnabled }
+                        GuitarSquareButton(Icons.Filled.SkipPrevious, "Anterior", size = 56.dp) { player.seekToPrevious() }
+                        GuitarPlayButton(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, beat, 80.dp) {
+                            if (player.isPlaying) player.pause() else player.play() }
+                        GuitarSquareButton(Icons.Filled.SkipNext, "Siguiente", size = 56.dp, enabled = player.hasNextMediaItem()) { player.seekToNextMediaItem() }
+                        GuitarSquareButton(if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, "Repetir",
+                            if (player.repeatMode != Player.REPEAT_MODE_OFF) Guitar.PurpleLight else Color.White, 52.dp) {
+                            player.repeatMode = when (player.repeatMode) {
+                                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                else -> Player.REPEAT_MODE_OFF
+                            }
+                        }
+                    }
                 } else if (bocina) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically) {
@@ -831,6 +872,7 @@ fun MusicPlayerScreen(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CoverArt(
+    circle: Boolean = false,
     cover: Bitmap?,
     video: Player?,
     animated: java.io.File? = null,
@@ -868,7 +910,9 @@ private fun CoverArt(
     val hasPrev by rememberUpdatedState(canPrev)
     val collapsed by rememberUpdatedState(collapse)
     val corner = 22.dp + (10.dp - 22.dp) * collapse
-    val shape = RoundedCornerShape(corner)
+    val shape = if (circle && collapse < 0.5f) CircleShape else RoundedCornerShape(corner)
+    // en la portada redonda los botoncitos se meten más para no cortarse
+    val inset = if (circle) size * 0.12f else 10.dp
 
     Box(
         modifier = Modifier
@@ -983,7 +1027,7 @@ private fun CoverArt(
         }
         if ((video != null || pairToggle != null) && collapse < 0.3f) {
             Box(
-                Modifier.align(Alignment.BottomStart).padding(10.dp).size(38.dp)
+                Modifier.align(Alignment.BottomStart).padding(inset).size(38.dp)
                     .graphicsLayer { alpha = 1f - collapse / 0.3f }
                     .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .clickable { if (pairToggle != null) pairToggle() else MotionPref.on = !MotionPref.on },
@@ -998,14 +1042,14 @@ private fun CoverArt(
         // estrella diamante: esta canción tiene carátula animada
         // el diamante es también el botón: carátula animada ↔ carátula fija
         if (animated != null && video == null && collapse < 0.3f) {
-            DiamondStar(34.dp, Modifier.align(Alignment.TopEnd).padding(10.dp)
+            DiamondStar(34.dp, Modifier.align(Alignment.TopEnd).padding(inset)
                 .graphicsLayer { alpha = (1f - collapse / 0.3f) * (if (MotionPref.on) 1f else 0.45f) }
                 .clip(CircleShape).clickable { MotionPref.on = !MotionPref.on }, backdrop = true)
         }
         // ⋮ abajo a la derecha de la portada (se esconde al encogerse)
         if (collapse < 0.3f) {
             Box(
-                Modifier.align(Alignment.BottomEnd).padding(10.dp).size(38.dp)
+                Modifier.align(Alignment.BottomEnd).padding(inset).size(38.dp)
                     .graphicsLayer { alpha = 1f - collapse / 0.3f }
                     .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
                     .clickable(onClick = onMenu),

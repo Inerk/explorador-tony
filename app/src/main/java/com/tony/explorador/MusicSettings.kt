@@ -85,6 +85,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.sin
 
 /*
  * «Ajustes de música» con el diseño Nebula: tarjetas de cristal por sección y páginas para
@@ -112,7 +121,7 @@ private enum class SPage(val title: String) {
 fun MusicSettingsScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     remember { AudioFx.init(ctx); 0 }
-    var page by remember { mutableStateOf(if (MusicUi.settingsPage == "eq") SPage.Eq else SPage.Main).also { MusicUi.settingsPage = null } }
+    var page by remember { mutableStateOf(when (MusicUi.settingsPage) { "eq" -> SPage.Eq; "theme" -> SPage.Theme; else -> SPage.Main }).also { MusicUi.settingsPage = null } }
     BackHandler { if (page != SPage.Main) page = SPage.Main else onClose() }
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Nebula.Top, Nebula.Night, Nebula.Deep)))) {
         NebulaBackground(Modifier.fillMaxSize())
@@ -392,42 +401,179 @@ private fun VisualPage() {
 
 // ───────── Tema ─────────
 
+private class SkinInfo(val name: String, val sub: String)
+private val skinInfo = mapOf(
+    MusicSkin.NEBULA to SkinInfo("Nebula", "Noche morada y rosa neón"),
+    MusicSkin.BOCINA to SkinInfo("Bocina", "Bocina, aro y ondas al ritmo"),
+    MusicSkin.GUITAR to SkinInfo("Guitar Nebula", "Escenario y notas que bajan"),
+    MusicSkin.LAVANDA to SkinInfo("Lavanda", "Claro y suave, morado"),
+    MusicSkin.ORIGINAL to SkinInfo("Original", "Toma el color de la portada"),
+    MusicSkin.MEDIA_PLAYER to SkinInfo("Media Player", "Azul cristal"),
+    MusicSkin.WALKMAN to SkinInfo("Retro naranja", "Negro, naranja y morado"),
+    MusicSkin.VINTAGE to SkinInfo("Vintage", "Tocadiscos y madera"),
+)
+
 @Composable
 private fun ThemePage() {
-    val previews = mapOf(
-        MusicSkin.NEBULA to listOf(Color(0xFF1B1038), Color(0xFF8B5CF6), Color(0xFFFF4F9A)),
-        MusicSkin.BOCINA to listOf(Color(0xFF0D1E3A), Color(0xFF3FA0FF), Color(0xFFBFE2FF)),
-        MusicSkin.LAVANDA to listOf(Color(0xFFF7F4FD), Color(0xFFB79BF2), Color(0xFF4F7BFF)),
-        MusicSkin.WALKMAN to listOf(Color(0xFF120A1C), Color(0xFFFF8A1F), Color(0xFF7B2FF7)),
-        MusicSkin.MEDIA_PLAYER to listOf(Color(0xFF0B1630), Color(0xFF3FA9F5), Color(0xFF9CDBFF)),
-        MusicSkin.VINTAGE to listOf(Color(0xFF3A2416), Color(0xFFC9A15A), Color(0xFFF2E3C6)),
-        MusicSkin.ORIGINAL to listOf(Color(0xFF26304A), Color(0xFFE07A5F), Color(0xFF81B29A)),
-    )
-    MusicSkin.entries.chunked(3).forEach { row ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            row.forEach { sk ->
-                val on = LibraryStore.musicSkin == sk
-                val c = previews[sk] ?: listOf(Color.DarkGray, Color.Gray, Color.LightGray)
-                Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp))
-                    .background(if (on) SC.accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f))
-                    .border(if (on) 1.5.dp else 1.dp, if (on) SC.accent2 else Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
-                    .clickable { LibraryStore.changeMusicSkin(sk) }.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Canvas(Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(10.dp))) {
-                        drawRect(Brush.verticalGradient(listOf(c[0], c[0].copy(alpha = 0.8f))))
-                        drawRoundRect(c[1], Offset(size.width * 0.12f, size.height * 0.2f), androidx.compose.ui.geometry.Size(size.width * 0.3f, size.height * 0.6f), CornerRadius(8f))
-                        drawRoundRect(c[2].copy(alpha = 0.8f), Offset(size.width * 0.5f, size.height * 0.3f), androidx.compose.ui.geometry.Size(size.width * 0.38f, 6f), CornerRadius(3f))
-                        drawRoundRect(c[2].copy(alpha = 0.5f), Offset(size.width * 0.5f, size.height * 0.55f), androidx.compose.ui.geometry.Size(size.width * 0.28f, 6f), CornerRadius(3f))
-                    }
-                    Text(sk.label.substringBefore(" ("), color = Color.White, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                }
-            }
-            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+    Text("Elige cómo se ve tu reproductor", color = SC.sub, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+    val order = skinInfo.keys.toList() + MusicSkin.entries.filter { it !in skinInfo }
+    order.chunked(2).forEach { row ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            row.forEach { sk -> ThemeCard(sk, Modifier.weight(1f)) }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
         }
     }
     Column(Modifier.fillMaxWidth().padding(top = 10.dp).card().padding(vertical = 4.dp)) {
         SettingRow(Icons.Filled.MovieFilter, "Carátula animada o video", "Mostrarla en el reproductor cuando exista",
             on = MotionPref.on, onToggle = { MotionPref.on = it }, last = true)
+    }
+}
+
+@Composable
+private fun ThemeCard(sk: MusicSkin, modifier: Modifier) {
+    val on = LibraryStore.musicSkin == sk
+    val scale by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0.96f, androidx.compose.animation.core.spring(dampingRatio = 0.6f), label = "tc")
+    val info = skinInfo[sk] ?: SkinInfo(sk.label.substringBefore(" ("), sk.label.substringAfter("(", "").removeSuffix(")"))
+    Column(modifier.graphicsLayer { scaleX = scale; scaleY = scale }.clickable(
+        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { LibraryStore.changeMusicSkin(sk) },
+        horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxWidth().aspectRatio(0.56f)
+            .shadow(if (on) 18.dp else 6.dp, RoundedCornerShape(24.dp), ambientColor = SC.accent, spotColor = SC.accent)
+            .clip(RoundedCornerShape(24.dp))
+            .border(if (on) 2.5.dp else 1.dp, if (on) Brush.linearGradient(listOf(SC.accent2, Nebula.Pink)) else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.06f))), RoundedCornerShape(24.dp))) {
+            SkinPreview(sk, Modifier.fillMaxSize())
+            if (on) Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(24.dp).clip(CircleShape).background(SC.accent)
+                .border(1.5.dp, Color.White, CircleShape), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
+            }
+        }
+        Text(info.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
+        Text(info.sub, color = SC.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** Mini pantalla del reproductor de cada tema, dibujada (no es foto). */
+@Composable
+private fun SkinPreview(sk: MusicSkin, modifier: Modifier) {
+    val marco = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.bocina_marco)
+    val stage = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.gn_escenario)
+    val gems = listOf(R.drawable.gn_gema_verde, R.drawable.gn_gema_roja, R.drawable.gn_gema_amarilla, R.drawable.gn_gema_azul, R.drawable.gn_gema_naranja)
+        .map { androidx.compose.ui.graphics.ImageBitmap.imageResource(it) }
+    Canvas(modifier) {
+        val w = size.width; val h = size.height
+        fun rr(c: Color, x: Float, y: Float, ww: Float, hh: Float, r: Float = hh / 2) =
+            drawRoundRect(c, Offset(x, y), androidx.compose.ui.geometry.Size(ww, hh), CornerRadius(r))
+        fun coverArt(x: Float, y: Float, s: Float, round: Boolean = false, c1: Color = Color(0xFFFF8A5B), c2: Color = Color(0xFF6A3FD0)) {
+            val br = Brush.linearGradient(listOf(c1, c2), Offset(x, y), Offset(x + s, y + s))
+            if (round) drawCircle(br, s / 2, Offset(x + s / 2, y + s / 2))
+            else drawRoundRect(br, Offset(x, y), androidx.compose.ui.geometry.Size(s, s), CornerRadius(s * 0.12f))
+            drawCircle(Color.White.copy(alpha = 0.25f), s * 0.16f, Offset(x + s * 0.5f, y + s * 0.5f))
+        }
+        fun texts(y: Float, ink: Color, center: Boolean = false) {
+            val x = if (center) w * 0.25f else w * 0.1f
+            rr(ink.copy(alpha = 0.9f), x, y, w * 0.5f, h * 0.018f)
+            rr(ink.copy(alpha = 0.45f), x + if (center) w * 0.08f else 0f, y + h * 0.032f, w * 0.34f, h * 0.014f)
+        }
+        fun seek(y: Float, acc: Color, track: Color = Color.White.copy(alpha = 0.2f)) {
+            rr(track, w * 0.1f, y, w * 0.8f, h * 0.008f)
+            rr(acc, w * 0.1f, y, w * 0.34f, h * 0.008f)
+            drawCircle(Color.White, h * 0.011f, Offset(w * 0.44f, y + h * 0.004f))
+        }
+        fun controls(y: Float, ink: Color, play: Brush, square: Boolean = false, btn: Color = Color.White.copy(alpha = 0.10f)) {
+            val r = w * 0.055f
+            listOf(0.16f, 0.32f, 0.68f, 0.84f).forEach { fx ->
+                if (square) drawRoundRect(btn, Offset(w * fx - r, y - r), androidx.compose.ui.geometry.Size(r * 2, r * 2), CornerRadius(r * 0.6f))
+                else drawCircle(btn, r, Offset(w * fx, y))
+                drawCircle(ink.copy(alpha = 0.8f), r * 0.28f, Offset(w * fx, y))
+            }
+            drawCircle(play, w * 0.1f, Offset(w * 0.5f, y))
+            val p = Path().apply { moveTo(w * 0.475f, y - w * 0.035f); lineTo(w * 0.53f, y); lineTo(w * 0.475f, y + w * 0.035f); close() }
+            drawPath(p, Color.White)
+        }
+        when (sk) {
+            MusicSkin.NEBULA, MusicSkin.WALKMAN -> {
+                val orange = sk == MusicSkin.WALKMAN
+                val pink = if (orange) Color(0xFFFF8A1F) else Color(0xFFFF4F9A)
+                val pur = if (orange) Color(0xFF7B2FF7) else Color(0xFF8B5CF6)
+                drawRect(Brush.verticalGradient(listOf(if (orange) Color(0xFF1A0E26) else Color(0xFF1B1038), Color(0xFF080512))))
+                drawCircle(Brush.radialGradient(listOf(pur.copy(alpha = 0.5f), Color.Transparent), Offset(w, 0f), w * 0.8f), w * 0.8f, Offset(w, 0f))
+                drawCircle(Brush.radialGradient(listOf(pink.copy(alpha = 0.3f), Color.Transparent), Offset(0f, h * 0.6f), w * 0.7f), w * 0.7f, Offset(0f, h * 0.6f))
+                repeat(22) { val r = kotlin.random.Random(it * 31); drawCircle(Color.White.copy(alpha = 0.6f * r.nextFloat()), 1.2f + r.nextFloat() * 1.5f, Offset(r.nextFloat() * w, r.nextFloat() * h)) }
+                drawCircle(Brush.sweepGradient(listOf(pink, pur, Color(0xFF8FD3FF), pink), Offset(w / 2, h * 0.32f)), w * 0.40f, Offset(w / 2, h * 0.32f), style = Stroke(2.dp.toPx()))
+                coverArt(w * 0.2f, h * 0.32f - w * 0.3f, w * 0.6f, c1 = pink, c2 = pur)
+                texts(h * 0.6f, Color.White); seek(h * 0.71f, pink)
+                controls(h * 0.82f, Color.White, Brush.radialGradient(listOf(pink.copy(alpha = 0.8f), pink)), square = true)
+                rr(Color.White.copy(alpha = 0.08f), w * 0.08f, h * 0.91f, w * 0.84f, h * 0.05f)
+            }
+            MusicSkin.BOCINA -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF0D1E3A), Color(0xFF11264A), Color(0xFF060D1B))))
+                val p = Path().apply { moveTo(w * 0.35f, 0f); quadraticBezierTo(w * 0.62f, h * 0.08f, w, h * 0.11f) }
+                drawPath(p, Color(0xFFBFE2FF).copy(alpha = 0.7f), style = Stroke(1.2.dp.toPx()))
+                val cy = h * 0.33f; val r = w * 0.36f
+                for (i in 0 until 9) for (side in listOf(-1f, 1f)) {
+                    val x = w / 2 + side * (r * 0.9f + i * w * 0.022f); val hh = h * 0.05f * (1f - i * 0.1f) * (0.5f + 0.5f * kotlin.math.abs(sin(i * 1.7f)))
+                    drawLine(Color(0xFFBFE2FF).copy(alpha = 0.8f), Offset(x, cy - hh), Offset(x, cy + hh), 1.5.dp.toPx())
+                }
+                drawImage(marco, dstOffset = IntOffset((w / 2 - r).toInt(), (cy - r).toInt()), dstSize = IntSize((r * 2).toInt(), (r * 2).toInt()))
+                drawCircle(Color(0xFFBFE2FF), r * 1.1f, Offset(w / 2, cy), style = Stroke(1.5.dp.toPx()))
+                coverArt(w / 2 - r * 0.5f, cy - r * 0.5f, r, round = true, c1 = Color(0xFF4FC3F7), c2 = Color(0xFF283593))
+                texts(h * 0.6f, Color.White); seek(h * 0.71f, Color(0xFF7FC4FF))
+                controls(h * 0.82f, Color.White, Brush.radialGradient(listOf(Color(0xFF9FD2FF), Color(0xFF2E5C9A))), btn = Color(0xFF2E3D58))
+                rr(Color(0xFF2A3A55), w * 0.08f, h * 0.91f, w * 0.84f, h * 0.05f)
+            }
+            MusicSkin.GUITAR -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF120C34), Color(0xFF05040F))))
+                val sh = w * stage.height / stage.width * 1.3f
+                drawImage(stage, dstOffset = IntOffset((-w * 0.15f).toInt(), 0), dstSize = IntSize((w * 1.3f).toInt(), sh.toInt()), alpha = 0.95f)
+                drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF0A0820)), sh * 0.5f, sh), Offset(0f, sh * 0.5f), androidx.compose.ui.geometry.Size(w, h))
+                texts(h * 0.06f, Color.White, center = true)
+                coverArt(w * 0.33f, h * 0.15f, w * 0.34f, c1 = Color(0xFF6FA8FF), c2 = Color(0xFF1C2A7A))
+                val y0 = h * 0.15f + w * 0.32f; val y1 = h * 0.72f
+                val road = Path().apply { moveTo(w * 0.37f, y0); lineTo(w * 0.63f, y0); lineTo(w * 0.98f, y1); lineTo(w * 0.02f, y1); close() }
+                drawPath(road, Color(0xFF15102F))
+                drawPath(road, Brush.linearGradient(listOf(Color(0xFF4C7DFF), Color(0xFFA35CFF))), style = Stroke(1.5.dp.toPx()))
+                for (i in 0 until 5) {
+                    val xt = w / 2 + (i - 2) * w * 0.052f; val xb = w / 2 + (i - 2) * w * 0.19f
+                    drawLine(Guitar.lanes[i], Offset(xt, y0), Offset(xb, y1 - h * 0.03f), 1.2.dp.toPx())
+                    val g = gems[i]; val gw = w * 0.17f; val gh = gw * g.height / g.width
+                    drawImage(g, dstOffset = IntOffset((xb - gw / 2).toInt(), (y1 - h * 0.03f - gh / 2).toInt()), dstSize = IntSize(gw.toInt(), gh.toInt()))
+                    val z = listOf(0.3f, 0.6f, 0.45f, 0.2f, 0.75f)[i]
+                    val nx = xt + (xb - xt) * z; val ny = y0 + (y1 - y0) * z; val nw = gw * (0.35f + 0.4f * z)
+                    drawImage(g, dstOffset = IntOffset((nx - nw / 2).toInt(), (ny - nw * 0.3f).toInt()), dstSize = IntSize(nw.toInt(), (nw * g.height / g.width).toInt()))
+                }
+                seek(h * 0.79f, Color(0xFFA35CFF))
+                controls(h * 0.88f, Color.White, Brush.radialGradient(listOf(Color(0xFF2B1F5C), Color(0xFF120D2C))), square = true, btn = Color(0xFF231F45))
+                drawCircle(Color(0xFFA35CFF), w * 0.1f, Offset(w * 0.5f, h * 0.88f), style = Stroke(2.dp.toPx()))
+            }
+            MusicSkin.LAVANDA -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFFFBF9FF), Color(0xFFF1EBFC))))
+                coverArt(w * 0.15f, h * 0.1f, w * 0.7f, c1 = Color(0xFFB79BF2), c2 = Color(0xFF6A8BFF))
+                texts(h * 0.55f, Color(0xFF221B33)); seek(h * 0.67f, Color(0xFF7C4DDB), Color(0xFF7C4DDB).copy(alpha = 0.18f))
+                controls(h * 0.8f, Color(0xFF6A3FD0), Brush.radialGradient(listOf(Color(0xFFB79BF2), Color(0xFF7C4DDB))), btn = Color.White)
+            }
+            MusicSkin.MEDIA_PLAYER -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF1C3463), Color(0xFF0B1630))))
+                coverArt(w * 0.12f, h * 0.08f, w * 0.76f, c1 = Color(0xFF3FA9F5), c2 = Color(0xFF0B2E6E))
+                texts(h * 0.56f, Color.White); seek(h * 0.68f, Color(0xFF3FA9F5))
+                controls(h * 0.8f, Color.White, Brush.radialGradient(listOf(Color.White, Color(0xFF3FA9F5), Color(0xFF0B2E6E))))
+            }
+            MusicSkin.VINTAGE -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF5A3517), Color(0xFF2A190C))))
+                val c = Offset(w / 2, h * 0.32f)
+                drawCircle(Color(0xFF111111), w * 0.38f, c)
+                for (k in 1..5) drawCircle(Color.White.copy(alpha = 0.06f), w * 0.38f * (0.4f + k * 0.11f), c, style = Stroke(1f))
+                drawCircle(Color(0xFFC9A15A), w * 0.12f, c)
+                drawLine(Color(0xFFDCC28A), Offset(w * 0.86f, h * 0.1f), Offset(w * 0.62f, h * 0.38f), 2.dp.toPx(), StrokeCap.Round)
+                texts(h * 0.6f, Color(0xFFF2E3C6)); seek(h * 0.71f, Color(0xFFC9A15A))
+                controls(h * 0.82f, Color(0xFFF2E3C6), Brush.radialGradient(listOf(Color(0xFFDCC28A), Color(0xFF8B5A2B))))
+            }
+            else -> {
+                drawRect(Brush.verticalGradient(listOf(Color(0xFF26304A), Color(0xFF101522))))
+                coverArt(w * 0.12f, h * 0.08f, w * 0.76f, c1 = Color(0xFFE07A5F), c2 = Color(0xFF3D405B))
+                texts(h * 0.56f, Color.White); seek(h * 0.68f, Color(0xFFE07A5F))
+                controls(h * 0.8f, Color.White, Brush.radialGradient(listOf(Color(0xFFE07A5F), Color(0xFFE07A5F))))
+            }
+        }
     }
 }
 

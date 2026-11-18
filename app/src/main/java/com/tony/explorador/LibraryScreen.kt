@@ -140,7 +140,7 @@ private object Retro {
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
     private val org get() = LibraryStore.musicSkin == MusicSkin.ORIGINAL
     private val lav get() = LibraryStore.musicSkin == MusicSkin.LAVANDA
-    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN || LibraryStore.musicSkin == MusicSkin.BOCINA
+    private val neb get() = LibraryStore.musicSkin == MusicSkin.NEBULA || LibraryStore.musicSkin == MusicSkin.WALKMAN || LibraryStore.musicSkin == MusicSkin.BOCINA || LibraryStore.musicSkin == MusicSkin.GUITAR
     val isNebula get() = neb
     val isWmp get() = wmp
     val isVintage get() = vin
@@ -569,7 +569,7 @@ private fun MainMenu(
         Entry("Carátulas animadas", if (AnimatedScanner.running) "buscando…" else "", Icons.Filled.AutoAwesome, LibPage.AnimatedCoversP),
         Entry("Letras", if (LyricsLocal.running) "buscando…" else "", Icons.Filled.Lyrics, LibPage.LyricsP),
         Entry("Sincronizar con NAS", if (NasSync.running) "sincronizando…" else "", Icons.Filled.CloudSync, LibPage.Nas),
-        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null, action = { skinDialog = true }),
+        Entry("Tema del reproductor", LibraryStore.musicSkin.label.substringBefore(" ("), Icons.Filled.Palette, null, action = { MusicUi.settingsPage = "theme"; MusicUi.settingsOpen = true }),
         Entry("Ajustes", "", Icons.Filled.Settings, null, action = { MusicUi.settingsOpen = true }),
     ) + (if (IS_MUSIC_APP) listOf(Entry("Buscar actualización",
         when (UpdateCenter.state) { is UpdateState.Checking -> "buscando…"; is UpdateState.Available -> "¡hay nueva!"; else -> "v" + AppVersion.name },
