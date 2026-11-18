@@ -175,10 +175,13 @@ fun XpDesktop(
         })
     }
 
+    val nebula = LibraryStore.homeStyle == HomeStyle.NEBULA
     Box(Modifier.fillMaxSize()) {
-        WallpaperView(Modifier.fillMaxSize())
+        if (nebula) NebulaLauncher(apps, player, hasMusic, onOpenPlayer, onClock = { clockOpen = !clockOpen },
+            onHome = { myPc.open = false; settings.open = false; startOpen = false; clockOpen = false })
+        else WallpaperView(Modifier.fillMaxSize())
 
-        Column(Modifier.fillMaxSize()) {
+        if (!nebula) Column(Modifier.fillMaxSize()) {
             // Íconos del escritorio
             DesktopIconsArea(apps, Modifier.weight(1f).fillMaxWidth().statusBarsPadding().padding(8.dp),
                 onChangeWallpaper = { wallpaperOpen = true })
@@ -191,7 +194,7 @@ fun XpDesktop(
         }
 
         // Capa de ventanas (arriba de la barra de tareas)
-        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = 42.dp)) {
+        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = if (nebula) 96.dp else 42.dp)) {
             if (myPc.open && !myPc.minimized) {
                 XpWindowFrame(
                     state = myPc,
@@ -206,7 +209,7 @@ fun XpDesktop(
                     )
                 }
             }
-            if (hasMusic && !DesktopState.player.minimized && player != null) {
+            if (!nebula && hasMusic && !DesktopState.player.minimized && player != null) {
                 XpMediaWindow(
                     player = player,
                     onOpen = onOpenPlayer,
@@ -240,11 +243,11 @@ fun XpDesktop(
             )
             XpClockWindow(
                 onClose = { clockOpen = false },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = 48.dp)
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = if (nebula) 100.dp else 48.dp)
             )
         }
 
-        if (startOpen) {
+        if (startOpen && !nebula) {
             // tocar fuera cierra el menú
             Box(
                 Modifier.fillMaxSize().clickable(

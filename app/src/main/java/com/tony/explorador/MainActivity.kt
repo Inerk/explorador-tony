@@ -464,17 +464,21 @@ fun AppRoot() {
                 title = { Text("Tema") },
                 text = {
                     Column {
-                        AppTheme.entries.forEach { t ->
+                        HomeStyle.all.forEach { (id, label) ->
                             androidx.compose.foundation.layout.Row(
                                 Modifier.fillMaxWidth()
-                                    .clickable { LibraryStore.changeTheme(t); choosingTheme = false }
+                                    .clickable { LibraryStore.changeHomeStyle(id); choosingTheme = false }
                                     .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 androidx.compose.material3.RadioButton(
-                                    selected = LibraryStore.theme == t,
-                                    onClick = { LibraryStore.changeTheme(t); choosingTheme = false })
-                                Text(t.label)
+                                    selected = LibraryStore.homeStyle == id,
+                                    onClick = { LibraryStore.changeHomeStyle(id); choosingTheme = false })
+                                Column {
+                                    Text(label)
+                                    Text(if (id == HomeStyle.NEBULA) "Iconos de cristal y fondo de onda (oficial)" else "El escritorio anterior con barra de Inicio",
+                                        fontSize = androidx.compose.ui.unit.TextUnit(12f, androidx.compose.ui.unit.TextUnitType.Sp))
+                                }
                             }
                         }
                     }

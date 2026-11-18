@@ -77,6 +77,8 @@ object LibraryStore {
     val playlists = mutableStateListOf<Playlist>()
 
     var theme by mutableStateOf(AppTheme.XP)
+    /** Pantalla de inicio: "nebula" (oficial) o "neko" (el escritorio anterior). */
+    var homeStyle by mutableStateOf(HomeStyle.NEBULA)
         private set
     var userName by mutableStateOf("Tony")
         private set
@@ -326,6 +328,7 @@ object LibraryStore {
     }
 
     fun changeTheme(t: AppTheme) { theme = t; save() }
+    fun changeHomeStyle(s: String) { homeStyle = s; save() }
 
     fun addFolder(path: String) { if (path !in musicFolders) { musicFolders.add(path); save() } }
     fun removeFolder(path: String) { musicFolders.remove(path); save() }
@@ -547,6 +550,7 @@ object LibraryStore {
             put("counts", JSONObject(playCounts.toMap()))
             put("last", JSONObject(lastPlayed.toMap()))
             put("theme", theme.name)
+            put("homeStyle", homeStyle)
             put("user", userName)
             put("avatar", avatar)
             put("musicSkin", musicSkin.name)
@@ -587,6 +591,7 @@ object LibraryStore {
         o.optJSONObject("last")?.let { m -> m.keys().forEach { k -> lastPlayed[k] = m.getLong(k) } }
         // por ahora el único tema es el clásico XP (versión beta)
         theme = AppTheme.XP
+        homeStyle = o.optString("homeStyle", HomeStyle.NEBULA).takeIf { s -> HomeStyle.all.any { it.first == s } } ?: HomeStyle.NEBULA
         o.optString("user").takeIf { it.isNotBlank() }?.let { userName = it }
         avatar = o.optInt("avatar", 0)
         o.optString("musicSkin").let { t -> MusicSkin.entries.firstOrNull { it.name == t }?.let { musicSkin = it } }

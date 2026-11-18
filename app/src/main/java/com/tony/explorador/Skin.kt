@@ -7,7 +7,7 @@ import androidx.compose.runtime.getValue
 
 /** Temas de la app. Para agregar uno nuevo: añádelo aquí y en [skinFor]. */
 enum class AppTheme(val label: String) {
-    XP("Nebula"),
+    XP("Nebula Neko"),
     MODERNO("Moderno"),
 }
 
