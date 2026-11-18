@@ -921,7 +921,7 @@ private fun SongListInner(
                     LazyColumn(Modifier.fillMaxSize().padding(end = if (alphabet && songs.size > 25) 14.dp else 0.dp), state = listState) {
                         item { header() }
                         itemsIndexed(songs, key = { i, _ -> keys[i] }) { i, song ->
-                            if (Retro.isLavanda && view != "cards") Box(Modifier.padding(start = 12.dp, end = 4.dp, top = 3.dp, bottom = 3.dp)
+                            if (Retro.isLavanda && view != "cards") Box(Modifier.padding(start = 12.dp, end = if (alphabet && songs.size > 25) 22.dp else 12.dp, top = 3.dp, bottom = 3.dp)
                                 .shadow(3.dp, RoundedCornerShape(18.dp), ambientColor = Color(0x227C4DDB), spotColor = Color(0x227C4DDB))
                                 .clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.78f))) {
                                 SongRow(song = song, rank = if (showCounts) i + 1 else null,
