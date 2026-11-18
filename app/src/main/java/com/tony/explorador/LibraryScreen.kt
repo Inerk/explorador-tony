@@ -73,6 +73,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.RemoveCircleOutline
@@ -1500,13 +1501,14 @@ fun AlphabetScroller(firstIndex: Map<String, Int>, textColor: Color = Retro.Text
                         active = null
                     }
                 },
-            verticalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = if (glass) Arrangement.Top else Arrangement.SpaceEvenly,
             horizontalAlignment = if (glass) Alignment.CenterHorizontally else Alignment.End
         ) {
             LETTERS.forEach { l ->
                 if (glass) {
                     val on = l == (active ?: current)
-                    Box(Modifier.size(18.dp).clip(CircleShape).background(if (on) activeColor else Color.Transparent), contentAlignment = Alignment.Center) {
+                    Box(Modifier.weight(1f).aspectRatio(1f, matchHeightConstraintsFirst = true).widthIn(max = 18.dp).clip(CircleShape)
+                        .background(if (on) activeColor else Color.Transparent), contentAlignment = Alignment.Center) {
                         Text(l, fontSize = 9.sp, lineHeight = 10.sp, fontWeight = FontWeight.Bold, color = when {
                             on -> Color.White; l in firstIndex -> textColor; else -> dimColor })
                     }
@@ -2132,8 +2134,8 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
     Box(Modifier.fillMaxWidth()) {
         // el planeta que asoma arriba a la derecha
         androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
-            val c = androidx.compose.ui.geometry.Offset(size.width * 1.05f, -size.height * 0.55f)
-            val r = size.height * 1.25f
+            val c = androidx.compose.ui.geometry.Offset(size.width * 1.02f, -size.height * 0.9f)
+            val r = size.height * 2.2f
             drawCircle(Brush.radialGradient(listOf(Nebula.Purple.copy(alpha = 0.45f), Color.Transparent), c, r * 1.35f), r * 1.35f, c)
             drawCircle(Brush.radialGradient(listOf(Color(0xFF1A0F3D), Color(0xFF2B1666)), c, r), r, c)
             drawCircle(Brush.sweepGradient(listOf(Nebula.Violet, Nebula.Pink, Color(0xFF8FD3FF), Nebula.Violet), c), r, c,
