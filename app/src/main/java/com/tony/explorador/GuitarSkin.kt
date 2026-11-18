@@ -300,22 +300,22 @@ fun GuitarBackground(accent: Color, beat: BocinaBeat, sim: GuitarSim? = null, mo
         row(crowdFar, w - farW * 0.90f, floorY - farW * crowdFar.height / crowdFar.width * 0.50f, farW, 0.55f, 0.2f)
         drawRect(Guitar.Night.copy(alpha = 0.25f), Offset(0f, floorY - h * 0.02f), Size(w, h * 0.06f))
         // 2) en medio
-        val midW = w * 0.80f; val midTop = floorY + h * 0.005f
+        val midW = w * 0.85f; val midTop = floorY + h * 0.03f
         row(crowdC, -midW * 0.25f, midTop, midW, 0.75f, 0.5f)
         row(crowdC, w - midW * 0.72f, midTop + h * 0.006f, midW, 0.75f, 0.5f)
         // manos y barras de luz de la gente de en medio/cerca, que se mecen arriba de sus cabezas
-        val nearW = w * 1.05f
-        val nearTop = midTop + h * 0.05f
-        val people = listOf(0.05f, 0.15f, 0.25f, 0.75f, 0.85f, 0.95f)
+        val nearW = w * 1.30f
+        val nearTop = midTop + h * 0.10f
+        val people = listOf(0.04f, 0.12f, 0.20f, 0.80f, 0.88f, 0.96f)
         people.forEachIndexed { i, fx ->
             val ph = i * 1.37f
             val up = (sin(t * 3.2f + ph) * 0.5f + 0.5f) * (0.4f + beat.level) * 9.dp.toPx() + beat.kick * 7.dp.toPx() * (if (i % 2 == 0) 1f else 0.6f)
             val x = w * fx; val baseY = nearTop + h * 0.02f
             if (i % 2 == 0) {
-                val hand = hands[i % hands.size]; val hw = w * 0.10f; val hh = hw * hand.height / hand.width
+                val hand = hands[i % hands.size]; val hw = w * 0.13f; val hh = hw * hand.height / hand.width
                 img(hand, x - hw / 2, baseY - hh - up, hw, hh, 0.95f)
             } else {
-                val st = sticks[i % sticks.size]; val sw = w * 0.04f; val sh = sw * st.height / st.width
+                val st = sticks[i % sticks.size]; val sw = w * 0.05f; val sh = sw * st.height / st.width
                 val ang = sin(t * 2.6f + ph) * (14f + beat.level * 18f)
                 withTransform({ rotate(ang, Offset(x, baseY - up)) }) {
                     drawCircle(Brush.radialGradient(listOf(Guitar.Purple.copy(alpha = 0.35f), Color.Transparent), Offset(x, baseY - up - sh * 0.5f), sh * 0.6f),
@@ -329,7 +329,7 @@ fun GuitarBackground(accent: Color, beat: BocinaBeat, sim: GuitarSim? = null, mo
         row(crowdB, w - nearW * 0.60f, nearTop + h * 0.008f, nearW, 1f, 0.85f)
 
         // se funde suave hacia abajo (sin cortes) y una sombra arriba para leer el nombre
-        val fadeTop = nearTop + nearW * crowdA.height / crowdA.width * 0.45f
+        val fadeTop = nearTop + nearW * crowdA.height / crowdA.width * 0.75f
         drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.5f to Guitar.Night.copy(alpha = 0.85f), 1f to Guitar.Deep, startY = fadeTop, endY = fadeTop + h * 0.10f),
             Offset(0f, fadeTop), Size(w, h - fadeTop))
         drawRect(Brush.verticalGradient(listOf(Guitar.Deep.copy(alpha = 0.55f), Color.Transparent), 0f, h * 0.16f), Offset.Zero, Size(w, h * 0.16f))
