@@ -80,20 +80,29 @@ class GuitarSim {
     private val avg = FloatArray(5)
     private val cool = FloatArray(5)
     var scroll = 0f
+    private var globalCool = 0f
     private val groups = listOf(0..2, 3..5, 6..8, 9..12, 13 until SpectrumAnalyzer.BANDS)
 
     fun update(beat: BocinaBeat, playing: Boolean, dt: Float) {
         scroll = (scroll + dt * (0.6f + beat.level * 0.9f) * (if (playing) 1f else 0.15f)) % 1f
+        // solo los 1 o 2 carriles que más subieron sueltan nota (así no bajan en filas parejas)
+        globalCool -= dt
+        val cand = ArrayList<Pair<Int, Float>>()
         for (i in 0 until 5) {
             val g = groups[i]
             var e = 0f; for (b in g) e += beat.bands.getOrElse(b) { 0f }; e /= g.count()
             energy[i] = e
             cool[i] -= dt
-            if (playing && cool[i] <= 0f && e > avg[i] * 1.22f + 0.05f && notes.size < 24) {
-                notes.add(Note(i, 0f)); cool[i] = 0.24f
-            }
+            val jump = e - (avg[i] * 1.18f + 0.04f)
+            if (playing && cool[i] <= 0f && jump > 0f) cand.add(i to jump / (avg[i] + 0.05f))
             avg[i] = avg[i] * 0.94f + e * 0.06f
             flash[i] = (flash[i] - dt * 3.2f).coerceAtLeast(0f)
+        }
+        if (cand.isNotEmpty() && globalCool <= 0f && notes.size < 24) {
+            cand.sortByDescending { it.second }
+            val take = if (cand.size >= 3 && cand[1].second > 0.8f) 2 else 1
+            cand.take(take).forEach { (i, _) -> notes.add(Note(i, 0f)); cool[i] = 0.30f }
+            globalCool = 0.11f
         }
         val speed = if (playing) 1f / 1.15f else 0.25f
         val it = notes.iterator()
