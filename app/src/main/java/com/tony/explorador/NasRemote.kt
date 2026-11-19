@@ -188,6 +188,7 @@ private class RState {
     var rating by mutableStateOf(0)
     var shuffle by mutableStateOf(false)
     var repeat by mutableStateOf("off")         // off · all · single
+    var spotify by mutableStateOf(false)        // suena Spotify (bocina «NAS Nebula») por el pipe del NAS
     val outputs = mutableStateListOf<ROutput>()
 }
 
@@ -230,6 +231,8 @@ private fun artUrl(host: String, rel: String?) = rel?.takeIf { it.isNotBlank() }
     if (it.startsWith("http")) it else "http://$host:${AirPlayBridge.PORT}/" + it.removePrefix(".").trimStart('/')
 }
 private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+/** El pipe de Spotify Connect que llena librespot en el NAS (Music/Spotify/spotify). */
+private fun isSpotifyPipe(it: JSONObject) = it.optString("data_kind") == "pipe" && it.optString("path").endsWith("/Spotify/spotify")
 private fun fmt(ms: Long): String { val t = (ms / 1000).coerceAtLeast(0); return "%d:%02d".format(t / 60, t % 60) }
 
 private fun JSONObject.items(): JSONArray = optJSONArray("items") ?: JSONArray()
@@ -296,6 +299,17 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                         for (i in 0 until q.length()) {
                             val it = q.getJSONObject(i)
                             if (it.optLong("id") == itemId) {
+                                st.spotify = isSpotifyPipe(it)
+                                if (st.spotify) {
+                                    // lo que manda Spotify: si aún no llegan los datos, el pipe se llama «spotify»
+                                    val t = it.optString("title")
+                                    st.title = if (t.isBlank() || t.equals("spotify", true)) "Spotify" else t
+                                    st.artist = it.optString("artist").ifBlank { "NAS Nebula" }
+                                    st.trackId = ""; st.rating = 0
+                                    // la portada del pipe siempre tiene la misma dirección: se le pega la canción para que se refresque
+                                    st.art = artUrl(h, it.optString("artwork_url"))?.let { u -> u + (if ('?' in u) "&" else "?") + "c=" + (st.title + st.artist).hashCode() }
+                                    break
+                                }
                                 st.title = it.optString("title"); st.artist = it.optString("artist")
                                 val tid = it.optString("track_id")
                                 if (tid != st.trackId) {
@@ -305,7 +319,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                                 st.art = artUrl(h, it.optString("artwork_url")); break
                             }
                         }
-                    } else { st.title = ""; st.artist = ""; st.art = null }
+                    } else { st.title = ""; st.artist = ""; st.art = null; st.spotify = false }
                     if (tick % 4 == 0) {
                         val o = JSONObject(api(h, "GET", "/api/outputs")).optJSONArray("outputs") ?: JSONArray()
                         val list = (0 until o.length()).map { o.getJSONObject(it) }
@@ -371,7 +385,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 Icon(Icons.Filled.ArrowBack, "Cerrar", tint = RC.text, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { handleBack() }.padding(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Control remoto", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                    Text(st.host?.let { "Música del NAS · $it" } ?: if (st.searching) "Buscando el NAS…" else "Sin conexión", color = RC.sub, fontSize = 12.sp)
+                    Text(st.host?.let { if (st.spotify) "Spotify en el NAS · $it" else "Música del NAS · $it" } ?: if (st.searching) "Buscando el NAS…" else "Sin conexión", color = RC.sub, fontSize = 12.sp)
                 }
                 if (st.searching) CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 else Icon(Icons.Filled.Refresh, "Buscar otra vez", tint = RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { reload++ }.padding(10.dp))
@@ -408,11 +422,14 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                         Text(st.title, color = RC.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(st.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    if (st.spotify) SpotifyBadge()
+                    else {
                     Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, "Pausa", tint = RC.text,
                         modifier = Modifier.size(40.dp).clip(CircleShape).clickable {
                             call("PUT", if (st.state == "play") "/api/player/pause" else "/api/player/play"); st.state = if (st.state == "play") "pause" else "play"
                         }.padding(8.dp))
                     Icon(Icons.Filled.SkipNext, "Siguiente", tint = RC.text, modifier = Modifier.size(40.dp).clip(CircleShape).clickable { call("PUT", "/api/player/next") }.padding(8.dp))
+                    }
                 }
             }
             // pestañas
@@ -427,6 +444,13 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             }
         }
     }
+}
+
+/** Etiqueta verde de Spotify. */
+@Composable
+private fun SpotifyBadge(modifier: Modifier = Modifier) {
+    Text("● Spotify · NAS Nebula", color = Color(0xFF1DB954), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        modifier = modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x221DB954)).padding(horizontal = 10.dp, vertical = 4.dp))
 }
 
 @Composable
@@ -449,9 +473,10 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
             else Icon(Icons.Filled.MusicNote, null, tint = RC.sub, modifier = Modifier.size(80.dp))
         }
         Spacer(Modifier.height(20.dp))
+        if (st.spotify) { SpotifyBadge(Modifier.padding(bottom = 6.dp)) }
         Text(st.title.ifBlank { "Nada sonando" }, color = RC.text, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(st.artist.ifBlank { "Elige música en «Biblioteca»" }, color = RC.sub, fontSize = 14.sp, maxLines = 1)
-        if (st.trackId.isNotBlank()) {
+        if (st.trackId.isNotBlank() && !st.spotify) {
             val fav = st.rating >= 80
             Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorito", tint = if (fav) Color(0xFFFF5A8A) else RC.sub,
                 modifier = Modifier.padding(top = 4.dp).size(40.dp).clip(CircleShape).clickable {
@@ -462,6 +487,24 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         val names = st.outputs.filter { it.selected }.joinToString(", ") { RemotePrefs.nameOf(it.id, it.name) }
         if (names.isNotBlank()) Text("🔊 $names", color = RC.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(12.dp))
+        if (st.spotify) {
+            // Spotify manda el avance; cambiar de canción o pausar se hace en la app de Spotify
+            val len = st.len.coerceAtLeast(1)
+            if (st.len > 0) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+                    Box(Modifier.fillMaxWidth((st.pos.toFloat() / len).coerceIn(0f, 1f)).height(4.dp).background(Color(0xFF1DB954)))
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    Text(fmt(st.pos), color = RC.sub, fontSize = 11.sp); Spacer(Modifier.weight(1f)); Text(fmt(st.len), color = RC.sub, fontSize = 11.sp)
+                }
+            }
+            Text(if (st.state == "play") "Pausa, cambia de canción o de lista desde la app de Spotify. Aquí escoges bocinas y volumen."
+                 else "Spotify está en pausa. Dale play en la app de Spotify (bocina «NAS Nebula»).",
+                color = RC.sub, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(vertical = 12.dp))
+            VolumeControl(st.volume, Modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) { v ->
+                st.volume = v; call("PUT", "/api/player/volume?volume=$v", null)
+            }
+        } else {
         val len = st.len.coerceAtLeast(1)
         Slider(dragging ?: (st.pos.toFloat() / len).coerceIn(0f, 1f), { dragging = it },
             onValueChangeFinished = { dragging?.let { call("PUT", "/api/player/seek?position_ms=${(it * len).toLong()}", null) }; dragging = null },
@@ -487,6 +530,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
             color = RC.accent, fontSize = 11.sp)
         VolumeControl(st.volume, Modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) { v ->
             st.volume = v; call("PUT", "/api/player/volume?volume=$v", null)
+        }
         }
     }
 }
