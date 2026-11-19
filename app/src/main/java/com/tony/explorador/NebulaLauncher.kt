@@ -94,34 +94,34 @@ object HomeStyle {
 
 /** Los iconos de cristal de cada app. */
 fun nebulaIconFor(app: DeskApp): Int = when (app.id) {
-    "music" -> R.drawable.nbx_music
-    "pictures" -> R.drawable.nbx_gallery
-    "videos" -> R.drawable.nbx_video
-    "downloads" -> R.drawable.nbx_downloads
-    "panel" -> R.drawable.nbx_settings
-    "updates" -> R.drawable.nbx_update
+    "music" -> R.drawable.pv_musica
+    "pictures", "camera" -> R.drawable.pv_galeria
+    "videos" -> R.drawable.pv_video
+    "downloads" -> R.drawable.pv_descargas
+    "panel" -> R.drawable.pv_ajustes
+    "updates" -> R.drawable.pv_actualizar
     "trash" -> R.drawable.nbx_trash
-    "web" -> R.drawable.nbx_web
-    "explorer" -> R.drawable.nbx_folder
-    "remote" -> R.drawable.nbx_speaker
-    "tienda" -> R.drawable.nbx_store
-    "casa" -> R.drawable.nbx_house
-    "mypc", "sd" -> R.drawable.nbx_database
-    "camera" -> R.drawable.nbx_photos
-    "docs" -> R.drawable.nbx_document
+    "web" -> R.drawable.pv_internet
+    "explorer", "mypc", "sd" -> R.drawable.pv_explorador
+    "remote" -> R.drawable.pv_control
+    "tienda" -> R.drawable.pv_tienda_nebula
+    "casa" -> R.drawable.pv_inicio
+    "docs" -> R.drawable.pv_carpeta_enlace
     else -> when (app.kind) {
-        XpIconKind.FOLDER -> if (Regex("(?i)m[uú]sic").containsMatchIn(app.label)) R.drawable.nbx_musicfolder else R.drawable.nbx_greenfolder
-        XpIconKind.PICTURES -> R.drawable.nbx_photos
-        XpIconKind.MUSIC -> R.drawable.nbx_music
-        XpIconKind.VIDEOS -> R.drawable.nbx_video
-        else -> R.drawable.nbx_document
+        XpIconKind.FOLDER -> if (Regex("(?i)m[uú]sic").containsMatchIn(app.label)) R.drawable.pv_musica_carpeta else R.drawable.pv_carpeta_enlace
+        XpIconKind.PICTURES -> R.drawable.pv_galeria
+        XpIconKind.MUSIC -> R.drawable.pv_musica
+        XpIconKind.VIDEOS -> R.drawable.pv_video
+        else -> R.drawable.pv_carpeta_enlace
     }
 }
 
-private val NebulaDefaults = listOf("music", "pictures", "videos", "downloads", "panel", "updates", "trash", "web", "explorer", "remote", "tienda")
+private val NebulaDefaults = listOf("music", "pictures", "videos", "downloads", "panel", "updates", "trash", "web", "explorer", "tienda")
 
-private val labelStyle = TextStyle(color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center,
+private val labelStyle get() = if (XpColors.dark) TextStyle(color = Color.White, fontSize = 13.sp, textAlign = TextAlign.Center,
     shadow = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 6f))
+    else TextStyle(color = Color(0xFF0E1A3A), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+    shadow = Shadow(Color.White.copy(alpha = 0.8f), blurRadius = 8f))
 
 @Composable
 private fun NebulaWallpaperImage(modifier: Modifier) {
@@ -129,12 +129,15 @@ private fun NebulaWallpaperImage(modifier: Modifier) {
     if (LibraryStore.wallpaper == "custom" && LibraryStore.wallpaperFile.isFile)
         AsyncImage(ImageRequest.Builder(ctx).data(LibraryStore.wallpaperFile).memoryCacheKey("wallpaper-${LibraryStore.wallpaperVersion}")
             .diskCachePolicy(CachePolicy.DISABLED).build(), null, contentScale = ContentScale.Crop, modifier = modifier)
-    else Image(painterResource(R.drawable.nebula_wall), null, contentScale = ContentScale.Crop, modifier = modifier)
+    else Image(painterResource(if (XpColors.dark) R.drawable.pv_fondo_oscuro else R.drawable.pv_fondo_claro), null, contentScale = ContentScale.Crop, modifier = modifier)
 }
 
-private fun Modifier.glassBar(shape: RoundedCornerShape) = this.clip(shape)
-    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.06f))))
-    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.06f))), shape)
+private fun Modifier.glassBar(shape: RoundedCornerShape) = if (XpColors.dark) this.clip(shape)
+    .background(Brush.verticalGradient(listOf(Color(0xFF1B2450).copy(alpha = 0.75f), Color(0xFF0E1433).copy(alpha = 0.75f))))
+    .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))), shape)
+    else this.clip(shape)
+    .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.52f))))
+    .border(1.dp, Color.White.copy(alpha = 0.95f), shape)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -212,15 +215,15 @@ private fun NebulaMiniPlayer(player: Player, onOpen: () -> Unit) {
     val md = player.mediaMetadata
     Row(Modifier.padding(horizontal = 14.dp).padding(bottom = 8.dp).fillMaxWidth().glassBar(RoundedCornerShape(22.dp))
         .clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.nbx_music), null, Modifier.size(38.dp))
+        Image(painterResource(R.drawable.pv_musica), null, Modifier.size(38.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(md.title?.toString() ?: "Música", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(md.artist?.toString() ?: "", color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(md.title?.toString() ?: "Música", color = if (XpColors.dark) Color.White else Color(0xFF0E1A3A), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(md.artist?.toString() ?: "", color = if (XpColors.dark) Color.White.copy(alpha = 0.65f) else Color(0xFF4A5878), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Icon(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Reproducir o pausar", tint = Color.White,
+        Icon(if (player.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Reproducir o pausar", tint = if (XpColors.dark) Color.White else Color(0xFF1E5BFF),
             modifier = Modifier.size(40.dp).clip(CircleShape).clickable { if (player.isPlaying) player.pause() else player.play() }.padding(7.dp))
-        Icon(Icons.Filled.SkipNext, "Siguiente", tint = Color.White,
+        Icon(Icons.Filled.SkipNext, "Siguiente", tint = if (XpColors.dark) Color.White else Color(0xFF1E5BFF),
             modifier = Modifier.size(40.dp).clip(CircleShape).clickable { player.seekToNextMediaItem() }.padding(8.dp))
     }
 }
@@ -232,20 +235,21 @@ private fun NebulaDock(onApps: () -> Unit, onSearch: () -> Unit, onHome: () -> U
     val es = Locale("es", "MX")
     Row(Modifier.navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 10.dp).fillMaxWidth()
         .glassBar(RoundedCornerShape(30.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        DockButton(Icons.Filled.GridView, "Todas las apps", false, onApps)
+        Image(painterResource(R.drawable.pv_apps), "Todas las apps", Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onApps))
         Spacer(Modifier.width(10.dp))
         DockButton(Icons.Filled.Search, "Buscar", false, onSearch)
         Spacer(Modifier.width(10.dp))
-        DockButton(Icons.Filled.Home, "Inicio", true, onHome)
+        Image(painterResource(R.drawable.pv_inicio), "Inicio", Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onHome))
         Spacer(Modifier.weight(1f))
-        Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.07f)).clickable(onClick = onClock)
+        val ink = if (XpColors.dark) Color.White else Color(0xFF0E1A3A)
+        Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = if (XpColors.dark) 0.07f else 0.4f)).clickable(onClick = onClock)
             .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("🌙", fontSize = 22.sp, modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).padding(6.dp))
+            Text(if (XpColors.dark) "🌙" else "🌸", fontSize = 22.sp, modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).padding(6.dp))
             Spacer(Modifier.width(8.dp))
             Column {
-                Text(SimpleDateFormat("h:mm a", es).format(Date(now)), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text(SimpleDateFormat("h:mm a", es).format(Date(now)), color = ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text(SimpleDateFormat("EEE, d MMM", es).format(Date(now)).replaceFirstChar { it.uppercase() }.replace(".", ""),
-                    color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    color = ink.copy(alpha = 0.7f), fontSize = 12.sp)
             }
         }
     }
@@ -254,10 +258,11 @@ private fun NebulaDock(onApps: () -> Unit, onSearch: () -> Unit, onHome: () -> U
 @Composable
 private fun DockButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
     Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
-        .background(if (active) Brush.verticalGradient(listOf(Color(0xFF6B4FD8), Color(0xFF4A35A8))) else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.05f))))
-        .border(1.dp, Color.White.copy(alpha = if (active) 0.35f else 0.15f), RoundedCornerShape(16.dp))
+        .background(if (XpColors.dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.06f)))
+            else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFFE6EEFB))))
+        .border(1.dp, Color.White.copy(alpha = if (XpColors.dark) 0.18f else 0.95f), RoundedCornerShape(16.dp))
         .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, label, tint = if (active) Color.White else Color(0xFFD9CFFF), modifier = Modifier.size(26.dp))
+        GradIcon(icon, listOf(Color(0xFF3FA9FF), Color(0xFF1E5BFF)), 26.dp)
     }
 }
 

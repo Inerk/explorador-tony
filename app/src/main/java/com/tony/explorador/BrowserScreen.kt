@@ -178,6 +178,8 @@ fun BrowserScreen(
     var castFile by remember { mutableStateOf<File?>(null) }
     var docFile by remember { mutableStateOf<File?>(null) }
     var recentMode by remember { mutableStateOf(false) }
+    /** «Favoritos» del inicio: usa la misma vista que Recientes, pero con lo que marcaste con estrella. */
+    var favMode by remember { mutableStateOf(false) }
     var category by remember { mutableStateOf<FileCategory?>(null) }
     var lastDir by remember { mutableStateOf<File?>(null) }
     LaunchedEffect(currentDir) { currentDir?.let { lastDir = it } }
@@ -276,10 +278,13 @@ fun BrowserScreen(
     }
 
     // Recientes: lo último que se guardó o cambió en el teléfono
-    LaunchedEffect(recentMode, showHidden) {
+    LaunchedEffect(recentMode, favMode, showHidden) {
         if (!recentMode) { if (!searchActive) searchResults = null; return@LaunchedEffect }
         formatFilter = emptySet(); searching = true; searchResults = emptyList()
-        searchResults = withContext(Dispatchers.IO) { recentFiles(context, showHidden) }
+        searchResults = withContext(Dispatchers.IO) {
+            if (favMode) LibraryStore.favorites.entries.sortedByDescending { it.value }.map { File(it.key) }.filter { it.exists() }
+            else recentFiles(context, showHidden)
+        }
         searching = false
     }
 
@@ -344,8 +349,10 @@ fun BrowserScreen(
                 }
             },
             onFiles = { ExplorerHome.show = false; if (currentDir == null) goTo(lastDir ?: roots.first().file) },
-            onRecent = { ExplorerHome.show = false; if (currentDir == null) currentDir = roots.first().file; recentMode = true },
-            onRemote = { RemoteUi.open = true },
+            onRecent = { ExplorerHome.show = false; if (currentDir == null) currentDir = roots.first().file; favMode = false; recentMode = true },
+            onFavorites = { ExplorerHome.show = false; if (currentDir == null) currentDir = roots.first().file; favMode = true; recentMode = true },
+            onSearch = { ExplorerHome.show = false; if (currentDir == null) currentDir = roots.first().file; searchActive = true },
+            onSettings = { ExplorerHome.show = false; goTo(null); DesktopState.settings.open = true; DesktopState.settings.minimized = false },
         )
         BackHandler(enabled = currentDir != null || ExplorerHome.show) { ExplorerHome.show = false; goTo(null) }
         return
@@ -446,8 +453,8 @@ fun BrowserScreen(
                             Text("${searchResults?.size ?: 0} archivos en tu teléfono", fontSize = 13.sp, color = ExpTheme.sub, maxLines = 1)
                         }
                         else if (recentMode) Column {
-                            Text("Recientes", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                            Text("Lo último que se guardó en tu teléfono", fontSize = 13.sp, color = ExpTheme.sub, maxLines = 1)
+                            Text(if (favMode) "Favoritos" else "Recientes", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text(if (favMode) "Lo que marcaste con estrella" else "Lo último que se guardó en tu teléfono", fontSize = 13.sp, color = ExpTheme.sub, maxLines = 1)
                         }
                         else if (dir == null) Text("DriveNebula", maxLines = 1, fontWeight = FontWeight.Bold)
                         else {
