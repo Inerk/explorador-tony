@@ -1,0 +1,8 @@
+# Sonido virtual del contenedor de Spotify oficial.
+# Todo lo que suene sale al pipe que OwnTone lee (Music/Spotify/spotify).
+load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse/native
+load-module module-pipe-sink file=/pipe/spotify sink_name=nas format=s16le rate=44100 channels=2 sink_properties=device.description=OwnTone
+set-default-sink nas
+# si nada suena en 2 s, deja de escribir al pipe (si no, OwnTone creería que siempre hay Spotify)
+load-module module-suspend-on-idle timeout=2
+load-module module-stream-restore restore_device=false
