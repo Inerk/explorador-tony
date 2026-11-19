@@ -155,6 +155,18 @@ internal object Keeper {
             }
         }
     }.start()
+    private fun req(host: String, method: String, path: String, body: String? = null): String =
+        (java.net.URL("http://$host:$PORT$path").openConnection() as java.net.HttpURLConnection).run {
+            requestMethod = method; connectTimeout = 3000; readTimeout = 4000
+            if (body != null) { doOutput = true; setRequestProperty("Content-Type", "application/json; charset=utf-8"); outputStream.use { it.write(body.toByteArray()) } }
+            val t = (if (responseCode < 400) inputStream else errorStream)?.bufferedReader()?.readText() ?: ""
+            disconnect(); if (responseCode >= 400) throw Exception("NAS respondió $responseCode") else t
+        }
+    fun getConfig(host: String): JSONObject? = runCatching { JSONObject(req(host, "GET", "/config")) }.getOrNull()
+    fun putConfig(host: String, cfg: JSONObject) = runCatching { req(host, "PUT", "/config", cfg.toString()) }.isSuccess
+    fun timer(host: String): JSONObject? = runCatching { JSONObject(req(host, "GET", "/timer")) }.getOrNull()
+    fun setTimer(host: String, body: JSONObject): JSONObject? = runCatching { JSONObject(req(host, "POST", "/timer", body.toString())) }.getOrNull()
+    fun cancelTimer(host: String) = runCatching { req(host, "DELETE", "/timer") }.isSuccess
     fun info(host: String): JSONObject? = runCatching {
         (java.net.URL("http://$host:$PORT/").openConnection() as java.net.HttpURLConnection).run {
             connectTimeout = 2000; readTimeout = 2000; JSONObject(inputStream.bufferedReader().readText()).also { disconnect() }
@@ -199,8 +211,15 @@ object RemotePrefs {
     /** perfil → (id de bocina → (encendida, volumen)) */
     val profiles = androidx.compose.runtime.mutableStateMapOf<String, Map<String, Pair<Boolean, Int>>>()
 
+    private var app: android.content.Context? = null
+    /** NAS con el que se sincronizan apodos, perfiles y alarmas. */
+    @Volatile var host: String? = null
+    /** true cuando ya se leyó la configuración del NAS. */
+    var synced by mutableStateOf(false)
+
     fun init(c: android.content.Context) {
         if (prefs != null) return
+        app = c.applicationContext
         val p = c.applicationContext.getSharedPreferences("remote", android.content.Context.MODE_PRIVATE); prefs = p
         runCatching { JSONObject(p.getString("nicks", "{}")!!).let { o -> o.keys().forEach { nicks[it] = o.getString(it) } } }
         runCatching {
@@ -211,14 +230,64 @@ object RemotePrefs {
             }
         }
     }
+    /**
+     * Lee la configuración guardada en el NAS (apodos, perfiles y alarmas) y la usa en este teléfono.
+     * Si el NAS todavía no tiene nada, le sube lo de este teléfono. Se llama en segundo plano.
+     */
+    fun syncFrom(h: String) {
+        host = h
+        val c = app ?: return
+        val remote = Keeper.getConfig(h)
+        if (remote == null) return
+        if (remote.optInt("rev") <= 0 || (remote.optJSONObject("nicks")?.length() ?: 0) + (remote.optJSONObject("profiles")?.length() ?: 0) +
+            (remote.optJSONArray("alarms")?.length() ?: 0) == 0) {
+            NasAlarms.load(c)
+            if (nicks.isNotEmpty() || profiles.isNotEmpty() || NasAlarms.list.isNotEmpty()) Keeper.putConfig(h, toJson())
+            android.os.Handler(android.os.Looper.getMainLooper()).post { synced = true }
+            return
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            runCatching {
+                val n = remote.optJSONObject("nicks") ?: JSONObject()
+                nicks.clear(); n.keys().forEach { nicks[it] = n.getString(it) }
+                val o = remote.optJSONObject("profiles") ?: JSONObject()
+                profiles.clear()
+                o.keys().forEach { name ->
+                    val m = o.getJSONObject(name)
+                    profiles[name] = m.keys().asSequence().associateWith { id -> m.getJSONObject(id).let { Pair(it.optBoolean("s"), it.optInt("v")) } }
+                }
+                prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
+                persistLocal()
+                NasAlarms.replaceFromNas(c, remote.optJSONArray("alarms") ?: JSONArray())
+            }
+            synced = true
+        }
+    }
+
+    private fun toJson(): JSONObject {
+        val p = JSONObject()
+        profiles.forEach { (n, m) -> p.put(n, JSONObject().apply { m.forEach { (id, sv) -> put(id, JSONObject().put("s", sv.first).put("v", sv.second)) } }) }
+        val tz = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60000
+        return JSONObject().put("nicks", JSONObject(nicks.toMap())).put("profiles", p).put("alarms", NasAlarms.toJson()).put("tz", tz)
+    }
+
+    /** Manda todo al NAS (después de cualquier cambio). */
+    fun pushAll() {
+        val h = host ?: return
+        val cfg = toJson()
+        Thread { Keeper.putConfig(h, cfg) }.start()
+    }
+
     fun nameOf(id: String, fallback: String) = nicks[id]?.takeIf { it.isNotBlank() } ?: fallback
     fun setNick(id: String, nick: String) {
         if (nick.isBlank()) nicks.remove(id) else nicks[id] = nick.trim()
         prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
+        pushAll()
     }
     fun saveProfile(name: String, outs: List<Pair<String, Pair<Boolean, Int>>>) { profiles[name.trim()] = outs.toMap(); persist() }
     fun deleteProfile(name: String) { profiles.remove(name); persist() }
-    private fun persist() {
+    private fun persist() { persistLocal(); pushAll() }
+    private fun persistLocal() {
         val o = JSONObject()
         profiles.forEach { (n, m) -> o.put(n, JSONObject().apply { m.forEach { (id, sv) -> put(id, JSONObject().put("s", sv.first).put("v", sv.second)) } }) }
         prefs?.edit()?.putString("profiles", o.toString())?.apply()
@@ -276,6 +345,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
         if (!hasPerm() && !permAsked) { runCatching { permLauncher.launch(localPerm) }.onFailure { permAsked = true; reload++ }; return@LaunchedEffect }
         st.searching = true; st.error = null
         st.host = withContext(Dispatchers.IO) { runCatching { AirPlayBridge.findHost(ctx) }.getOrNull() }
+        st.host?.let { h -> withContext(Dispatchers.IO) { RemotePrefs.syncFrom(h) } }
         st.searching = false
         if (st.host == null) st.error = if (!hasPerm())
             "La app no tiene permiso para ver tu red. Ve a Ajustes del teléfono → Apps → DriveNebula → Permisos → «Dispositivos cercanos / red local» y actívalo."
@@ -486,6 +556,7 @@ private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
         }
         val names = st.outputs.filter { it.selected }.joinToString(", ") { RemotePrefs.nameOf(it.id, it.name) }
         if (names.isNotBlank()) Text("🔊 $names", color = RC.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+        st.host?.let { SleepTimerChip(it, Modifier.padding(top = 8.dp)) }
         Spacer(Modifier.height(12.dp))
         if (st.spotify) {
             // Spotify manda el avance; cambiar de canción o pausar se hace en la app de Spotify

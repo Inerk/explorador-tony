@@ -19,7 +19,7 @@ class ExploradorApp : Application(), ImageLoaderFactory {
             previous?.uncaughtException(t, e)
         }
         runCatching { ExitReport.check(this) }
-        runCatching { NasAlarms.rescheduleAll(this) }
+        runCatching { NasAlarms.cancelPhoneAlarms(this) }
         TagOverrides.init(this)
         LibraryStore.init(this)
         Trash.init(this)

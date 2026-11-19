@@ -106,42 +106,36 @@ object NasAlarms {
     }
     private fun save(c: Context) { prefs(c).edit().putString("list", JSONArray(list.map { it.toJson() }).toString()).apply() }
 
+    /** Cambios hechos aquí: se guardan y se mandan al NAS (que es quien las hace sonar). */
     fun put(c: Context, a: NasAlarm) {
         load(c)
         val i = list.indexOfFirst { it.id == a.id }
         if (i >= 0) list[i] = a else list += a
-        save(c); schedule(c, a)
+        save(c); RemotePrefs.pushAll()
     }
-    fun remove(c: Context, a: NasAlarm) { list.removeAll { it.id == a.id }; save(c); cancel(c, a.id) }
+    fun remove(c: Context, a: NasAlarm) { list.removeAll { it.id == a.id }; save(c); RemotePrefs.pushAll() }
     fun newId() = (list.maxOfOrNull { it.id } ?: 0) + 1
 
-    /** Próxima vez que toca (en milisegundos), o null si está apagada. */
-    fun nextTime(a: NasAlarm, from: Long = System.currentTimeMillis()): Long? {
-        if (!a.enabled) return null
-        val c = Calendar.getInstance().apply { timeInMillis = from; set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
-        c.set(Calendar.HOUR_OF_DAY, a.hour); c.set(Calendar.MINUTE, a.minute)
-        if (c.timeInMillis <= from) c.add(Calendar.DAY_OF_YEAR, 1)
-        if (a.days.isNotEmpty()) repeat(7) { if (c.get(Calendar.DAY_OF_WEEK) !in a.days) c.add(Calendar.DAY_OF_YEAR, 1) }
-        return c.timeInMillis
+    /** Lo que vino del NAS reemplaza lo de este teléfono. */
+    fun replaceFromNas(c: Context, a: JSONArray) {
+        load(c)
+        list.clear(); for (i in 0 until a.length()) runCatching { list += NasAlarm.from(a.getJSONObject(i)) }
+        save(c)
     }
+    fun toJson() = JSONArray(list.map { it.toJson() })
 
-    private fun pending(c: Context, id: Int) = PendingIntent.getBroadcast(c, 7000 + id,
-        Intent(c, NasAlarmReceiver::class.java).putExtra("id", id), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-    fun schedule(c: Context, a: NasAlarm) {
+    /** Las versiones anteriores las programaban en el teléfono: se quitan para que no suenen dos veces. */
+    fun cancelPhoneAlarms(c: Context) {
+        load(c)
         val am = c.getSystemService(AlarmManager::class.java) ?: return
-        val t = nextTime(a) ?: run { cancel(c, a.id); return }
-        val pi = pending(c, a.id)
-        val exact = android.os.Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
-        runCatching {
-            if (exact) {
-                val show = PendingIntent.getActivity(c, 6999, Intent(c, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-                am.setAlarmClock(AlarmManager.AlarmClockInfo(t, show), pi)
-            } else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, t, pi)
+        (list.map { it.id } + (1..60)).toSet().forEach { id ->
+            runCatching {
+                am.cancel(PendingIntent.getBroadcast(c, 7000 + id, Intent(c, NasAlarmReceiver::class.java).putExtra("id", id),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+            }
         }
     }
-    fun cancel(c: Context, id: Int) { c.getSystemService(AlarmManager::class.java)?.cancel(pending(c, id)) }
-    fun rescheduleAll(c: Context) { load(c); list.forEach { schedule(c, it) } }
+    @Suppress("unused") fun rescheduleAll(c: Context) = cancelPhoneAlarms(c)
 
     fun describe(a: NasAlarm): String {
         val names = listOf("", "D", "L", "M", "M", "J", "V", "S")
@@ -154,62 +148,11 @@ object NasAlarms {
         }
         return d + " · " + a.sourceName.ifBlank { "sin música elegida" } + (if (a.shuffle) " · aleatorio" else "")
     }
-
-    /** Lo que hace la alarma en el NAS: bocinas, volumen y música. */
-    fun fire(c: Context, a: NasAlarm) {
-        RemotePrefs.init(c)
-        val host = runBlocking { runCatching { AirPlayBridge.findHost(c) }.getOrNull() } ?: throw Exception("no encontré el NAS")
-        fun api(m: String, p: String, b: String? = null) = AirPlayBridge.http(m, host, p, b)
-        a.profile?.let { RemotePrefs.profiles[it] }?.let { prof ->
-            val o = JSONObject(api("GET", "/api/outputs")).optJSONArray("outputs") ?: JSONArray()
-            for (i in 0 until o.length()) {
-                val out = o.getJSONObject(i); val id = out.optString("id")
-                if (out.optString("name").endsWith("+") || out.optString("type") == "ALSA") continue
-                val sv = prof[id] ?: Pair(false, out.optInt("volume"))
-                api("PUT", "/api/outputs/$id", JSONObject().put("selected", sv.first).apply { if (sv.first) put("volume", sv.second) }.toString())
-            }
-        }
-        a.profile?.let { RemotePrefs.profiles[it] }?.let { prof -> Keeper.push(host, prof.filter { it.value.first }.map { it.key to it.value.second }) }
-        a.volume?.let { api("PUT", "/api/player/volume?volume=$it") }
-        api("PUT", "/api/player/shuffle?state=${a.shuffle}")
-        val what = if (a.kind == "folder") "expression=" + URLEncoder.encode("media_kind is music and path starts with \"${a.source.replace("\"", "")}\"", "UTF-8")
-            else "uris=" + URLEncoder.encode("library:playlist:${a.source}", "UTF-8")
-        api("POST", "/api/queue/items/add?clear=true&playback=start&$what")
-    }
 }
 
+/** Ya no hace sonar nada (lo hace el NAS); solo limpia alarmas viejas del teléfono. */
 class NasAlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(c: Context, i: Intent) {
-        val app = c.applicationContext
-        if (i.action == Intent.ACTION_BOOT_COMPLETED || i.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
-            i.action == "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED") { NasAlarms.rescheduleAll(app); return }
-        val id = i.getIntExtra("id", -1)
-        NasAlarms.load(app)
-        val a = NasAlarms.list.firstOrNull { it.id == id } ?: return
-        val done = goAsync()
-        Thread {
-            // el wifi puede tardar en despertar: varios intentos
-            var ok = false
-            for (t in 0 until 5) {
-                if (runCatching { NasAlarms.fire(app, a) }.isSuccess) { ok = true; break }
-                Thread.sleep(8000)
-            }
-            if (!ok) notifyFail(app, a)
-            // siguiente vez (o apagarla si era de una vez)
-            if (a.days.isEmpty()) NasAlarms.put(app, a.copy(enabled = false)) else NasAlarms.schedule(app, a)
-            done.finish()
-        }.start()
-    }
-
-    private fun notifyFail(c: Context, a: NasAlarm) = runCatching {
-        val nm = c.getSystemService(android.app.NotificationManager::class.java)
-        nm.createNotificationChannel(android.app.NotificationChannel("alarmas", "Alarmas de música", android.app.NotificationManager.IMPORTANCE_DEFAULT))
-        nm.notify(8000 + a.id, androidx.core.app.NotificationCompat.Builder(c, "alarmas")
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("La alarma de las %d:%02d no sonó".format(a.hour, a.minute))
-            .setContentText("No pude hablar con el NAS. ¿El teléfono estaba en el wifi de la casa?")
-            .setAutoCancel(true).build())
-    }
+    override fun onReceive(c: Context, i: Intent) { runCatching { NasAlarms.cancelPhoneAlarms(c.applicationContext) } }
 }
 
 // ───────────────────────── pantalla ─────────────────────────
@@ -219,20 +162,16 @@ internal fun AlarmsTab(host: String) {
     val ctx = LocalContext.current
     remember { NasAlarms.load(ctx); 0 }
     var editing by remember { mutableStateOf<NasAlarm?>(null) }
-    val am = remember { ctx.getSystemService(AlarmManager::class.java) }
-    val exactOk = android.os.Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
 
     if (editing != null) { AlarmEditor(host, editing!!, onDone = { a -> if (a != null) NasAlarms.put(ctx, a); editing = null }); return }
 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 14.dp)) {
         item {
             Text("Alarmas", color = RC.text, fontWeight = FontWeight.Black, fontSize = 32.sp, modifier = Modifier.padding(start = 2.dp, top = 4.dp))
-            Text("A la hora que elijas, el NAS pone tu lista o carpeta en las bocinas. El teléfono debe estar en el wifi de la casa.",
+            Text("Las alarmas se guardan en el NAS y él las hace sonar, aunque tu teléfono esté apagado o fuera de casa. Desde cualquier teléfono ves las mismas.",
                 color = RC.sub, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
-            if (!exactOk) Text("Para que suene a la hora exacta, activa «Alarmas y recordatorios» para DriveNebula. Toca aquí.",
-                color = Color(0xFFFFD27A), fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp).glass(RoundedCornerShape(14.dp)).clickable {
-                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:" + ctx.packageName))) }
-                }.padding(12.dp))
+            SleepTimerCard(host, Modifier.padding(vertical = 6.dp))
+            Text("Alarmas programadas", color = RC.accent, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
         }
         items(NasAlarms.list.sortedBy { it.hour * 60 + it.minute }, key = { it.id }) { a ->
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).glass(RoundedCornerShape(20.dp)).clickable { editing = a }.padding(16.dp),
