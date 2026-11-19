@@ -17,7 +17,7 @@ PORT = int(os.environ.get("PORT", "3690"))
 RETRY = int(os.environ.get("INTERVAL", "60"))
 DATA = "/data/keep.json"
 CONFIG = "/data/config.json"
-lock = threading.Lock()
+lock = threading.RLock()
 keep = {}          # id -> volumen
 status = {"ultimo": "", "reconexiones": 0}
 # apodos, perfiles y alarmas; tz = minutos respecto a UTC del teléfono (México: -360)
@@ -203,7 +203,9 @@ class H(BaseHTTPRequestHandler):
             with lock: c = {k: v for k, v in config.items() if k != "fired"}
             return self._send(200, c)
         if self.path.startswith("/timer"): return self._send(200, self._timer_info())
-        with lock: self._send(200, {"keep": keep, "intervalo": RETRY, **status, "timer": self._timer_info()})
+        info = self._timer_info()
+        with lock: k = dict(keep)
+        self._send(200, {"keep": k, "intervalo": RETRY, **status, "timer": info})
     def do_PUT(self):
         if not self.path.startswith("/config"): return self._send(404, {})
         try:
@@ -226,10 +228,10 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
             if self.path.startswith("/timer"):
                 d = self._body()
+                pl = (api("GET", "/api/player") or {}) if d.get("song") else {}
                 with lock:
                     timer.clear()
                     if d.get("song"):
-                        pl = api("GET", "/api/player") or {}
                         timer.update({"kind": "song", "item": pl.get("item_id"), "fade": False})
                     elif d.get("at"):
                         timer.update({"kind": "time", "at": float(d["at"]), "fade": bool(d.get("fade", True))})
