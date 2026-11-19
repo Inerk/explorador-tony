@@ -104,6 +104,7 @@ object NasAlarms {
             list.clear(); for (i in 0 until a.length()) list += NasAlarm.from(a.getJSONObject(i))
         }
     }
+    fun saveLocal(c: Context) = save(c)
     private fun save(c: Context) { prefs(c).edit().putString("list", JSONArray(list.map { it.toJson() }).toString()).apply() }
 
     /** Cambios hechos aquí: se guardan y se mandan al NAS (que es quien las hace sonar). */

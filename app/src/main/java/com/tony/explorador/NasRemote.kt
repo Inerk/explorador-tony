@@ -243,11 +243,17 @@ object RemotePrefs {
             (remote.optJSONArray("alarms")?.length() ?: 0) == 0) {
             NasAlarms.load(c)
             if (nicks.isNotEmpty() || profiles.isNotEmpty() || NasAlarms.list.isNotEmpty()) Keeper.putConfig(h, toJson())
+            prefs?.edit()?.putBoolean("unido_nas", true)?.apply()
             android.os.Handler(android.os.Looper.getMainLooper()).post { synced = true }
             return
         }
+        // la primera vez que este teléfono se conecta, lo que tenía guardado se suma a lo del NAS (sin borrar nada)
+        val firstTime = prefs?.getBoolean("unido_nas", false) != true
         android.os.Handler(android.os.Looper.getMainLooper()).post {
             runCatching {
+                val localNicks = nicks.toMap(); val localProfiles = profiles.toMap()
+                NasAlarms.load(c)
+                val localAlarms = NasAlarms.list.toList()
                 val n = remote.optJSONObject("nicks") ?: JSONObject()
                 nicks.clear(); n.keys().forEach { nicks[it] = n.getString(it) }
                 val o = remote.optJSONObject("profiles") ?: JSONObject()
@@ -259,6 +265,20 @@ object RemotePrefs {
                 prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
                 persistLocal()
                 NasAlarms.replaceFromNas(c, remote.optJSONArray("alarms") ?: JSONArray())
+                if (firstTime) {
+                    var added = false
+                    localNicks.forEach { (k, v) -> if (k !in nicks) { nicks[k] = v; added = true } }
+                    localProfiles.forEach { (k, v) -> if (k !in profiles) { profiles[k] = v; added = true } }
+                    localAlarms.forEach { a ->
+                        val same = NasAlarms.list.any { it.hour == a.hour && it.minute == a.minute && it.days == a.days && it.source == a.source }
+                        if (!same) { NasAlarms.list += a.copy(id = NasAlarms.newId()); added = true }
+                    }
+                    prefs?.edit()?.putBoolean("unido_nas", true)?.apply()
+                    if (added) {
+                        prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
+                        persistLocal(); NasAlarms.saveLocal(c); pushAll()
+                    }
+                }
             }
             synced = true
         }
