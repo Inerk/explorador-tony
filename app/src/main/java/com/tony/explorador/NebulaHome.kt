@@ -253,12 +253,12 @@ fun NebulaHome(
             .verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
             // encabezado
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)) {
-                Image(painterResource(R.drawable.nb_galaxy), null, Modifier.width(64.dp).height(48.dp))
+                Image(painterResource(if (dark) R.drawable.nb_galaxy else R.drawable.nb_galaxy_claro), null, Modifier.width(64.dp).height(48.dp))
                 Spacer(Modifier.width(6.dp))
                 Column(Modifier.weight(1f)) {
                     Text(buildAnnotatedString {
                         withStyle(SpanStyle(color = pv.text)) { append("Drive") }
-                        withStyle(SpanStyle(brush = Brush.linearGradient(listOf(Color(0xFF1E6FFF), Color(0xFF3FA9FF))))) { append("Nebula") }
+                        withStyle(SpanStyle(color = if (dark) Color(0xFF5CB4FF) else Color(0xFF1558E8))) { append("Nebula") }
                     }, fontSize = 27.sp, fontWeight = FontWeight.Bold)
                     Text("Tus archivos. Tu universo.", color = pv.sub, fontSize = 12.sp)
                 }

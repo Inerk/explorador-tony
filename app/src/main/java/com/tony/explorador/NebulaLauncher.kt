@@ -100,9 +100,10 @@ fun nebulaIconFor(app: DeskApp): Int = when (app.id) {
     "downloads" -> R.drawable.pv_descargas
     "panel" -> R.drawable.pv_ajustes
     "updates" -> R.drawable.pv_actualizar
-    "trash" -> R.drawable.nbx_trash
+    "trash" -> R.drawable.pv_papelera
     "web" -> R.drawable.pv_internet
-    "explorer", "mypc", "sd" -> R.drawable.pv_explorador
+    "explorer" -> R.drawable.pv_explorador
+    "mypc", "sd" -> R.drawable.pv_telefono
     "remote" -> R.drawable.pv_control
     "tienda" -> R.drawable.pv_tienda_nebula
     "casa" -> R.drawable.pv_inicio
