@@ -93,7 +93,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 
 /** Pantalla de inicio del explorador (antes de entrar a las carpetas). */
-object ExplorerHome { var show by mutableStateOf(false) }
+object ExplorerHome {
+    var show by mutableStateOf(false)
+    /** "buscar" o "favoritos": lo pide la barra de la pantalla de inicio. */
+    var request by mutableStateOf<String?>(null)
+}
 
 private object NB {
     val bg1 = Color(0xFF0B0820); val bg2 = Color(0xFF1C0F3D)

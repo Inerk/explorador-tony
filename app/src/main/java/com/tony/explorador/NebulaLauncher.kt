@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -197,9 +198,11 @@ fun NebulaLauncher(
             }
             if (hasMusic && player != null) NebulaMiniPlayer(player, onOpenPlayer)
             NebulaDock(
+                onExplore = { drawer = false; apps["explorer"]?.action?.invoke() },
+                onSearch = { drawer = false; apps["explorer"]?.action?.invoke(); ExplorerHome.request = "buscar" },
+                onFavorites = { drawer = false; apps["explorer"]?.action?.invoke(); ExplorerHome.request = "favoritos" },
+                onTrash = { drawer = false; AppNav.openTrash() },
                 onApps = { searching = false; drawer = true },
-                onSearch = { searching = true; drawer = true },
-                onHome = { drawer = false; onHome() },
                 onClock = onClock,
             )
         }
@@ -230,40 +233,40 @@ private fun NebulaMiniPlayer(player: Player, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun NebulaDock(onApps: () -> Unit, onSearch: () -> Unit, onHome: () -> Unit, onClock: () -> Unit) {
+private fun NebulaDock(onExplore: () -> Unit, onSearch: () -> Unit, onFavorites: () -> Unit, onTrash: () -> Unit, onApps: () -> Unit, onClock: () -> Unit) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(15_000) } }
     val es = Locale("es", "MX")
-    Row(Modifier.navigationBarsPadding().padding(start = 14.dp, end = 14.dp, bottom = 10.dp).fillMaxWidth()
-        .glassBar(RoundedCornerShape(30.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.pv_apps), "Todas las apps", Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onApps))
-        Spacer(Modifier.width(10.dp))
-        DockButton(Icons.Filled.Search, "Buscar", false, onSearch)
-        Spacer(Modifier.width(10.dp))
-        Image(painterResource(R.drawable.pv_inicio), "Inicio", Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onHome))
+    val ink = if (XpColors.dark) Color.White else Color(0xFF0E1A3A)
+    Row(Modifier.navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 8.dp).fillMaxWidth()
+        .glassBar(RoundedCornerShape(24.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Image(painterResource(R.drawable.pv_explorador), "Explorador", Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).clickable(onClick = onExplore))
+        Spacer(Modifier.width(6.dp))
+        DockButton(Icons.Filled.Search, "Buscar archivos", false, onSearch)
+        Spacer(Modifier.width(6.dp))
+        DockButton(Icons.Filled.Star, "Favoritos", false, onFavorites)
+        Spacer(Modifier.width(6.dp))
+        Image(painterResource(R.drawable.pv_papelera), "Papelera", Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).clickable(onClick = onTrash))
+        Spacer(Modifier.width(6.dp))
+        Image(painterResource(R.drawable.pv_apps), "Todas las apps", Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).clickable(onClick = onApps))
         Spacer(Modifier.weight(1f))
-        val ink = if (XpColors.dark) Color.White else Color(0xFF0E1A3A)
-        Row(Modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = if (XpColors.dark) 0.07f else 0.4f)).clickable(onClick = onClock)
-            .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (XpColors.dark) "🌙" else "🌸", fontSize = 22.sp, modifier = Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).padding(6.dp))
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text(SimpleDateFormat("h:mm a", es).format(Date(now)), color = ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Text(SimpleDateFormat("EEE, d MMM", es).format(Date(now)).replaceFirstChar { it.uppercase() }.replace(".", ""),
-                    color = ink.copy(alpha = 0.7f), fontSize = 12.sp)
-            }
+        Column(Modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClock).padding(horizontal = 6.dp, vertical = 2.dp),
+            horizontalAlignment = Alignment.End) {
+            Text(SimpleDateFormat("h:mm a", es).format(Date(now)), color = ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(SimpleDateFormat("EEE d MMM", es).format(Date(now)).replaceFirstChar { it.uppercase() }.replace(".", ""),
+                color = ink.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1)
         }
     }
 }
 
 @Composable
 private fun DockButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, active: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp))
+    Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp))
         .background(if (XpColors.dark) Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.06f)))
             else Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.95f), Color(0xFFE6EEFB))))
-        .border(1.dp, Color.White.copy(alpha = if (XpColors.dark) 0.18f else 0.95f), RoundedCornerShape(16.dp))
+        .border(1.dp, Color.White.copy(alpha = if (XpColors.dark) 0.18f else 0.95f), RoundedCornerShape(13.dp))
         .clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        GradIcon(icon, listOf(Color(0xFF3FA9FF), Color(0xFF1E5BFF)), 26.dp)
+        GradIcon(icon, listOf(Color(0xFF3FA9FF), Color(0xFF1E5BFF)), 21.dp)
     }
 }
 

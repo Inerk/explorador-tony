@@ -161,8 +161,11 @@ fun BrowserScreen(
     val roots = remember { storageRoots(context) }
 
     var currentDir by remember { mutableStateOf<File?>(null) }
-    var sortMode by remember { mutableStateOf(SortMode.NAME) }
-    var ascending by remember { mutableStateOf(true) }
+    // el orden elegido se guarda para la próxima vez que abras la app
+    val sortPrefs = remember { context.getSharedPreferences("explorador", android.content.Context.MODE_PRIVATE) }
+    var sortMode by remember { mutableStateOf(runCatching { SortMode.valueOf(sortPrefs.getString("orden", "NAME")!!) }.getOrDefault(SortMode.NAME)) }
+    var ascending by remember { mutableStateOf(sortPrefs.getBoolean("ascendente", true)) }
+    LaunchedEffect(sortMode, ascending) { sortPrefs.edit().putString("orden", sortMode.name).putBoolean("ascendente", ascending).apply() }
     var showHidden by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
 
@@ -180,6 +183,16 @@ fun BrowserScreen(
     var recentMode by remember { mutableStateOf(false) }
     /** «Favoritos» del inicio: usa la misma vista que Recientes, pero con lo que marcaste con estrella. */
     var favMode by remember { mutableStateOf(false) }
+    // pedidos desde la barra de la pantalla de inicio: buscar archivos o ver favoritos
+    LaunchedEffect(ExplorerHome.request) {
+        val r = ExplorerHome.request ?: return@LaunchedEffect
+        ExplorerHome.request = null; ExplorerHome.show = false
+        if (currentDir == null) currentDir = roots.first().file
+        when (r) {
+            "buscar" -> { recentMode = false; searchActive = true }
+            "favoritos" -> { searchActive = false; favMode = true; recentMode = true }
+        }
+    }
     var category by remember { mutableStateOf<FileCategory?>(null) }
     var lastDir by remember { mutableStateOf<File?>(null) }
     LaunchedEffect(currentDir) { currentDir?.let { lastDir = it } }
