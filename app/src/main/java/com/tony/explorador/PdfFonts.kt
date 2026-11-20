@@ -37,13 +37,15 @@ object PdfFonts {
      */
     fun detect(c: Context, bmp: Bitmap, rc: Rect, text: String, bg: Int): Pair<Int, Boolean> {
         if (text.isBlank()) return 0 to false
-        val r = Rect(rc.left.coerceAtLeast(0), rc.top.coerceAtLeast(0), rc.right.coerceAtMost(bmp.width), rc.bottom.coerceAtMost(bmp.height))
+        // un poco de margen: el recuadro del OCR a veces corta las orillas de las letras
+        val pad = rc.height() / 4
+        val r = Rect((rc.left - pad).coerceAtLeast(0), (rc.top - pad).coerceAtLeast(0), (rc.right + pad).coerceAtMost(bmp.width), (rc.bottom + pad).coerceAtMost(bmp.height))
         if (r.width() < 4 || r.height() < 4) return 0 to false
         val hh = 40
         val ww = (r.width() * hh / r.height()).coerceIn(8, 1600)
         val crop = Bitmap.createScaledBitmap(Bitmap.createBitmap(bmp, r.left, r.top, r.width(), r.height()), ww, hh, true)
         fun far(p: Int) = kotlin.math.abs(((p shr 16) and 255) - ((bg shr 16) and 255)) +
-            kotlin.math.abs(((p shr 8) and 255) - ((bg shr 8) and 255)) + kotlin.math.abs((p and 255) - (bg and 255)) > 150
+            kotlin.math.abs(((p shr 8) and 255) - ((bg shr 8) and 255)) + kotlin.math.abs((p and 255) - (bg and 255)) > 300
         val px = IntArray(ww * hh); crop.getPixels(px, 0, ww, 0, 0, ww, hh)
         var x0 = ww; var y0 = hh; var x1 = -1; var y1 = -1
         for (y in 0 until hh) for (x in 0 until ww) if (far(px[y * ww + x])) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y }
@@ -75,6 +77,7 @@ object PdfFonts {
             val stretch = kotlin.math.abs(kotlin.math.ln(sx / sy))
             val weight = kotlin.math.abs(kotlin.math.ln(ink.coerceAtLeast(1).toFloat() / origInk))
             val score = shape + 1.2f * stretch + 0.35f * weight
+            android.util.Log.d("PdfFonts", "'$text' ${f.name}${if (bold) " bold" else ""} forma=$shape ancho=$stretch grosor=$weight total=$score")
             if (score < bestScore) { bestScore = score; best = f.id to bold }
         }
         return best
