@@ -28,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -124,10 +126,18 @@ suspend fun loadPdfThumb(file: File, widthPx: Int = 300): Bitmap? {
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun PdfViewerScreen(file: File, onClose: () -> Unit, onHome: () -> Unit) {
+fun PdfViewerScreen(original: File, onClose: () -> Unit, onHome: () -> Unit) {
     val context = LocalContext.current
+    // si se guarda una copia editada, el visor pasa a mostrar esa copia
+    var file by remember { mutableStateOf(original) }
+    var editing by remember { mutableStateOf(false) }
+    var version by remember { mutableIntStateOf(0) }
+    if (editing) {
+        PdfEditorScreen(file) { saved -> if (saved != null) { file = saved; version++ }; editing = false }
+        return
+    }
     BackHandler(onBack = onClose)
-    val doc by produceState<Result<PdfDoc>?>(null, file) {
+    val doc by produceState<Result<PdfDoc>?>(null, file, version) {
         value = withContext(Dispatchers.IO) { runCatching { PdfDoc(file) } }
     }
     // ojo: hay que cerrar el documento que existía en ese momento, no el que haya después
@@ -154,6 +164,7 @@ fun PdfViewerScreen(file: File, onClose: () -> Unit, onHome: () -> Unit) {
                             Text("Página $page de ${d.pageCount}", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
                         }
                     }
+                    IconButton(onClick = { editing = true }, enabled = doc?.isSuccess == true) { Icon(Icons.Filled.Edit, "Editar PDF", tint = Color.White) }
                     IconButton(onClick = { shareFiles(context, listOf(file)) }) { Icon(Icons.Filled.Share, "Compartir", tint = Color.White) }
                     HomeButton(onHome, Modifier.padding(end = 10.dp))
                 }

@@ -124,6 +124,8 @@ dependencies {
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    // editar PDF: anotaciones, firmas y páginas (girar, borrar, unir)
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0") { exclude(group = "org.bouncycastle") }
 }
 
 // Nebula Música no usa la búsqueda de texto en fotos: fuera esas piezas (unos 12 MB)
