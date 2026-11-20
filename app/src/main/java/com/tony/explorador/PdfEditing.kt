@@ -74,6 +74,7 @@ object PdfEditing {
             if (out.exists()) out.delete()
             if (!tmp.renameTo(out)) { tmp.copyTo(out, overwrite = true); tmp.delete() }
         } finally {
+            runCatching { File(out.parentFile, out.name + ".guardando").takeIf { it.exists() }?.delete() }
             runCatching { doc.close() }
             sources.values.forEach { runCatching { it.close() } }
         }
