@@ -9,8 +9,19 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -177,16 +188,62 @@ fun PdfViewerScreen(original: File, onClose: () -> Unit, onHome: () -> Unit) {
                 }
                 else -> {
                     val d = r.getOrThrow()
-                    val transform = rememberTransformableState { zoom, pan, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
-                        offset = if (scale == 1f) Offset.Zero else Offset(offset.x + pan.x, 0f)
-                    }
+                    val scope = rememberCoroutineScope()
                     Box(
                         Modifier.fillMaxSize()
-                            .transformable(transform, lockRotationOnZoomPan = true, canPan = { scale > 1f })
+                            .pointerInput(d) {
+                                // pellizcar para acercar; ya con zoom, un dedo arrastra la hoja hacia cualquier lado
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                    val tracker = VelocityTracker()
+                                    var moved = false
+                                    do {
+                                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                                        val pressed = ev.changes.count { it.pressed }
+                                        if (pressed >= 2 || (scale > 1f && pressed == 1)) {
+                                            val zoom = if (pressed >= 2) ev.calculateZoom() else 1f
+                                            val pan = ev.calculatePan()
+                                            val q = ev.calculateCentroid(useCurrent = true)
+                                            val c = Offset(size.width / 2f, size.height / 2f)
+                                            val ns = (scale * zoom).coerceIn(1f, 5f)
+                                            val z = ns / scale
+                                            var t = (q - c) - (q - c - offset) * z + pan
+                                            if (q == Offset.Unspecified) t = offset + pan
+                                            val maxX = size.width * (ns - 1f) / 2f
+                                            val maxY = size.height * (ns - 1f) / 2f
+                                            val ty = t.y.coerceIn(-maxY, maxY)
+                                            val over = t.y - ty
+                                            // lo que sobra de arrastre vertical pasa las páginas
+                                            if (over != 0f && ns > 1f) listState.dispatchRawDelta(-over / ns)
+                                            else if (over != 0f && pressed >= 2) listState.dispatchRawDelta(-over)
+                                            scale = ns
+                                            offset = if (ns <= 1f) Offset.Zero else Offset(t.x.coerceIn(-maxX, maxX), ty)
+                                            ev.changes.forEach { if (it.positionChanged()) it.consume() }
+                                            if (pressed == 1) ev.changes.firstOrNull { it.pressed }?.let { tracker.addPosition(it.uptimeMillis, it.position); moved = true }
+                                            else tracker.resetTracking()
+                                        }
+                                    } while (ev.changes.any { it.pressed })
+                                    if (moved && scale > 1f) {
+                                        val v = tracker.calculateVelocity()
+                                        scope.launch {
+                                            listState.scroll {
+                                                var prev = 0f
+                                                AnimationState(0f, -v.y / scale).animateDecay(exponentialDecay()) { scrollBy(value - prev); prev = value }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             .pointerInput(Unit) {
-                                detectTapGestures(onDoubleTap = {
-                                    if (scale > 1f) { scale = 1f; offset = Offset.Zero } else scale = 2.5f
+                                detectTapGestures(onDoubleTap = { p ->
+                                    if (scale > 1f) { scale = 1f; offset = Offset.Zero }
+                                    else {
+                                        scale = 2.5f
+                                        val c = Offset(size.width / 2f, size.height / 2f)
+                                        val t = (p - c) * (1f - 2.5f)
+                                        val maxX = size.width * 1.5f / 2f; val maxY = size.height * 1.5f / 2f
+                                        offset = Offset(t.x.coerceIn(-maxX, maxX), t.y.coerceIn(-maxY, maxY))
+                                    }
                                 })
                             }
                     ) {
@@ -194,14 +251,17 @@ fun PdfViewerScreen(original: File, onClose: () -> Unit, onHome: () -> Unit) {
                             state = listState,
                             modifier = Modifier.fillMaxSize().graphicsLayer {
                                 scaleX = scale; scaleY = scale
-                                val maxX = (size.width * (scale - 1f)) / 2f
-                                translationX = offset.x.coerceIn(-maxX, maxX)
+                                translationX = offset.x; translationY = offset.y
                             },
                             contentPadding = PaddingValues(10.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(d.pageCount) { i ->
-                                val bmp by produceState<Bitmap?>(null, d, i) { value = d.render(i, (widthPx * 1.6f).toInt()) }
+                                val base by produceState<Bitmap?>(null, d, i) { value = d.render(i, (widthPx * 1.6f).toInt()) }
+                                // con mucho zoom se vuelve a dibujar más nítida
+                                val sharp = scale > 1.8f
+                                val hi by produceState<Bitmap?>(null, d, i, sharp) { value = if (sharp) d.render(i, 2400) else null }
+                                val bmp = hi ?: base
                                 Box(
                                     Modifier.fillMaxWidth().aspectRatio(1f / d.ratios[i].coerceIn(0.2f, 5f))
                                         .shadow(6.dp, RoundedCornerShape(2.dp)).clip(RoundedCornerShape(2.dp)).background(Color.White),

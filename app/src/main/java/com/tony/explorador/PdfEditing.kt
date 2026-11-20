@@ -29,6 +29,12 @@ sealed class PdfMark {
     data class Text(val pos: Offset, val text: String, val color: Int, val size: Float) : PdfMark()
     /** Firma o imagen; [pos] es el centro; [width] fracción del ancho; [ratio] alto/ancho de la imagen. */
     data class Image(val pos: Offset, val path: String, val width: Float, val ratio: Float) : PdfMark()
+    /**
+     * Texto corregido con OCR: tapa el renglón original ([l],[t],[r],[b] de 0 a 1) con el color del fondo
+     * y escribe encima el texto nuevo. [size] es el alto de letra como fracción del ancho de la página.
+     */
+    data class Replace(val l: Float, val t: Float, val r: Float, val b: Float, val text: String, val color: Int,
+                       val bg: Int, val size: Float, val bold: Boolean, val original: String) : PdfMark()
 }
 
 /** Una página del documento final: de qué archivo sale (null = en blanco), cuál es y cuánto se gira de más. */
@@ -109,6 +115,38 @@ object PdfEditing {
                         cs.setNonStrokingColor(r(m.color), g(m.color), b(m.color))
                         cs.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(rot.toDouble()), p.first, p.second))
                         cs.showText(safeText(txt))
+                        cs.endText()
+                    }
+                }
+                is PdfMark.Replace -> {
+                    val aspect = pageAspect(box, rot)
+                    val font = if (m.bold) PDType1Font.HELVETICA_BOLD else PDType1Font.HELVETICA
+                    val txt = safeText(m.text.replace("\n", " "))
+                    var size = m.size * viewW
+                    val boxW = (m.r - m.l) * viewW
+                    var textW = font.getStringWidth(txt) / 1000f * size
+                    // si el texto nuevo es más largo, se estira el parche hasta la orilla y, si no cabe, se achica la letra
+                    val roomW = (1f - m.l) * viewW * 0.98f
+                    if (textW > roomW) { size *= roomW / textW; textW = roomW }
+                    val right = (m.l + maxOf(boxW, textW) / viewW + 0.004f).coerceAtMost(1f)
+                    val padY = 0.15f * (m.b - m.t)
+                    val corners = listOf(Offset(m.l - 0.003f, m.t - padY), Offset(right, m.t - padY), Offset(right, m.b + padY), Offset(m.l - 0.003f, m.b + padY))
+                        .map { toPdf(Offset(it.x.coerceIn(0f, 1f), it.y.coerceIn(0f, 1f)), box, rot) }
+                    cs.saveGraphicsState()
+                    cs.setNonStrokingColor(r(m.bg), g(m.bg), b(m.bg))
+                    cs.moveTo(corners[0].first, corners[0].second)
+                    corners.drop(1).forEach { cs.lineTo(it.first, it.second) }
+                    cs.closePath(); cs.fill()
+                    cs.restoreGraphicsState()
+                    if (txt.isNotBlank()) {
+                        // la base del texto queda cerca de la orilla de abajo del renglón
+                        val baseV = m.b - (m.b - m.t - size / viewW / aspect) / 2f - 0.2f * size / viewW / aspect
+                        val p = toPdf(Offset(m.l, baseV), box, rot)
+                        cs.beginText()
+                        cs.setFont(font, size)
+                        cs.setNonStrokingColor(r(m.color), g(m.color), b(m.color))
+                        cs.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(rot.toDouble()), p.first, p.second))
+                        cs.showText(txt)
                         cs.endText()
                     }
                 }

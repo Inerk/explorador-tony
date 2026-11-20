@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -133,7 +134,70 @@ private class PdfSources {
 
 private enum class PdfTool(val label: String, val icon: ImageVector) {
     PEN("Pluma", Icons.Filled.Edit), MARKER("Resaltar", Icons.Filled.BorderColor), TEXT("Texto", Icons.Filled.TextFields),
-    SIGN("Firma", Icons.Filled.Draw), ERASE("Borrar", Icons.Filled.AutoFixNormal)
+    OCR("Editar texto", Icons.Filled.DocumentScanner), SIGN("Firma", Icons.Filled.Draw), ERASE("Borrar", Icons.Filled.AutoFixNormal)
+}
+
+/** Un renglón que encontró el OCR, en coordenadas de 0 a 1 sobre la página. */
+private data class OcrLine(val l: Float, val t: Float, val r: Float, val b: Float, val text: String, val color: Int, val bg: Int, val size: Float)
+
+/** Lee el texto de la página (sea texto real o parte de una imagen/escaneo) con el OCR del teléfono. */
+private suspend fun readPageText(bmp: Bitmap): List<OcrLine> = withContext(Dispatchers.Default) {
+    val rec = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+    try {
+        val res = com.google.android.gms.tasks.Tasks.await(rec.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)))
+        val w = bmp.width.toFloat(); val h = bmp.height.toFloat()
+        res.textBlocks.flatMap { it.lines }.mapNotNull { ln ->
+            val rc = ln.boundingBox ?: return@mapNotNull null
+            if (rc.width() < 4 || rc.height() < 4) return@mapNotNull null
+            val (fg, bg) = sampleColors(bmp, rc)
+            OcrLine(rc.left / w, rc.top / h, rc.right / w, rc.bottom / h, ln.text, fg, bg, rc.height() / w * 0.92f)
+        }
+    } finally { rec.close() }
+}
+
+/** Saca el color del fondo (alrededor del renglón) y el de la letra (lo más distinto al fondo dentro del renglón). */
+private fun sampleColors(bmp: Bitmap, rc: android.graphics.Rect): Pair<Int, Int> {
+    fun px(x: Int, y: Int) = bmp.getPixel(x.coerceIn(0, bmp.width - 1), y.coerceIn(0, bmp.height - 1))
+    val pad = maxOf(2, rc.height() / 5)
+    val ring = ArrayList<Int>()
+    val stepX = maxOf(1, rc.width() / 40)
+    for (x in rc.left..rc.right step stepX) { ring += px(x, rc.top - pad); ring += px(x, rc.bottom + pad) }
+    for (y in rc.top..rc.bottom step maxOf(1, rc.height() / 8)) { ring += px(rc.left - pad, y); ring += px(rc.right + pad, y) }
+    fun med(sel: (Int) -> Int) = ring.map(sel).sorted()[ring.size / 2]
+    val bg = android.graphics.Color.rgb(med { (it shr 16) and 255 }, med { (it shr 8) and 255 }, med { it and 255 })
+    fun dist(c: Int) = kotlin.math.abs(((c shr 16) and 255) - ((bg shr 16) and 255)) + kotlin.math.abs(((c shr 8) and 255) - ((bg shr 8) and 255)) + kotlin.math.abs((c and 255) - (bg and 255))
+    val ink = ArrayList<Int>()
+    val sx = maxOf(1, rc.width() / 120); val sy = maxOf(1, rc.height() / 20)
+    for (y in rc.top until rc.bottom step sy) for (x in rc.left until rc.right step sx) { val c = px(x, y); if (dist(c) > 140) ink += c }
+    val fg = if (ink.isEmpty()) {
+        val lum = 0.3 * ((bg shr 16) and 255) + 0.59 * ((bg shr 8) and 255) + 0.11 * (bg and 255)
+        if (lum > 128) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+    } else {
+        val top = ink.sortedByDescending { dist(it) }.take(maxOf(1, ink.size / 2))
+        android.graphics.Color.rgb(top.sumOf { (it shr 16) and 255 } / top.size, top.sumOf { (it shr 8) and 255 } / top.size, top.sumOf { it and 255 } / top.size)
+    }
+    return fg to bg
+}
+
+/** Dibuja en pantalla un texto corregido igual que como quedará en el PDF. */
+private fun drawReplace(cv: android.graphics.Canvas, m: PdfMark.Replace, w: Float, h: Float) {
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = android.graphics.Typeface.create("sans-serif", if (m.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        textSize = m.size * w; color = m.color
+    }
+    val txt = m.text.replace("\n", " ")
+    var textW = paint.measureText(txt)
+    val room = (1f - m.l) * w * 0.98f
+    if (textW > room) { paint.textSize *= room / textW; textW = room }
+    val right = minOf(w, m.l * w + maxOf((m.r - m.l) * w, textW) + 0.004f * w)
+    val padY = 0.15f * (m.b - m.t) * h
+    val bgp = android.graphics.Paint().apply { color = m.bg }
+    cv.drawRect(m.l * w - 0.003f * w, m.t * h - padY, right, m.b * h + padY, bgp)
+    if (txt.isNotBlank()) {
+        val sz = paint.textSize
+        val base = m.b * h - ((m.b - m.t) * h - sz) / 2f - 0.2f * sz
+        cv.drawText(txt, m.l * w, base, paint)
+    }
 }
 
 private val inkColors = listOf(0xFF111111.toInt(), 0xFF1E5BFF.toInt(), 0xFFE53935.toInt(), 0xFF2E9E4F.toInt(), 0xFFFFD600.toInt(), 0xFFFF6FB0.toInt())
@@ -276,6 +340,23 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
     var sigVersion by remember { mutableIntStateOf(0) }
     val sigBmp = remember(sigVersion) { if (sigFile.exists()) android.graphics.BitmapFactory.decodeFile(sigFile.absolutePath) else null }
     val bmp by produceState<Bitmap?>(null, ref) { value = if (ref.file == null) null else src.render(ref.file, ref.index, 1400) }
+    // OCR: se lee cada página una sola vez, cuando eliges «Editar texto»
+    val ocr = remember { mutableStateMapOf<Long, List<OcrLine>>() }
+    var ocrBusy by remember { mutableStateOf(false) }
+    var editLine by remember { mutableStateOf<OcrLine?>(null) }
+    var editMark by remember { mutableStateOf<PdfMark.Replace?>(null) }
+    androidx.compose.runtime.LaunchedEffect(tool, ref.id) {
+        if (tool == PdfTool.OCR && ocr[ref.id] == null) {
+            ocrBusy = true
+            val big = if (ref.file == null) null else src.render(ref.file, ref.index, 2200)
+            ocr[ref.id] = if (big == null) emptyList() else runCatching { readPageText(big) }.getOrElse {
+                Toast.makeText(ctx, "No pude leer el texto de esta página.", Toast.LENGTH_SHORT).show(); emptyList()
+            }
+            ocrBusy = false
+        }
+    }
+    val lines = ocr[ref.id] ?: emptyList()
+    fun replaced(l: OcrLine) = pageMarks.any { it is PdfMark.Replace && kotlin.math.abs(it.l - l.l) < 0.002f && kotlin.math.abs(it.t - l.t) < 0.002f }
 
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -288,7 +369,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
             Box(Modifier.width(pw).aspectRatio(1f / ratio).background(Color.White)) {
                 bmp?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
                 val sigImg = remember(sigBmp) { sigBmp?.asImageBitmap() }
-                Canvas(Modifier.fillMaxSize().pointerInput(tool, color, thick, pageMarks) {
+                Canvas(Modifier.fillMaxSize().pointerInput(tool, color, thick, pageMarks, lines) {
                     val w = size.width.toFloat(); val h = size.height.toFloat()
                     fun norm(o: Offset) = Offset((o.x / w).coerceIn(0f, 1f), (o.y / h).coerceIn(0f, 1f))
                     when (tool) {
@@ -302,6 +383,14 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                             onDragCancel = { live = emptyList() }
                         ) { ch, _ -> ch.consume(); live = live + norm(ch.position) }
                         PdfTool.TEXT -> detectTapGestures { textAt = norm(it) }
+                        PdfTool.OCR -> detectTapGestures { p ->
+                            val n = norm(p)
+                            val mx = 0.01f; val my = 0.006f
+                            val done = pageMarks.lastOrNull { it is PdfMark.Replace && n.x in (it.l - mx)..(it.r + mx) && n.y in (it.t - my)..(it.b + my) } as PdfMark.Replace?
+                            if (done != null) editMark = done
+                            else lines.filter { n.x in (it.l - mx)..(it.r + mx) && n.y in (it.t - my)..(it.b + my) }
+                                .minByOrNull { kotlin.math.abs((it.t + it.b) / 2 - n.y) }?.let { editLine = it }
+                        }
                         PdfTool.SIGN -> detectTapGestures { p ->
                             val n = norm(p)
                             val b = sigBmp
@@ -332,11 +421,19 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                                 }
                                 m.text.split("\n").forEachIndexed { i, line -> drawText(line, m.pos.x * w, m.pos.y * h + m.size * w * (0.85f + 1.2f * i), paint) }
                             }
+                            is PdfMark.Replace -> drawReplace(drawContext.canvas.nativeCanvas, m, w, h)
                             is PdfMark.Image -> sigImg?.let { img ->
                                 val iw = m.width * w; val ih = iw * m.ratio
                                 drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset((m.pos.x * w - iw / 2).toInt(), (m.pos.y * h - ih / 2).toInt()),
                                     dstSize = androidx.compose.ui.unit.IntSize(iw.toInt(), ih.toInt()))
                             }
+                        }
+                    }
+                    if (tool == PdfTool.OCR) lines.forEach { l ->
+                        if (!replaced(l)) {
+                            val tl = Offset(l.l * w - 2f, l.t * h - 2f); val sz = Size((l.r - l.l) * w + 4f, (l.b - l.t) * h + 4f)
+                            drawRect(Color(0x223D7BFF), tl, sz)
+                            drawRect(Color(0xAA3D7BFF), tl, sz, style = Stroke(1.5f))
                         }
                     }
                     if (live.isNotEmpty()) drawStroke(live, color, if (tool == PdfTool.MARKER) thick * 4f else thick, if (tool == PdfTool.MARKER) 0.35f else 1f)
@@ -373,6 +470,19 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                         Text(if (sigBmp == null) "Toca la hoja para hacer tu firma." else "Toca la hoja para poner tu firma.", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = { signDialog = Offset(0.5f, 0.85f) }) { Text(if (sigBmp == null) "Hacer firma" else "Nueva firma") }
                     }
+                    PdfTool.OCR -> Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (ocrBusy) { CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                        Text(when {
+                            ocrBusy -> "Leyendo el texto de la página…"
+                            lines.isEmpty() -> "No encontré texto en esta página."
+                            else -> "Toca un renglón marcado en azul para cambiar lo que dice."
+                        }, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        if (lines.isNotEmpty()) TextButton(onClick = {
+                            val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("Texto del PDF", lines.joinToString("\n") { it.text }))
+                            Toast.makeText(ctx, "Texto de la página copiado", Toast.LENGTH_SHORT).show()
+                        }) { Text("Copiar todo") }
+                    }
                     PdfTool.ERASE -> Text("Toca un trazo, texto o firma para quitarlo.", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                 }
                 // tamaño de la última firma
@@ -399,6 +509,44 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
             confirmButton = { TextButton(onClick = { if (txt.isNotBlank()) onMarks(pageMarks + PdfMark.Text(at, txt, color, size)); textAt = null }) { Text("Poner") } },
             dismissButton = { TextButton(onClick = { textAt = null }) { Text("Cancelar") } })
     }
+    if (editLine != null || editMark != null) {
+        val ln = editLine; val mk = editMark
+        val base = mk ?: PdfMark.Replace(ln!!.l, ln.t, ln.r, ln.b, ln.text, ln.color, ln.bg, ln.size, false, ln.text)
+        var txt by remember(base) { mutableStateOf(base.text) }
+        var bold by remember(base) { mutableStateOf(base.bold) }
+        var size by remember(base) { mutableFloatStateOf(base.size) }
+        var col by remember(base) { mutableIntStateOf(base.color) }
+        fun close() { editLine = null; editMark = null }
+        fun put(text: String) {
+            val m = base.copy(text = text, bold = bold, size = size, color = col)
+            onMarks((if (mk != null) pageMarks - mk else pageMarks) + m); close()
+        }
+        AlertDialog(onDismissRequest = { close() }, title = { Text("Editar texto") },
+            text = {
+                Column {
+                    Text("Decía: «${base.original}»", fontSize = 12.sp, color = Color.Gray, maxLines = 3)
+                    OutlinedTextField(txt, { txt = it }, label = { Text("Texto nuevo") }, modifier = Modifier.padding(top = 6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        androidx.compose.material3.Checkbox(bold, { bold = it }); Text("Negrita", fontSize = 13.sp)
+                        Spacer(Modifier.weight(1f))
+                        (listOf(base.color) + inkColors.take(3)).distinct().forEach { c ->
+                            Box(Modifier.padding(start = 6.dp).size(22.dp).clip(CircleShape).background(Color(c))
+                                .border(if (col == c) 3.dp else 1.dp, if (col == c) Color(0xFF6C4BE0) else Color.LightGray, CircleShape).clickable { col = c })
+                        }
+                    }
+                    Text("Tamaño de letra", fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Slider(size, { size = it }, valueRange = (base.size * 0.5f)..(base.size * 1.6f))
+                }
+            },
+            confirmButton = { TextButton(onClick = { put(txt) }) { Text("Cambiar") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { put("") }) { Text("Quitar texto") }
+                    if (mk != null) TextButton(onClick = { onMarks(pageMarks - mk); close() }) { Text("Como estaba") }
+                    else TextButton(onClick = { close() }) { Text("Cancelar") }
+                }
+            })
+    }
     signDialog?.let { at ->
         SignatureDialog(onDismiss = { signDialog = null }) { b ->
             sigFile.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -415,6 +563,7 @@ private fun hits(m: PdfMark, p: Offset, aspect: Float): Boolean {
         is PdfMark.Stroke -> m.points.any { d(it, p) < 0.03f + m.width }
         is PdfMark.Text -> p.x in (m.pos.x - 0.02f)..(m.pos.x + m.size * 0.6f * m.text.lines().maxOf { it.length } + 0.02f) &&
             (p.y - m.pos.y) * aspect in -0.02f..(m.size * 1.2f * m.text.lines().size + 0.02f)
+        is PdfMark.Replace -> p.x in m.l..m.r && p.y in m.t..m.b
         is PdfMark.Image -> kotlin.math.abs(p.x - m.pos.x) < m.width / 2 && kotlin.math.abs(p.y - m.pos.y) * aspect < m.width * m.ratio / 2
     }
 }
