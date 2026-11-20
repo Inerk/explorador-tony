@@ -62,7 +62,8 @@ object PdfEditing {
                 page.rotation = (baseRot + ref.extraRotation) % 360
             }
             val tmp = File(out.parentFile, out.name + ".guardando")
-            doc.save(tmp)
+            // se escribe y se obliga a que quede en disco antes de renombrar
+            java.io.FileOutputStream(tmp).use { fo -> doc.save(fo); fo.flush(); fo.fd.sync() }
             doc.close()
             sources.values.forEach { runCatching { it.close() } }
             if (out.exists()) out.delete()

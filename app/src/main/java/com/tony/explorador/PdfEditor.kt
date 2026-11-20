@@ -150,7 +150,11 @@ private suspend fun readPageText(bmp: Bitmap): List<OcrLine> = withContext(Dispa
             val rc = ln.boundingBox ?: return@mapNotNull null
             if (rc.width() < 4 || rc.height() < 4) return@mapNotNull null
             val (fg, bg) = sampleColors(bmp, rc)
-            OcrLine(rc.left / w, rc.top / h, rc.right / w, rc.bottom / h, ln.text, fg, bg, rc.height() / w * 0.92f)
+            // tamaño de letra: el que hace que el texto ocupe el mismo ancho del renglón (más fiel que el alto)
+            val byH = rc.height() / w * 0.92f
+            val unit = android.graphics.Paint().apply { typeface = android.graphics.Typeface.SANS_SERIF; textSize = 100f }.measureText(ln.text) / 100f
+            val byW = if (unit > 0f) rc.width() / w / unit else byH
+            OcrLine(rc.left / w, rc.top / h, rc.right / w, rc.bottom / h, ln.text, fg, bg, byW.coerceIn(byH * 0.75f, byH * 1.35f))
         }
     } finally { rec.close() }
 }

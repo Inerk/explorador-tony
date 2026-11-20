@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -190,7 +191,7 @@ fun PdfViewerScreen(original: File, onClose: () -> Unit, onHome: () -> Unit) {
                     val d = r.getOrThrow()
                     val scope = rememberCoroutineScope()
                     Box(
-                        Modifier.fillMaxSize()
+                        Modifier.fillMaxSize().clipToBounds()
                             .pointerInput(d) {
                                 // pellizcar para acercar; ya con zoom, un dedo arrastra la hoja hacia cualquier lado
                                 awaitEachGesture {
