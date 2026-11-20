@@ -66,7 +66,9 @@ object PdfEditing {
             }
             val tmp = File(out.parentFile, out.name + ".guardando")
             // se escribe y se obliga a que quede en disco antes de renombrar
-            java.io.FileOutputStream(tmp).use { fo -> doc.save(fo); fo.flush(); fo.fd.sync() }
+            doc.save(tmp)
+            runCatching { java.io.FileOutputStream(tmp, true).use { it.fd.sync() } }
+            if (tmp.length() == 0L) throw java.io.IOException("el archivo quedó vacío")
             doc.close()
             sources.values.forEach { runCatching { it.close() } }
             if (out.exists()) out.delete()

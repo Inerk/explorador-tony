@@ -57,7 +57,9 @@ object PdfFonts {
         val cv = Canvas(cand)
         val cpx = IntArray(bw * bh)
         var best = 0 to false; var bestScore = Float.MAX_VALUE
-        for (f in all) for (bold in listOf(false, true)) {
+        // el OCR a veces mete espacios de más junto a guiones o diagonales: se prueba también sin ellos
+        val variants = listOf(text, text.replace(Regex("\\s*([-/])\\s*"), "$1")).distinct()
+        for (f in all) for (bold in listOf(false, true)) for (text in variants) {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = typeface(c, f.id, bold); textSize = 100f; color = 0xFF000000.toInt() }
             val tb = Rect(); paint.getTextBounds(text, 0, text.length, tb)
             if (tb.width() <= 0 || tb.height() <= 0) continue
@@ -77,7 +79,6 @@ object PdfFonts {
             val stretch = kotlin.math.abs(kotlin.math.ln(sx / sy))
             val weight = kotlin.math.abs(kotlin.math.ln(ink.coerceAtLeast(1).toFloat() / origInk))
             val score = shape + 1.2f * stretch + 0.35f * weight
-            android.util.Log.d("PdfFonts", "'$text' ${f.name}${if (bold) " bold" else ""} forma=$shape ancho=$stretch grosor=$weight total=$score")
             if (score < bestScore) { bestScore = score; best = f.id to bold }
         }
         return best
