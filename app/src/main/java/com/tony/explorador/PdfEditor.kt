@@ -14,6 +14,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -138,10 +145,11 @@ private enum class PdfTool(val label: String, val icon: ImageVector) {
 }
 
 /** Un renglón que encontró el OCR, en coordenadas de 0 a 1 sobre la página. */
-private data class OcrLine(val l: Float, val t: Float, val r: Float, val b: Float, val text: String, val color: Int, val bg: Int, val size: Float)
+private data class OcrLine(val l: Float, val t: Float, val r: Float, val b: Float, val text: String, val color: Int, val bg: Int, val size: Float,
+                           val font: Int = 0, val bold: Boolean = false)
 
 /** Lee el texto de la página (sea texto real o parte de una imagen/escaneo) con el OCR del teléfono. */
-private suspend fun readPageText(bmp: Bitmap): List<OcrLine> = withContext(Dispatchers.Default) {
+private suspend fun readPageText(ctx: android.content.Context, bmp: Bitmap): List<OcrLine> = withContext(Dispatchers.Default) {
     val rec = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
     try {
         val res = com.google.android.gms.tasks.Tasks.await(rec.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)))
@@ -151,10 +159,11 @@ private suspend fun readPageText(bmp: Bitmap): List<OcrLine> = withContext(Dispa
             if (rc.width() < 4 || rc.height() < 4) return@mapNotNull null
             val (fg, bg) = sampleColors(bmp, rc)
             // tamaño de letra: el que hace que el texto ocupe el mismo ancho del renglón (más fiel que el alto)
+            val (font, bold) = runCatching { PdfFonts.detect(ctx, bmp, rc, ln.text, bg) }.getOrDefault(0 to false)
             val byH = rc.height() / w * 0.92f
-            val unit = android.graphics.Paint().apply { typeface = android.graphics.Typeface.SANS_SERIF; textSize = 100f }.measureText(ln.text) / 100f
+            val unit = android.graphics.Paint().apply { typeface = PdfFonts.typeface(ctx, font, bold); textSize = 100f }.measureText(ln.text) / 100f
             val byW = if (unit > 0f) rc.width() / w / unit else byH
-            OcrLine(rc.left / w, rc.top / h, rc.right / w, rc.bottom / h, ln.text, fg, bg, byW.coerceIn(byH * 0.75f, byH * 1.35f))
+            OcrLine(rc.left / w, rc.top / h, rc.right / w, rc.bottom / h, ln.text, fg, bg, byW.coerceIn(byH * 0.7f, byH * 1.45f), font, bold)
         }
     } finally { rec.close() }
 }
@@ -184,9 +193,9 @@ private fun sampleColors(bmp: Bitmap, rc: android.graphics.Rect): Pair<Int, Int>
 }
 
 /** Dibuja en pantalla un texto corregido igual que como quedará en el PDF. */
-private fun drawReplace(cv: android.graphics.Canvas, m: PdfMark.Replace, w: Float, h: Float) {
+private fun drawReplace(ctx: android.content.Context, cv: android.graphics.Canvas, m: PdfMark.Replace, w: Float, h: Float) {
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = android.graphics.Typeface.create("sans-serif", if (m.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        typeface = PdfFonts.typeface(ctx, m.font, m.bold)
         textSize = m.size * w; color = m.color
     }
     val txt = m.text.replace("\n", " ")
@@ -335,6 +344,8 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                         onMarks: (List<PdfMark>) -> Unit, onPage: (Int) -> Unit) {
     val ctx = LocalContext.current
     var tool by remember { mutableStateOf(PdfTool.PEN) }
+    var zScale by remember(ref.id) { mutableFloatStateOf(1f) }
+    var zOff by remember(ref.id) { mutableStateOf(Offset.Zero) }
     var color by remember { mutableIntStateOf(inkColors[1]) }
     var thick by remember { mutableFloatStateOf(0.004f) }
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
@@ -353,7 +364,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
         if (tool == PdfTool.OCR && ocr[ref.id] == null) {
             ocrBusy = true
             val big = if (ref.file == null) null else src.render(ref.file, ref.index, 2200)
-            ocr[ref.id] = if (big == null) emptyList() else runCatching { readPageText(big) }.getOrElse {
+            ocr[ref.id] = if (big == null) emptyList() else runCatching { readPageText(ctx, big) }.getOrElse {
                 Toast.makeText(ctx, "No pude leer el texto de esta página.", Toast.LENGTH_SHORT).show(); emptyList()
             }
             ocrBusy = false
@@ -366,11 +377,35 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onPage(index - 1) }, enabled = index > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Anterior", tint = Color.White) }
             Text("Página ${index + 1} de $total", color = Color.White, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            if (zScale > 1f) Text("Ajustar", color = Color(0xFFC9B8FF), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { zScale = 1f; zOff = Offset.Zero }.padding(horizontal = 8.dp, vertical = 4.dp))
             IconButton(onClick = { onPage(index + 1) }, enabled = index < total - 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Siguiente", tint = Color.White) }
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp).clipToBounds()
+            .pointerInput(ref.id) {
+                // dos dedos = acercar y mover la hoja (no dibuja); un dedo = la herramienta elegida
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    do {
+                        val ev = awaitPointerEvent(PointerEventPass.Initial)
+                        if (ev.changes.count { it.pressed } >= 2) {
+                            val zoom = ev.calculateZoom(); val pan = ev.calculatePan()
+                            val q = ev.calculateCentroid(useCurrent = true)
+                            val c = Offset(size.width / 2f, size.height / 2f)
+                            val ns = (zScale * zoom).coerceIn(1f, 6f)
+                            val t = (q - c) - (q - c - zOff) * (ns / zScale) + pan
+                            val maxX = size.width * (ns - 1f) / 2f; val maxY = size.height * (ns - 1f) / 2f
+                            zScale = ns
+                            zOff = if (ns <= 1f) Offset.Zero else Offset(t.x.coerceIn(-maxX, maxX), t.y.coerceIn(-maxY, maxY))
+                            ev.changes.forEach { it.consume() }
+                        }
+                    } while (ev.changes.any { it.pressed })
+                }
+            }, contentAlignment = Alignment.Center) {
             val pw = minOf(maxWidth, maxHeight / ratio)
-            Box(Modifier.width(pw).aspectRatio(1f / ratio).background(Color.White)) {
+            Box(Modifier.width(pw).aspectRatio(1f / ratio)
+                .graphicsLayer { scaleX = zScale; scaleY = zScale; translationX = zOff.x; translationY = zOff.y }
+                .background(Color.White)) {
                 bmp?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
                 val sigImg = remember(sigBmp) { sigBmp?.asImageBitmap() }
                 Canvas(Modifier.fillMaxSize().pointerInput(tool, color, thick, pageMarks, lines) {
@@ -425,7 +460,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                                 }
                                 m.text.split("\n").forEachIndexed { i, line -> drawText(line, m.pos.x * w, m.pos.y * h + m.size * w * (0.85f + 1.2f * i), paint) }
                             }
-                            is PdfMark.Replace -> drawReplace(drawContext.canvas.nativeCanvas, m, w, h)
+                            is PdfMark.Replace -> drawReplace(ctx, drawContext.canvas.nativeCanvas, m, w, h)
                             is PdfMark.Image -> sigImg?.let { img ->
                                 val iw = m.width * w; val ih = iw * m.ratio
                                 drawImage(img, dstOffset = androidx.compose.ui.unit.IntOffset((m.pos.x * w - iw / 2).toInt(), (m.pos.y * h - ih / 2).toInt()),
@@ -515,14 +550,22 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
     }
     if (editLine != null || editMark != null) {
         val ln = editLine; val mk = editMark
-        val base = mk ?: PdfMark.Replace(ln!!.l, ln.t, ln.r, ln.b, ln.text, ln.color, ln.bg, ln.size, false, ln.text)
+        val base = mk ?: PdfMark.Replace(ln!!.l, ln.t, ln.r, ln.b, ln.text, ln.color, ln.bg, ln.size, ln.bold, ln.text, ln.font)
+        val detected = remember(base) { lines.firstOrNull { kotlin.math.abs(it.l - base.l) < 0.002f && kotlin.math.abs(it.t - base.t) < 0.002f } }
         var txt by remember(base) { mutableStateOf(base.text) }
         var bold by remember(base) { mutableStateOf(base.bold) }
         var size by remember(base) { mutableFloatStateOf(base.size) }
         var col by remember(base) { mutableIntStateOf(base.color) }
+        var font by remember(base) { mutableIntStateOf(base.font) }
         fun close() { editLine = null; editMark = null }
         fun put(text: String) {
-            val m = base.copy(text = text, bold = bold, size = size, color = col)
+            // al cambiar de letra se ajusta el tamaño para que ocupe lo mismo que el original
+            val sz = if (font == base.font) size else {
+                val u0 = android.graphics.Paint().apply { typeface = PdfFonts.typeface(ctx, base.font, base.bold); textSize = 100f }.measureText(base.original)
+                val u1 = android.graphics.Paint().apply { typeface = PdfFonts.typeface(ctx, font, bold); textSize = 100f }.measureText(base.original)
+                if (u1 > 0f) size * u0 / u1 else size
+            }
+            val m = base.copy(text = text, bold = bold, size = sz, color = col, font = font)
             onMarks((if (mk != null) pageMarks - mk else pageMarks) + m); close()
         }
         AlertDialog(onDismissRequest = { close() }, title = { Text("Editar texto") },
@@ -538,6 +581,19 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                                 .border(if (col == c) 3.dp else 1.dp, if (col == c) Color(0xFF6C4BE0) else Color.LightGray, CircleShape).clickable { col = c })
                         }
                     }
+                    Text("Letra", fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PdfFonts.all.forEach { f ->
+                            val on = font == f.id
+                            val tf = remember(f.id, bold) { androidx.compose.ui.text.font.FontFamily(PdfFonts.typeface(ctx, f.id, bold)) }
+                            Column(Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) Color(0xFF6C4BE0) else Color(0x22888888))
+                                .clickable { font = f.id }.padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Aa", fontFamily = tf, fontSize = 18.sp, color = if (on) Color.White else Color.Unspecified)
+                                Text(f.name + if (detected?.font == f.id) " ✓" else "", fontSize = 10.sp, color = if (on) Color.White else Color.Unspecified)
+                            }
+                        }
+                    }
+                    Text("✓ = la que se parece al original", fontSize = 10.sp, color = Color.Gray)
                     Text("Tamaño de letra", fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
                     Slider(size, { size = it }, valueRange = (base.size * 0.5f)..(base.size * 1.6f))
                 }

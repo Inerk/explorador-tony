@@ -9,6 +9,8 @@ import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
+import com.tom_roush.pdfbox.pdmodel.font.PDFont
+import com.tom_roush.pdfbox.pdmodel.font.PDType0Font
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
@@ -34,7 +36,7 @@ sealed class PdfMark {
      * y escribe encima el texto nuevo. [size] es el alto de letra como fracción del ancho de la página.
      */
     data class Replace(val l: Float, val t: Float, val r: Float, val b: Float, val text: String, val color: Int,
-                       val bg: Int, val size: Float, val bold: Boolean, val original: String) : PdfMark()
+                       val bg: Int, val size: Float, val bold: Boolean, val original: String, val font: Int = 0) : PdfMark()
 }
 
 /** Una página del documento final: de qué archivo sale (null = en blanco), cuál es y cuánto se gira de más. */
@@ -49,6 +51,7 @@ object PdfEditing {
         init(c)
         val sources = HashMap<File, PDDocument>()
         val doc = PDDocument()
+        val fonts = HashMap<String, PDFont>()
         try {
             for (ref in pages) {
                 val page: PDPage = if (ref.file == null) {
@@ -58,7 +61,7 @@ object PdfEditing {
                     doc.importPage(src.getPage(ref.index))
                 }
                 val baseRot = ((page.rotation % 360) + 360) % 360
-                marks[ref.id]?.takeIf { it.isNotEmpty() }?.let { drawMarks(doc, page, baseRot, it) }
+                marks[ref.id]?.takeIf { it.isNotEmpty() }?.let { drawMarks(c, doc, page, baseRot, it, fonts) }
                 page.rotation = (baseRot + ref.extraRotation) % 360
             }
             val tmp = File(out.parentFile, out.name + ".guardando")
@@ -86,7 +89,29 @@ object PdfEditing {
         }
     }
 
-    private fun drawMarks(doc: PDDocument, page: PDPage, rot: Int, marks: List<PdfMark>) {
+    /** La letra elegida, metida en el PDF (solo las letras que se usan). */
+    private fun fontFor(c: Context, doc: PDDocument, fonts: HashMap<String, PDFont>, id: Int, bold: Boolean): PDFont {
+        val key = PdfFonts.asset(id, bold)
+        return fonts.getOrPut(key) {
+            runCatching { c.assets.open(key).use { PDType0Font.load(doc, it, true) } as PDFont }
+                .getOrElse { if (bold) PDType1Font.HELVETICA_BOLD else PDType1Font.HELVETICA }
+        }
+    }
+
+    /** Quita las letras que la fuente no trae, para que no truene al guardar. */
+    private fun fitText(font: PDFont, t: String): String {
+        if (font is PDType1Font) return safeText(t)
+        val sb = StringBuilder()
+        var i = 0
+        while (i < t.length) {
+            val cp = t.codePointAt(i); val s = String(Character.toChars(cp))
+            sb.append(if (runCatching { font.encode(s) }.isSuccess) s else "?")
+            i += Character.charCount(cp)
+        }
+        return sb.toString()
+    }
+
+    private fun drawMarks(c: Context, doc: PDDocument, page: PDPage, rot: Int, marks: List<PdfMark>, fonts: HashMap<String, PDFont>) {
         val box = page.cropBox
         val viewW = if (rot == 90 || rot == 270) box.height else box.width   // ancho de la página como se ve
         PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true).use { cs ->
@@ -121,8 +146,8 @@ object PdfEditing {
                 }
                 is PdfMark.Replace -> {
                     val aspect = pageAspect(box, rot)
-                    val font = if (m.bold) PDType1Font.HELVETICA_BOLD else PDType1Font.HELVETICA
-                    val txt = safeText(m.text.replace("\n", " "))
+                    val font = fontFor(c, doc, fonts, m.font, m.bold)
+                    val txt = fitText(font, m.text.replace("\n", " "))
                     var size = m.size * viewW
                     val boxW = (m.r - m.l) * viewW
                     var textW = font.getStringWidth(txt) / 1000f * size
