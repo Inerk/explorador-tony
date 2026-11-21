@@ -25,7 +25,7 @@ object ExitReport {
         prefs.edit().putLong("last", newest).apply()
         // primera vez: solo cuenta lo de las últimas 6 horas (así sale el cierre que acaba de pasar)
         val since = if (seen == 0L) System.currentTimeMillis() - 6 * 3600_000L else seen
-        val bad = infos.filter { it.timestamp > since && it.reason in BAD }.maxByOrNull { it.timestamp } ?: return
+        val bad = infos.filter { it.timestamp > since && it.reason in BAD && !normalBackgroundKill(it) }.maxByOrNull { it.timestamp } ?: return
         val errFile = File(context.filesDir, "ultimo_error.txt")
         // si el atrapador normal ya guardó un error de Java, ese es más útil
         if (bad.reason == ApplicationExitInfo.REASON_CRASH && errFile.isFile) return
@@ -34,7 +34,8 @@ object ExitReport {
             .append(" · ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
         sb.append("Cierre inesperado: ").append(reasonName(bad.reason))
         sb.append(" · ").append(SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).format(Date(bad.timestamp))).append('\n')
-        bad.description?.let { sb.append("Detalle: ").append(it).append('\n') }
+        bad.description?.takeIf { it.isNotBlank() }?.let { sb.append("Detalle: ").append(it).append('\n') }
+        if (bad.reason == ApplicationExitInfo.REASON_SIGNALED) sb.append("Señal: ").append(bad.status).append('\n')
         sb.append("Memoria usada: ").append(bad.pss / 1024).append(" MB (máx. ").append(bad.rss / 1024).append(" MB)\n")
         sb.append("Proceso: ").append(bad.processName).append(" · importancia ").append(bad.importance).append('\n')
         if (bad.reason == ApplicationExitInfo.REASON_ANR) {
@@ -48,6 +49,17 @@ object ExitReport {
         }
         errFile.writeText(sb.toString())
     }
+
+    /**
+     * Android cierra solo las apps que están dormidas en segundo plano para liberar memoria.
+     * Eso es normal (al abrirla arranca de nuevo) y no es una falla de la app: no se reporta.
+     */
+    private fun normalBackgroundKill(i: ApplicationExitInfo): Boolean =
+        i.importance >= ActivityManager.RunningAppProcessInfo.IMPORTANCE_CACHED && i.reason in setOf(
+            ApplicationExitInfo.REASON_SIGNALED,
+            ApplicationExitInfo.REASON_LOW_MEMORY,
+            ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE,
+        )
 
     private val BAD = setOf(
         ApplicationExitInfo.REASON_CRASH,
