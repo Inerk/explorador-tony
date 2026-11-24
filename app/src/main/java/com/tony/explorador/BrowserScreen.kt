@@ -166,7 +166,8 @@ fun BrowserScreen(
     var sortMode by remember { mutableStateOf(runCatching { SortMode.valueOf(sortPrefs.getString("orden", "NAME")!!) }.getOrDefault(SortMode.NAME)) }
     var ascending by remember { mutableStateOf(sortPrefs.getBoolean("ascendente", true)) }
     LaunchedEffect(sortMode, ascending) { sortPrefs.edit().putString("orden", sortMode.name).putBoolean("ascendente", ascending).apply() }
-    var showHidden by remember { mutableStateOf(false) }
+    var showHidden by remember { mutableStateOf(sortPrefs.getBoolean("ocultos", false)) }
+    LaunchedEffect(showHidden) { sortPrefs.edit().putBoolean("ocultos", showHidden).apply() }
     var refreshKey by remember { mutableIntStateOf(0) }
 
     var selection by remember { mutableStateOf(setOf<File>()) }

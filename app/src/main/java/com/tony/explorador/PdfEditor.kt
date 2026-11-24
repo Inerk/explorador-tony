@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
@@ -351,6 +352,13 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
     var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var textAt by remember { mutableStateOf<Offset?>(null) }
     var signDialog by remember { mutableStateOf<Offset?>(null) }
+    // firma seleccionada para moverla o cambiarle el tamaño con los dedos
+    var selSig by remember(ref.id) { mutableStateOf<Int?>(null) }
+    var dragSig by remember { mutableStateOf<PdfMark.Image?>(null) }
+    var sigGrab by remember { mutableStateOf(false) }
+    val marksNow by androidx.compose.runtime.rememberUpdatedState(pageMarks)
+    val onMarksNow by androidx.compose.runtime.rememberUpdatedState(onMarks)
+    androidx.compose.runtime.LaunchedEffect(tool) { if (tool != PdfTool.SIGN) selSig = null }
     val sigFile = remember { File(ctx.filesDir, "firma.png") }
     var sigVersion by remember { mutableIntStateOf(0) }
     val sigBmp = remember(sigVersion) { if (sigFile.exists()) android.graphics.BitmapFactory.decodeFile(sigFile.absolutePath) else null }
@@ -388,7 +396,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                     awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     do {
                         val ev = awaitPointerEvent(PointerEventPass.Initial)
-                        if (ev.changes.count { it.pressed } >= 2) {
+                        if (!sigGrab && ev.changes.count { it.pressed } >= 2) {
                             val zoom = ev.calculateZoom(); val pan = ev.calculatePan()
                             val q = ev.calculateCentroid(useCurrent = true)
                             val c = Offset(size.width / 2f, size.height / 2f)
@@ -408,7 +416,64 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                 .background(Color.White)) {
                 bmp?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
                 val sigImg = remember(sigBmp) { sigBmp?.asImageBitmap() }
-                Canvas(Modifier.fillMaxSize().pointerInput(tool, color, thick, pageMarks, lines) {
+                val sigGestures = if (tool != PdfTool.SIGN) Modifier else Modifier.pointerInput(ref.id, sigBmp) {
+                    val w = size.width.toFloat(); val h = size.height.toFloat(); val asp = h / w
+                    fun norm(o: Offset) = Offset(o.x / w, o.y / h)
+                    fun hitPad(m: PdfMark.Image, p: Offset, pad: Float) =
+                        kotlin.math.abs(p.x - m.pos.x) < m.width / 2 + pad && kotlin.math.abs(p.y - m.pos.y) * asp < m.width * m.ratio / 2 + pad
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val n0 = norm(down.position)
+                        val marks = marksNow
+                        val sel = selSig?.takeIf { it in marks.indices && marks[it] is PdfMark.Image && hitPad(marks[it] as PdfMark.Image, n0, 0.05f) }
+                        val idx = sel ?: marks.indices.lastOrNull { (marks[it] as? PdfMark.Image)?.let { m -> hitPad(m, n0, 0f) } == true }
+                        if (idx == null) {
+                            // toque en hoja vacía: quita la selección o pone una firma nueva
+                            val up = waitForUpOrCancellation() ?: return@awaitEachGesture
+                            if ((up.position - down.position).getDistance() > 30f) return@awaitEachGesture
+                            when {
+                                selSig != null -> selSig = null
+                                sigBmp == null -> signDialog = n0
+                                else -> {
+                                    onMarksNow(marksNow + PdfMark.Image(n0, sigFile.absolutePath, 0.32f, sigBmp.height.toFloat() / sigBmp.width))
+                                    selSig = marksNow.size
+                                }
+                            }
+                            return@awaitEachGesture
+                        }
+                        sigGrab = true; selSig = idx
+                        var cur = marks[idx] as PdfMark.Image
+                        // agarrar la esquina de abajo a la derecha cambia el tamaño con un dedo
+                        val cx = cur.pos.x + cur.width / 2; val cy = cur.pos.y + cur.width * cur.ratio / 2 / asp
+                        val corner = sel != null && hypot(n0.x - cx, (n0.y - cy) * asp) < 0.06f
+                        down.consume()
+                        do {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val pressed = ev.changes.filter { it.pressed }
+                            if (pressed.size >= 2) {
+                                val z = ev.calculateZoom(); val pan = ev.calculatePan()
+                                cur = cur.copy(width = (cur.width * z).coerceIn(0.05f, 0.95f), pos = cur.pos + Offset(pan.x / w, pan.y / h))
+                            } else if (pressed.size == 1) {
+                                val ch = pressed[0]
+                                if (corner) {
+                                    val p = norm(ch.position)
+                                    val half = maxOf(kotlin.math.abs(p.x - cur.pos.x), kotlin.math.abs(p.y - cur.pos.y) * asp / cur.ratio)
+                                    cur = cur.copy(width = (half * 2).coerceIn(0.05f, 0.95f))
+                                } else {
+                                    val d = ch.position - ch.previousPosition
+                                    cur = cur.copy(pos = cur.pos + Offset(d.x / w, d.y / h))
+                                }
+                            }
+                            dragSig = cur
+                            ev.changes.forEach { it.consume() }
+                        } while (ev.changes.any { it.pressed })
+                        val fin = cur.copy(pos = Offset(cur.pos.x.coerceIn(0f, 1f), cur.pos.y.coerceIn(0f, 1f)))
+                        val now = marksNow
+                        if (idx in now.indices) onMarksNow(now.toMutableList().also { it[idx] = fin })
+                        dragSig = null; sigGrab = false
+                    }
+                }
+                Canvas(Modifier.fillMaxSize().then(sigGestures).pointerInput(tool, color, thick, pageMarks, lines) {
                     val w = size.width.toFloat(); val h = size.height.toFloat()
                     fun norm(o: Offset) = Offset((o.x / w).coerceIn(0f, 1f), (o.y / h).coerceIn(0f, 1f))
                     when (tool) {
@@ -430,12 +495,6 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                             else lines.filter { n.x in (it.l - mx)..(it.r + mx) && n.y in (it.t - my)..(it.b + my) }
                                 .minByOrNull { kotlin.math.abs((it.t + it.b) / 2 - n.y) }?.let { editLine = it }
                         }
-                        PdfTool.SIGN -> detectTapGestures { p ->
-                            val n = norm(p)
-                            val b = sigBmp
-                            if (b == null) signDialog = n
-                            else onMarks(pageMarks + PdfMark.Image(n, sigFile.absolutePath, 0.32f, b.height.toFloat() / b.width))
-                        }
                         PdfTool.ERASE -> detectTapGestures { p ->
                             val n = norm(p)
                             val hit = pageMarks.lastOrNull { m -> hits(m, n, h / w) }
@@ -451,7 +510,8 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                         if (pts.size == 1) drawCircle(Color(c).copy(alpha = a), sw * w / 2, px(pts[0]))
                         else drawPath(path, Color(c).copy(alpha = a), style = Stroke(sw * w, cap = StrokeCap.Round, join = StrokeJoin.Round))
                     }
-                    pageMarks.forEach { m ->
+                    pageMarks.forEachIndexed { mi, m0 ->
+                        val m = if (mi == selSig && dragSig != null) dragSig!! else m0
                         when (m) {
                             is PdfMark.Stroke -> drawStroke(m.points, m.color, m.width, m.alpha)
                             is PdfMark.Text -> drawContext.canvas.nativeCanvas.apply {
@@ -475,6 +535,16 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                             drawRect(Color(0xAA3D7BFF), tl, sz, style = Stroke(1.5f))
                         }
                     }
+                    // marco de la firma elegida, con la esquina para cambiar el tamaño
+                    val sm = selSig?.let { i -> if (dragSig != null) dragSig else pageMarks.getOrNull(i) as? PdfMark.Image }
+                    if (tool == PdfTool.SIGN && sm != null) {
+                        val iw = sm.width * w; val ih = iw * sm.ratio
+                        val tl = Offset(sm.pos.x * w - iw / 2, sm.pos.y * h - ih / 2)
+                        drawRect(Color(0xFF6C4BE0), tl, Size(iw, ih), style = Stroke(2.5f,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(14f, 10f))))
+                        drawCircle(Color.White, 15f, tl + Offset(iw, ih))
+                        drawCircle(Color(0xFF6C4BE0), 11f, tl + Offset(iw, ih))
+                    }
                     if (live.isNotEmpty()) drawStroke(live, color, if (tool == PdfTool.MARKER) thick * 4f else thick, if (tool == PdfTool.MARKER) 0.35f else 1f)
                 }
             }
@@ -491,7 +561,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                             Text(t.label, color = Color.White, fontSize = 11.sp)
                         }
                     }
-                    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = pageMarks.isNotEmpty()) { onMarks(pageMarks.dropLast(1)) }
+                    Column(Modifier.clip(RoundedCornerShape(12.dp)).clickable(enabled = pageMarks.isNotEmpty()) { selSig = null; onMarks(pageMarks.dropLast(1)) }
                         .padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.AutoMirrored.Filled.Undo, "Deshacer", tint = if (pageMarks.isNotEmpty()) Color.White else Color.Gray, modifier = Modifier.size(22.dp))
                         Text("Deshacer", color = Color.White, fontSize = 11.sp)
@@ -506,7 +576,12 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                         if (tool != PdfTool.TEXT) Slider(thick, { thick = it }, valueRange = 0.0015f..0.012f, modifier = Modifier.weight(1f))
                     }
                     PdfTool.SIGN -> Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (sigBmp == null) "Toca la hoja para hacer tu firma." else "Toca la hoja para poner tu firma.", color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text(when {
+                            sigBmp == null -> "Toca la hoja para hacer tu firma."
+                            selSig != null -> "Arrástrala para moverla. Pellizca o jala la esquina para cambiar el tamaño."
+                            else -> "Toca la hoja para poner tu firma, o toca una firma para acomodarla."
+                        }, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        selSig?.let { i -> TextButton(onClick = { (pageMarks.getOrNull(i) as? PdfMark.Image)?.let { onMarks(pageMarks - it) }; selSig = null }) { Text("Quitar") } }
                         TextButton(onClick = { signDialog = Offset(0.5f, 0.85f) }) { Text(if (sigBmp == null) "Hacer firma" else "Nueva firma") }
                     }
                     PdfTool.OCR -> Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -523,12 +598,6 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                         }) { Text("Copiar todo") }
                     }
                     PdfTool.ERASE -> Text("Toca un trazo, texto o firma para quitarlo.", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-                }
-                // tamaño de la última firma
-                val lastSig = pageMarks.lastOrNull() as? PdfMark.Image
-                if (tool == PdfTool.SIGN && lastSig != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tamaño", color = Color.White, fontSize = 12.sp)
-                    Slider(lastSig.width, { v -> onMarks(pageMarks.dropLast(1) + lastSig.copy(width = v)) }, valueRange = 0.1f..0.7f, modifier = Modifier.weight(1f).padding(start = 8.dp))
                 }
             }
         }
@@ -612,6 +681,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
             sigFile.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
             sigVersion++
             onMarks(pageMarks + PdfMark.Image(at, sigFile.absolutePath, 0.32f, b.height.toFloat() / b.width))
+            selSig = pageMarks.size
             signDialog = null
         }
     }
