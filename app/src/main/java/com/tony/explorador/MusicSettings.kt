@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FormatQuote
@@ -275,6 +276,10 @@ private fun MainPage(onOpen: (SPage) -> Unit, onClose: () -> Unit) {
     }
 
     SectionCard(Icons.Filled.Settings, "Avanzado") {
+        if (IS_MUSIC_APP) SettingRow(Icons.Filled.CloudDownload, "Buscar actualización",
+            when (UpdateCenter.state) { is UpdateState.Checking -> "Buscando…"; is UpdateState.Available -> "¡Hay versión nueva!"; else -> "Tienes la v" + AppVersion.name }) {
+            AppNav.checkUpdates()
+        }
         SettingRow(Icons.Filled.CleaningServices, "Borrar caché", cacheMsg ?: "Libera espacio de archivos temporales", last = true) {
             val n = ctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
             ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
