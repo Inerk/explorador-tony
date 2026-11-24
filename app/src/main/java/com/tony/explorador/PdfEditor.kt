@@ -495,6 +495,7 @@ private fun AnnotateTab(ref: PdfPageRef, index: Int, total: Int, ratio: Float, s
                             else lines.filter { n.x in (it.l - mx)..(it.r + mx) && n.y in (it.t - my)..(it.b + my) }
                                 .minByOrNull { kotlin.math.abs((it.t + it.b) / 2 - n.y) }?.let { editLine = it }
                         }
+                        PdfTool.SIGN -> Unit // la firma tiene sus propios gestos (arriba)
                         PdfTool.ERASE -> detectTapGestures { p ->
                             val n = norm(p)
                             val hit = pageMarks.lastOrNull { m -> hits(m, n, h / w) }
