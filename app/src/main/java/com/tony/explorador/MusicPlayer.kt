@@ -980,16 +980,12 @@ private fun CoverArt(
                             val v = offsetX.value
                             when {
                                 v < -w * 0.22f && hasNext -> {
-                                    offsetX.animateTo(-w * 1.2f, tween(170))
                                     next()
-                                    offsetX.snapTo(w * 1.2f)
-                                    offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                    offsetX.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
                                 }
                                 v > w * 0.22f && hasPrev -> {
-                                    offsetX.animateTo(w * 1.2f, tween(170))
                                     prev()
-                                    offsetX.snapTo(-w * 1.2f)
-                                    offsetX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow))
+                                    offsetX.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
                                 }
                                 else -> offsetX.animateTo(0f, spring(dampingRatio = 0.5f))
                             }
@@ -1016,14 +1012,15 @@ private fun CoverArt(
                 }
             }
             .graphicsLayer {
-                val frac = (offsetX.value / this.size.width).coerceIn(-1.5f, 1.5f)
-                translationX = offsetX.value
-                rotationZ = frac * 8f
+                // al deslizar la portada se mueve poquito y se atenúa; nunca se sale de su lugar
+                val frac = (offsetX.value / this.size.width).coerceIn(-0.6f, 0.6f)
+                translationX = if (circle) 0f else frac * this.size.width * 0.12f
+                rotationZ = if (circle) frac * 10f else 0f
                 val ps = pauseScale + (1f - pauseScale) * collapse
-                val s = ps * (1f - kotlin.math.abs(frac) * 0.12f)
+                val s = ps * (1f - kotlin.math.abs(frac) * 0.06f)
                 scaleX = s
                 scaleY = s
-                alpha = 1f - kotlin.math.abs(frac) * 0.5f
+                alpha = 1f - kotlin.math.abs(frac) * 0.35f
             }
             .shadow(36.dp + (6.dp - 36.dp) * collapse, shape, ambientColor = accent, spotColor = accent)
             .clip(shape)
@@ -1039,16 +1036,28 @@ private fun CoverArt(
             cover?.let { Image(remember(it) { it.asImageBitmap() }, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
             AnimatedCoverView(animated, playing, Modifier.fillMaxSize(), sync = syncPlayer)
         }
-        else Crossfade(targetState = cover, animationSpec = tween(400), label = "cover", modifier = Modifier.fillMaxSize()) { bmp ->
-            if (bmp != null) {
-                Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
-                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MusicNote, null, modifier = Modifier.fillMaxSize(0.45f),
-                        tint = Color.White.copy(alpha = 0.5f))
+        else {
+            // la carátula nueva aparece difuminándose encima de la anterior (sin hueco oscuro en medio)
+            var shown by remember { mutableStateOf(cover) }
+            var under by remember { mutableStateOf<Bitmap?>(null) }
+            var hadUnder by remember { mutableStateOf(false) }
+            val fade = remember { Animatable(1f) }
+            LaunchedEffect(cover) {
+                if (cover !== shown) {
+                    under = shown; hadUnder = true; shown = cover
+                    fade.snapTo(0f); fade.animateTo(1f, tween(650, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+                    under = null; hadUnder = false
                 }
             }
+            @Composable fun Art(bmp: Bitmap?, m: Modifier) {
+                if (bmp != null) Image(remember(bmp) { bmp.asImageBitmap() }, contentDescription = "Portada",
+                    contentScale = ContentScale.Crop, modifier = m.fillMaxSize())
+                else Box(m.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.MusicNote, null, modifier = Modifier.fillMaxSize(0.45f), tint = Color.White.copy(alpha = 0.5f))
+                }
+            }
+            if (hadUnder) Art(under, Modifier)
+            Art(shown, Modifier.graphicsLayer { alpha = fade.value })
         }
         // botón para ver el video / la animación, o sólo la carátula fija
         // letra encima de la carátula (si así se eligió en ajustes)
@@ -1093,18 +1102,7 @@ private fun CoverArt(
                 .graphicsLayer { alpha = (1f - collapse / 0.3f) * (if (MotionPref.on) 1f else 0.45f) }
                 .clip(CircleShape).clickable { MotionPref.on = !MotionPref.on }, backdrop = true)
         }
-        // ⋮ abajo a la derecha de la portada (se esconde al encogerse)
-        if (collapse < 0.3f) {
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(inset).size(38.dp)
-                    .graphicsLayer { alpha = 1f - collapse / 0.3f }
-                    .clip(CircleShape).background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(onClick = onMenu),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Filled.MoreVert, "Más opciones", tint = Color.White)
-            }
-        }
+        // (el menú ⋮ ya está arriba a la derecha en todos los temas, por eso no va en la portada)
     }
 }
 

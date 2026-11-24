@@ -82,7 +82,7 @@ class XmasFx {
     class Flake(var x: Float, var y: Float, val size: Float, val speed: Float, val phase: Float, val depth: Float, var spin: Float)
     class Sparkle(val x: Float, val y: Float, val vx: Float, val vy: Float, var life: Float, val gold: Boolean)
     private val rnd = Random(2412)
-    val flakes = List(170) {
+    val flakes = List(105) {
         val d = rnd.nextFloat()
         Flake(rnd.nextFloat(), rnd.nextFloat(), 0.6f + d * 2.4f, 0.04f + d * 0.10f, rnd.nextFloat() * 6.28f, d, rnd.nextFloat() * 360f)
     }
@@ -310,11 +310,11 @@ fun XmasSnowOverlay(fx: XmasFx, beat: BocinaBeat, alpha: Float) {
         val w = size.width; val h = size.height
         fx.flakes.forEach { f ->
             val x = f.x * w; val y = f.y * h
-            if (f.depth > 0.88f) {
-                val s = (8f + f.size * 3f).dp.toPx()
-                rotate(f.spin, Offset(x, y)) { img(flakeImg, x - s / 2, y - s / 2, s, s, 0.85f * alpha) }
+            if (f.depth > 0.93f) {
+                val s = (7f + f.size * 2.5f).dp.toPx()
+                rotate(f.spin, Offset(x, y)) { img(flakeImg, x - s / 2, y - s / 2, s, s, 0.6f * alpha) }
             } else {
-                drawCircle(Xmas.Snow.copy(alpha = (0.35f + f.depth * 0.55f) * alpha), f.size.dp.toPx(), Offset(x, y))
+                drawCircle(Xmas.Snow.copy(alpha = (0.25f + f.depth * 0.4f) * alpha), f.size.dp.toPx() * 0.85f, Offset(x, y))
             }
         }
         fx.sparkles.forEach { s ->
