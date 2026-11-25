@@ -249,7 +249,7 @@ fun DrawScope.drawBocinaStage(
         val band = beat.bandAt(d * 0.85f + 0.02f)
         val wig = 0.6f + 0.4f * sin(t * 7f + i * 0.9f + side)
         val env = (1f - d * 0.65f)
-        val hh = (maxH * (0.05f + band * 1.6f * wig + beat.bass * 0.25f * (1f - d)) * env).coerceIn(2.dp.toPx(), maxH)
+        val hh = (maxH * (0.05f + band * 1.6f * wig + beat.bass * 0.25f * (1f - d)) * env).coerceIn(2.dp.toPx(), maxOf(2.dp.toPx(), maxH))
         val a = (0.35f + 0.65f * (1f - d)) * alpha
         drawLine(accent.copy(alpha = 0.18f * a), Offset(x, cy - hh), Offset(x, cy + hh), gap * 0.75f, StrokeCap.Round)
         drawLine(light.copy(alpha = 0.95f * a), Offset(x, cy - hh), Offset(x, cy + hh), gap * 0.28f, StrokeCap.Round)
