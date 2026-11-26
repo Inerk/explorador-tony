@@ -198,8 +198,9 @@ fun StationLogo(s: RadioStation?, modifier: Modifier, corner: Int = 16, big: Boo
             SubcomposeAsyncImage(logo, s.name, contentScale = ContentScale.Fit,
                 loading = { Fallback() }, error = { Fallback() },
                 success = {
+                    val p = this.painter
                     Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
-                        androidx.compose.foundation.Image(painter, s.name, contentScale = ContentScale.Fit,
+                        androidx.compose.foundation.Image(p, s.name, contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize().padding(if (big) 22.dp else 5.dp))
                     }
                 },
