@@ -283,7 +283,7 @@ internal fun RadioTab(nowUrl: String?, playing: Boolean, onPlay: (RadioStation) 
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Radio", color = RC.text, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                    Text("Miles de estaciones en vivo, en tus bocinas", color = RC.sub, fontSize = 13.sp)
+                    Text("En vivo, en tus bocinas", color = RC.sub, fontSize = 13.sp, maxLines = 1)
                 }
                 Row(Modifier.glass(RoundedCornerShape(18.dp)).padding(3.dp)) {
                     listOf(true to "🇲🇽 México", false to "🌎 Mundo").forEach { (mx, l) ->
@@ -413,7 +413,10 @@ private fun StationSheet(s: RadioStation, now: Boolean, onPlay: () -> Unit, onDi
                 if (s.genres.isNotEmpty()) Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { s.genres.forEach { Chip(it) } }
                 Column(Modifier.fillMaxWidth().padding(top = 16.dp).glass(RoundedCornerShape(18.dp)).padding(14.dp)) {
                     InfoLine("Calidad", s.quality.ifBlank { "—" })
-                    InfoLine("Idioma", s.language.split(',').firstOrNull()?.trim()?.replaceFirstChar { it.uppercase() }?.ifBlank { null } ?: "—")
+                    InfoLine("Idioma", s.language.split(',').firstOrNull()?.trim()?.lowercase()?.let { l ->
+                        mapOf("spanish" to "Español", "español" to "Español", "english" to "Inglés", "portuguese" to "Portugués",
+                            "french" to "Francés", "italian" to "Italiano", "german" to "Alemán", "japanese" to "Japonés", "korean" to "Coreano")[l]
+                            ?: l.replaceFirstChar { it.uppercase() } }?.ifBlank { null } ?: "—")
                     InfoLine("Sitio", s.homepage.removePrefix("https://").removePrefix("http://").removeSuffix("/").ifBlank { "—" })
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
