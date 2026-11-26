@@ -211,7 +211,7 @@ class H(BaseHTTPRequestHandler):
         try:
             d = self._body()
             with lock:
-                for k in ("nicks", "profiles", "alarms"):
+                for k in ("nicks", "profiles", "alarms", "radios"):
                     if k in d: config[k] = d[k]
                 if "tz" in d: config["tz"] = int(d["tz"])
                 config["rev"] = int(config.get("rev", 0)) + 1

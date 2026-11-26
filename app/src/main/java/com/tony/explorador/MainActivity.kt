@@ -1,5 +1,7 @@
 package com.tony.explorador
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -186,7 +188,8 @@ fun AppRoot() {
 
     val controller = rememberMediaController()
     androidx.compose.runtime.SideEffect { AppNav.pauseMusic = { controller?.pause() } }
-    val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>() }
+    // Nebula Música arranca ya con la biblioteca puesta (sin que se asome el explorador mientras se anima)
+    val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>().apply { if (IS_MUSIC_APP) add(Overlay.Library) } }
     val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }
     fun open(o: Overlay) {
         // DriveNebula ya no trae el reproductor: la música vive en Nebula Música
@@ -196,6 +199,8 @@ fun AppRoot() {
             openMusicApp(context, path)
             return
         }
+        // si ya está abierta, sólo pasa al frente (sin volver a animarse desde cero)
+        if (o in overlays && overlayStates[o]?.targetState != false) { overlays.remove(o); overlays.add(o); return }
         overlays.remove(o); overlays.add(o)
         overlayStates[o] = androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
     }
@@ -376,6 +381,10 @@ fun AppRoot() {
             )
         }
 
+        // la app de música no tiene explorador: se tapa con el fondo de la biblioteca para que nunca se asome
+        if (IS_MUSIC_APP) Box(Modifier.fillMaxSize().background(LibraryBackdrop).pointerInput(Unit) {
+            awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+        })
         overlays.toList().forEach { o ->
             androidx.compose.runtime.key(o) {
                 val st = overlayStates[o] ?: remember { androidx.compose.animation.core.MutableTransitionState(true) }

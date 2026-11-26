@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -201,6 +202,7 @@ private class RState {
     var shuffle by mutableStateOf(false)
     var repeat by mutableStateOf("off")         // off · all · single
     var spotify by mutableStateOf(false)        // suena Spotify (bocina «NAS Nebula») por el pipe del NAS
+    var radio by mutableStateOf<RadioStation?>(null)   // suena una estación de radio por internet
     val outputs = mutableStateListOf<ROutput>()
 }
 
@@ -221,6 +223,7 @@ object RemotePrefs {
         if (prefs != null) return
         app = c.applicationContext
         val p = c.applicationContext.getSharedPreferences("remote", android.content.Context.MODE_PRIVATE); prefs = p
+        RadioStore.init(c)
         runCatching { JSONObject(p.getString("nicks", "{}")!!).let { o -> o.keys().forEach { nicks[it] = o.getString(it) } } }
         runCatching {
             val o = JSONObject(p.getString("profiles", "{}")!!)
@@ -265,6 +268,10 @@ object RemotePrefs {
                 prefs?.edit()?.putString("nicks", JSONObject(nicks.toMap()).toString())?.apply()
                 persistLocal()
                 NasAlarms.replaceFromNas(c, remote.optJSONArray("alarms") ?: JSONArray())
+                // radios favoritas: si el NAS aún no tiene, se le suben las de este teléfono
+                val remoteRadios = remote.optJSONArray("radios")
+                if (remoteRadios != null) RadioStore.replaceFavorites(remoteRadios, merge = firstTime)
+                if ((remoteRadios == null || firstTime) && RadioStore.favorites.isNotEmpty()) pushAll()
                 if (firstTime) {
                     var added = false
                     localNicks.forEach { (k, v) -> if (k !in nicks) { nicks[k] = v; added = true } }
@@ -289,6 +296,7 @@ object RemotePrefs {
         profiles.forEach { (n, m) -> p.put(n, JSONObject().apply { m.forEach { (id, sv) -> put(id, JSONObject().put("s", sv.first).put("v", sv.second)) } }) }
         val tz = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60000
         return JSONObject().put("nicks", JSONObject(nicks.toMap())).put("profiles", p).put("alarms", NasAlarms.toJson()).put("tz", tz)
+            .put("radios", RadioStore.favJson())
     }
 
     /** Manda todo al NAS (después de cualquier cambio). */
@@ -390,6 +398,18 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                             val it = q.getJSONObject(i)
                             if (it.optLong("id") == itemId) {
                                 st.spotify = isSpotifyPipe(it)
+                                // radio por internet: OwnTone la guarda como dirección http
+                                val path = it.optString("path")
+                                if (!st.spotify && (it.optString("data_kind") == "url" || path.startsWith("http"))) {
+                                    val known = RadioStore.byUrl(path) ?: st.radio?.takeIf { r -> r.url == path }
+                                    val station = known ?: RadioStation("", it.optString("album").ifBlank { it.optString("title") }.ifBlank { "Radio" }, path)
+                                    st.radio = station
+                                    st.title = it.optString("title"); st.artist = station.name
+                                    st.trackId = ""; st.rating = 0
+                                    st.art = station.logo.takeIf { l -> l.startsWith("http") } ?: artUrl(h, it.optString("artwork_url"))
+                                    break
+                                }
+                                st.radio = null
                                 if (st.spotify) {
                                     // lo que manda Spotify: si aún no llegan los datos, el pipe se llama «spotify»
                                     val t = it.optString("title")
@@ -409,7 +429,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                                 st.art = artUrl(h, it.optString("artwork_url")); break
                             }
                         }
-                    } else { st.title = ""; st.artist = ""; st.art = null; st.spotify = false }
+                    } else { st.title = ""; st.artist = ""; st.art = null; st.spotify = false; st.radio = null }
                     if (tick % 4 == 0) {
                         val o = JSONObject(api(h, "GET", "/api/outputs")).optJSONArray("outputs") ?: JSONArray()
                         val list = (0 until o.length()).map { o.getJSONObject(it) }
@@ -442,6 +462,19 @@ fun NasRemoteScreen(onClose: () -> Unit) {
         }
     }
     fun playUris(uris: String, from: Int, shuffle: Boolean): Unit = queue("uris=${enc(uris)}", from, shuffle)
+    /** Pone una estación de radio en las bocinas. */
+    fun playRadio(r: RadioStation) {
+        val h = st.host ?: return
+        st.radio = r; st.title = ""; st.artist = r.name; st.art = r.logo.takeIf { it.startsWith("http") }; st.state = "play"
+        RadioStore.played(r)
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                api(h, "PUT", "/api/player/shuffle?state=false")
+                api(h, "POST", "/api/queue/items/add?clear=true&playback=start&uris=${enc(r.url)}")
+            }.onFailure { st.error = "El NAS no pudo abrir esa estación." }
+            RadioApi.click(r.uuid)
+        }
+    }
     fun playExpr(expr: String, from: Int, shuffle: Boolean) = queue("expression=${enc(expr)}", from, shuffle)
     /** Mete una canción a la cola: «next» = justo después de la que suena; si no, al final. */
     fun enqueue(uri: String, next: Boolean) {
@@ -475,7 +508,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 Icon(Icons.Filled.ArrowBack, "Cerrar", tint = RC.text, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { handleBack() }.padding(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Control remoto", color = RC.text, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-                    Text(st.host?.let { if (st.spotify) "Spotify en el NAS · $it" else "Música del NAS · $it" } ?: if (st.searching) "Buscando el NAS…" else "Sin conexión", color = RC.sub, fontSize = 12.sp)
+                    Text(st.host?.let { if (st.spotify) "Spotify en el NAS · $it" else if (st.radio != null) "Radio en el NAS · $it" else "Música del NAS · $it" } ?: if (st.searching) "Buscando el NAS…" else "Sin conexión", color = RC.sub, fontSize = 12.sp)
                 }
                 if (st.searching) CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                 else Icon(Icons.Filled.Refresh, "Buscar otra vez", tint = RC.sub, modifier = Modifier.size(44.dp).clip(CircleShape).clickable { reload++ }.padding(10.dp))
@@ -490,7 +523,8 @@ fun NasRemoteScreen(onClose: () -> Unit) {
             Box(Modifier.weight(1f)) {
                 val h = st.host
                 if (h != null) when (tab) {
-                    0 -> NowPlayingTab(st, ::call)
+                    0 -> NowPlayingTab(st, ::call, ::playRadio)
+                    4 -> RadioTab(st.radio?.url, st.state == "play") { r -> playRadio(r); tab = 0 }
                     1 -> LibraryTab(h, nav, ::playUris, ::playExpr, ::enqueue, st.state == "play" || st.state == "pause")
                     2 -> SpeakersTab(st, ::call)
                     3 -> AlarmsTab(h)
@@ -513,7 +547,13 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                         Text(st.artist, color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (st.spotify) SpotifyBadge()
-                    else {
+                    else if (st.radio != null) {
+                        LiveBadge(Modifier.padding(end = 4.dp))
+                        Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, "Pausa", tint = RC.text,
+                            modifier = Modifier.size(40.dp).clip(CircleShape).clickable {
+                                call("PUT", if (st.state == "play") "/api/player/stop" else "/api/player/play"); st.state = if (st.state == "play") "stop" else "play"
+                            }.padding(8.dp))
+                    } else {
                     Icon(if (st.state == "play") Icons.Filled.Pause else Icons.Filled.PlayArrow, "Pausa", tint = RC.text,
                         modifier = Modifier.size(40.dp).clip(CircleShape).clickable {
                             call("PUT", if (st.state == "play") "/api/player/pause" else "/api/player/play"); st.state = if (st.state == "play") "pause" else "play"
@@ -529,7 +569,8 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceEvenly) {
                 TabBtn(Icons.Filled.PlayArrow, "Sonando", tab == 0) { tab = 0 }
                 TabBtn(Icons.Filled.Album, "Biblioteca", tab == 1) { tab = 1 }
-                TabBtn(Icons.Filled.Speaker, "Bocinas (${st.outputs.count { it.selected }})", tab == 2) { tab = 2 }
+                TabBtn(Icons.Filled.Radio, "Radio", tab == 4) { tab = 4 }
+                TabBtn(Icons.Filled.Speaker, "Bocinas·${st.outputs.count { it.selected }}", tab == 2) { tab = 2 }
                 TabBtn(Icons.Filled.Alarm, "Alarmas", tab == 3) { tab = 3 }
             }
         }
@@ -546,7 +587,7 @@ private fun SpotifyBadge(modifier: Modifier = Modifier) {
 @Composable
 private fun TabBtn(icon: ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
     Column(Modifier.clip(RoundedCornerShape(20.dp)).background(if (on) Color.White.copy(alpha = 0.14f) else Color.Transparent)
-        .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 4.dp),
+        .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, null, tint = if (on) RC.accent else RC.sub, modifier = Modifier.size(24.dp))
         Text(label, color = if (on) RC.accent else RC.sub, fontSize = 11.sp, maxLines = 1, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal)
@@ -554,7 +595,18 @@ private fun TabBtn(icon: ImageVector, label: String, on: Boolean, onClick: () ->
 }
 
 @Composable
-private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit) {
+private fun NowPlayingTab(st: RState, call: (String, String, String?) -> Unit, playRadio: (RadioStation) -> Unit) {
+    st.radio?.let { r ->
+        RadioNowPlaying(r, st.title, st.state == "play", st.volume,
+            st.outputs.filter { it.selected }.joinToString(", ") { RemotePrefs.nameOf(it.id, it.name) }, st.host,
+            onToggle = {
+                // la radio no se pausa: se detiene y al volver se reanuda en vivo
+                call("PUT", if (st.state == "play") "/api/player/stop" else "/api/player/play", null); st.state = if (st.state == "play") "stop" else "play"
+            },
+            onVolume = { v -> st.volume = v; call("PUT", "/api/player/volume?volume=$v", null) },
+            onSwitch = playRadio)
+        return
+    }
     var dragging by remember { mutableStateOf<Float?>(null) }
     var volDrag by remember { mutableStateOf<Float?>(null) }
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

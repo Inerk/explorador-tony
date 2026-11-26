@@ -135,6 +135,9 @@ import java.io.File
 import java.util.Locale
 
 /** Colores de la sección de música; cambian con el tema elegido (Walkman o Media Player). */
+/** Fondo de la biblioteca (lo usa Nebula Música debajo de todo). */
+val LibraryBackdrop: Brush get() = Retro.bgBrush
+
 private object Retro {
     private val wmp get() = LibraryStore.musicSkin == MusicSkin.MEDIA_PLAYER
     private val vin get() = LibraryStore.musicSkin == MusicSkin.VINTAGE
