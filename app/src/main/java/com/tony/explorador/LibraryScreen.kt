@@ -430,7 +430,7 @@ fun LibraryScreen(
                         RadioColors.accent = Retro.Orange; RadioColors.accent2 = Retro.OrangeLight
                         RadioColors.bg1 = Retro.Bg; RadioColors.bg2 = Retro.Panel
                     }
-                    RadioTab(null, false, subtitle = "Estaciones en vivo en tu teléfono") { r -> AppNav.playRadio(r) }
+                    RadioTab(null, false, subtitle = "Estaciones en vivo en tu teléfono", showTitle = false) { r -> AppNav.playRadio(r) }
                 }
                 LibPage.Artists -> GroupList(
                     groups = songs.groupBy { it.artist }.toSortedMap(compareBy { it.lowercase(Locale.ROOT) }),

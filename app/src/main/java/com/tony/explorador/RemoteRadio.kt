@@ -199,8 +199,10 @@ fun StationLogo(s: RadioStation?, modifier: Modifier, corner: Int = 16, big: Boo
     Box(modifier.clip(shape).background(Brush.linearGradient(listOf(c1, c2))), contentAlignment = Alignment.Center) {
         val initials = (s?.name ?: "").split(Regex("\\s+")).filter { it.firstOrNull()?.isLetterOrDigit() == true }.take(2).joinToString("") { it.take(1).uppercase() }
         @Composable fun Fallback() {
-            if (initials.isBlank()) Icon(Icons.Filled.Radio, null, tint = Color.White, modifier = Modifier.fillMaxSize(0.45f))
-            else Text(initials, color = Color.White, fontWeight = FontWeight.Black, fontSize = if (big) 64.sp else 18.sp)
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(c1, c2))), contentAlignment = Alignment.Center) {
+                if (initials.isBlank()) Icon(Icons.Filled.Radio, null, tint = Color.White, modifier = Modifier.fillMaxSize(0.45f))
+                else Text(initials, color = Color.White, fontWeight = FontWeight.Black, fontSize = if (big) 64.sp else 18.sp)
+            }
         }
         val logo = s?.logo?.takeIf { it.startsWith("http") }
         if (logo == null) Fallback()
@@ -261,7 +263,7 @@ private fun Chip(text: String, on: Boolean = false, onClick: (() -> Unit)? = nul
 /** Pestaña «Radio» del control remoto: buscar, géneros, favoritas y estaciones populares. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun RadioTab(nowUrl: String?, playing: Boolean, subtitle: String = "En vivo, en tus bocinas", onPlay: (RadioStation) -> Unit) {
+internal fun RadioTab(nowUrl: String?, playing: Boolean, subtitle: String = "En vivo, en tus bocinas", showTitle: Boolean = true, onPlay: (RadioStation) -> Unit) {
     val ctx = LocalContext.current
     LaunchedEffect(Unit) { RadioStore.init(ctx) }
     var mexico by remember { mutableStateOf(true) }
@@ -293,7 +295,7 @@ internal fun RadioTab(nowUrl: String?, playing: Boolean, subtitle: String = "En 
             // encabezado
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Radio", color = RadioColors.text, fontSize = 30.sp, fontWeight = FontWeight.Black)
+                    if (showTitle) Text("Radio", color = RadioColors.text, fontSize = 30.sp, fontWeight = FontWeight.Black)
                     Text(subtitle, color = RadioColors.sub, fontSize = 13.sp, maxLines = 1)
                 }
                 Row(Modifier.glass(RoundedCornerShape(18.dp)).padding(3.dp)) {

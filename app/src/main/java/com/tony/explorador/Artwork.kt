@@ -260,6 +260,7 @@ private val qualityCache = LruCache<String, String>(300)
 fun rememberAudioQuality(path: String?): String? =
     produceState<String?>(path?.let { qualityCache.get(it) }, path) {
         if (path == null) { value = null; return@produceState }
+        if (path.startsWith("http")) { value = RadioStore.byUrl(path)?.quality?.ifBlank { null } ?: "En vivo"; return@produceState }
         qualityCache.get(path)?.let { value = it; return@produceState }
         val q = withContext(Dispatchers.IO) {
             val ext = File(path).extension.uppercase(Locale.ROOT)
