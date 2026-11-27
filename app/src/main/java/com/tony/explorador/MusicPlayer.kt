@@ -531,6 +531,7 @@ fun MusicPlayerScreen(
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
                                 // mientras la portada «vuela» al mini reproductor, la de aquí no se queda pintada atrás
+                                val coverMaxW = maxWidth; val coverMaxH = maxHeight
                                 Box(Modifier.fillMaxSize().graphicsLayer {
                                     alpha = if (info?.cover != null && (closeFly.value > 0.001f || (screenW > 0f && aside.value > 1f))) 0f else 1f
                                 }) {
@@ -555,7 +556,7 @@ fun MusicPlayerScreen(
                                     playing = player.isPlaying,
                                     accent = accent,
                                     size = lerpDp(side, QueueThumb, p),
-                                    x = lerpDp((maxWidth - side) / 2, QueueThumbX, p),
+                                    x = lerpDp((coverMaxW - side) / 2, QueueThumbX, p),
                                     y = lerpDp(topGap, QueueThumbY, p),
                                     collapse = p,
                                     onTap = {
