@@ -43,7 +43,7 @@ object BeatMap {
 
     /** El mapa si ya está listo; si no, lo empieza a calcular y regresa null mientras tanto. */
     fun get(path: String?): Analysis? {
-        if (path.isNullOrEmpty()) return null
+        if (path.isNullOrEmpty() || path.startsWith("http")) return null   // la radio en vivo no se analiza
         synchronized(this) {
             cache[path]?.let { return it }
             if (path in pending || path in failed) return null

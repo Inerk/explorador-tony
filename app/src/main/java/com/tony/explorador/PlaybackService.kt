@@ -34,6 +34,8 @@ class PlaybackService : MediaSessionService() {
         val p = session?.player ?: return
         if (restoring) return
         if (p.mediaItemCount == 0) { LibraryStore.clearPlayback(); return }
+        // la radio en vivo no se guarda para «seguir donde te quedaste»
+        if (p.currentMediaItem?.mediaId?.startsWith("http") == true) return
         val paths = (0 until p.mediaItemCount).map { p.getMediaItemAt(it).mediaId }
         LibraryStore.savePlayback(SavedPlayback(paths, p.currentMediaItemIndex, p.currentPosition, p.shuffleModeEnabled, p.repeatMode))
     }

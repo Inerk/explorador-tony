@@ -65,6 +65,8 @@ import java.io.File
 
 /** Atajos para abrir pantallas desde cualquier parte. */
 object AppNav {
+    /** Nebula Música: pone una estación de radio en el reproductor. */
+    var playRadio: (RadioStation) -> Unit = {}
     var openTrash: () -> Unit = {}
     var openWeb: () -> Unit = {}
     /** Buscar actualización a mano (botón de Nebula Música). */

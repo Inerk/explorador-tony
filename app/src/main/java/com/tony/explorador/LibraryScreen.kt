@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.CheckCircle
@@ -191,6 +192,7 @@ private object Retro {
 
 private sealed interface LibPage {
     data object Menu : LibPage
+    data object Radio : LibPage
     data object Songs : LibPage
     data object Artists : LibPage
     data class Artist(val name: String) : LibPage
@@ -227,6 +229,8 @@ fun LibraryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val stack = remember { mutableStateListOf<LibPage>(LibPage.Menu) }
+    // Nebula Música busca música nueva sola cada vez que se abre (ya no hay botón de recargar)
+    LaunchedEffect(Unit) { if (IS_MUSIC_APP && !LibraryStore.scanning) LibraryStore.scan() }
     val page = stack.last()
     fun push(p: LibPage) { stack.add(p) }
     fun pop() { if (stack.size > 1) stack.removeAt(stack.lastIndex) else onClose() }
@@ -335,7 +339,8 @@ fun LibraryScreen(
     ) {
         // Encabezado: en el menú principal es limpio (el título grande va abajo); en las listas, el metálico
         val clean = page == LibPage.Menu
-        if (clean) Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
+        if (clean && IS_MUSIC_APP) Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)))
+        else if (clean) Box(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { pop() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Atrás", tint = Retro.Text) }
                 Spacer(Modifier.weight(1f))
@@ -343,7 +348,8 @@ fun LibraryScreen(
                 HomeButton(onHome, dark = Retro.isWmp)
                 IconButton(onClick = { scope.launch { LibraryStore.scan() } }) { Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.Text) }
             }
-        } else if (Retro.isNebula || Retro.isLavanda) NebulaListHeader(pageTitle(page), songs.size, onBack = { pop() }, onRefresh = { scope.launch { LibraryStore.scan() } })
+        } else if (Retro.isNebula || Retro.isLavanda) NebulaListHeader(pageTitle(page), songs.size, onBack = { pop() },
+            onRefresh = if (IS_MUSIC_APP) null else ({ scope.launch { LibraryStore.scan() } }))
         else Box(Modifier.fillMaxWidth().background(Retro.metal).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
             Row(
                 Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp),
@@ -363,9 +369,11 @@ fun LibraryScreen(
                         fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
                     )
                 }
-                HomeButton(onHome, dark = Retro.isWmp)
-                IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
-                    Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.HeaderIcon)
+                if (!IS_MUSIC_APP) {
+                    HomeButton(onHome, dark = Retro.isWmp)
+                    IconButton(onClick = { scope.launch { LibraryStore.scan() } }) {
+                        Icon(Icons.Filled.Refresh, "Volver a buscar", tint = Retro.HeaderIcon)
+                    }
                 }
             }
         }
@@ -380,16 +388,17 @@ fun LibraryScreen(
                 targetState = stack.size to page,
                 transitionSpec = {
                     // como la portada: entra con resorte, la de atrás se hace a un lado y se encoge
+                    // la lista nueva se despliega de arriba hacia abajo; al regresar se recoge
                     val forward = targetState.first >= initialState.first
-                    val dir = if (forward) 1 else -1
-                    val move = androidx.compose.animation.core.spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.82f, stiffness = 300f)
-                    val grow = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.82f, stiffness = 300f)
-                    ((androidx.compose.animation.slideInHorizontally(move) { dir * it * 2 / 3 } +
-                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                        androidx.compose.animation.scaleIn(grow, initialScale = 0.9f)) togetherWith
-                        (androidx.compose.animation.slideOutHorizontally(move) { -dir * it / 5 } +
-                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(240)) +
-                            androidx.compose.animation.scaleOut(grow, targetScale = 0.9f))).apply {
+                    val unfold = androidx.compose.animation.core.tween<androidx.compose.ui.unit.IntSize>(420, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                    (if (forward)
+                        (androidx.compose.animation.expandVertically(unfold, expandFrom = Alignment.Top) +
+                            androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(260))) togetherWith
+                            androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
+                    else
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) togetherWith
+                            (androidx.compose.animation.shrinkVertically(unfold, shrinkTowards = Alignment.Top) +
+                                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300)))).apply {
                         targetContentZIndex = if (forward) 1f else -1f
                     }
                 },
@@ -398,9 +407,13 @@ fun LibraryScreen(
             androidx.compose.runtime.CompositionLocalProvider(LocalLibGoTo provides libGoTo) {
             when (val p = shownPage) {
                 LibPage.Menu -> Column(Modifier.fillMaxSize()) {
-                    Text("Biblioteca", color = Retro.Text, fontSize = 34.sp, fontWeight = FontWeight.Black,
-                        fontFamily = if (Retro.isVintage) FontFamily.Serif else null,
-                        modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 8.dp))
+                    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = if (IS_MUSIC_APP) 10.dp else 4.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.Bottom) {
+                        Text("Biblioteca", color = Retro.Text, fontSize = 34.sp, fontWeight = FontWeight.Black,
+                            fontFamily = if (Retro.isVintage) FontFamily.Serif else null, modifier = Modifier.weight(1f))
+                        if (IS_MUSIC_APP) Text(java.text.NumberFormat.getIntegerInstance(Locale.US).format(songs.size) + " canciones",
+                            color = Retro.SubText, fontSize = 13.sp, modifier = Modifier.padding(bottom = 7.dp))
+                    }
                     LibSearchField(menuQuery, { menuQuery = it }, "Buscar canción, artista o álbum")
                     val menuResult = rememberSongSearch(songs, menuQuery, menuField)
                     if (menuQuery.isNotBlank() && menuResult != null) SearchFieldChips(menuResult.counts, menuField) { menuField = it }
@@ -411,6 +424,14 @@ fun LibraryScreen(
                         empty = "No encontré nada con «${menuQuery.trim()}»")
                 }
                 LibPage.Songs -> SongList(songs, onPlay, onAdd = { addTo = it }, alphabet = true)
+                LibPage.Radio -> {
+                    androidx.compose.runtime.SideEffect {
+                        RadioColors.text = Retro.Text; RadioColors.sub = Retro.SubText
+                        RadioColors.accent = Retro.Orange; RadioColors.accent2 = Retro.OrangeLight
+                        RadioColors.bg1 = Retro.Bg; RadioColors.bg2 = Retro.Panel
+                    }
+                    RadioTab(null, false, subtitle = "Estaciones en vivo en tu teléfono") { r -> AppNav.playRadio(r) }
+                }
                 LibPage.Artists -> GroupList(
                     groups = songs.groupBy { it.artist }.toSortedMap(compareBy { it.lowercase(Locale.ROOT) }),
                     icon = Icons.Filled.Person, color = Retro.Blue,
@@ -525,6 +546,7 @@ private fun pageTitle(p: LibPage): String = when (p) {
     LibPage.AnimatedCoversP -> "Carátulas animadas"
     LibPage.LyricsP -> "Letras"
     LibPage.Recent -> "Últimas agregadas"
+    LibPage.Radio -> "Radio"
     LibPage.Years -> "Por año"
     is LibPage.FolderBrowse -> p.path?.let { File(it).name } ?: "Carpeta"
 }
@@ -545,12 +567,13 @@ private fun libraryLists(nArtists: Int, nAlbums: Int, nVideos: Int, songCount: I
     "videos" to ListDef("Videos musicales", "$nVideos", Icons.Filled.Movie, LibPage.MusicVideos),
     "favorites" to ListDef("Favoritas", "${LibraryStore.favorites.size}", Icons.Filled.StarBorder, LibPage.Favorites),
     "most" to ListDef("Más escuchadas", "", Icons.Filled.TrendingUp, LibPage.MostPlayed),
+    "radio" to ListDef("Radio", "En vivo", Icons.Filled.Radio, LibPage.Radio),
 )
 
 /** Nombres de las listas para el ajuste de cuáles mostrar. */
 val LibraryListNames = listOf("playlists" to "Listas de reproducción", "artists" to "Artistas", "albums" to "Álbumes",
     "songs" to "Canciones", "recent" to "Últimas agregadas", "years" to "Por año", "folder" to "Carpeta",
-    "videos" to "Videos musicales", "favorites" to "Favoritas", "most" to "Más escuchadas")
+    "videos" to "Videos musicales", "favorites" to "Favoritas", "most" to "Más escuchadas", "radio" to "Radio")
 
 @Composable
 private fun MainMenu(
@@ -2148,7 +2171,7 @@ private fun NasFolderPicker(onClose: () -> Unit) {
 // ───────── Diseño Nebula de las listas (cristal, planeta y botones con brillo) ─────────
 
 @Composable
-private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRefresh: () -> Unit) {
+private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRefresh: (() -> Unit)?) {
     val light = Retro.isLavanda
     Box(Modifier.fillMaxWidth()) {
         // Lavanda: ondas suaves de colores arriba a la derecha
@@ -2182,7 +2205,7 @@ private fun NebulaListHeader(title: String, count: Int, onBack: () -> Unit, onRe
                 Text("♪ " + java.text.NumberFormat.getIntegerInstance(Locale.US).format(count) + " canciones",
                     color = if (light) Color(0xFF5A5470) else Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
             }
-            NebulaSquareButton(Icons.Filled.Refresh, "Volver a buscar", onRefresh)
+            if (onRefresh != null) NebulaSquareButton(Icons.Filled.Refresh, "Volver a buscar", onRefresh)
         }
     }
 }

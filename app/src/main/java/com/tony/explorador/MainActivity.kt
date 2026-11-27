@@ -175,6 +175,7 @@ sealed interface Overlay {
 @Composable
 fun AppRoot() {
     val context = LocalContext.current
+    remember { RadioStore.init(context); 0 }
     var granted by remember { mutableStateOf(hasStorageAccess(context)) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -188,6 +189,21 @@ fun AppRoot() {
 
     val controller = rememberMediaController()
     androidx.compose.runtime.SideEffect { AppNav.pauseMusic = { controller?.pause() } }
+    // radio por internet en el reproductor del teléfono (Nebula Música)
+    androidx.compose.runtime.SideEffect {
+        AppNav.playRadio = { r ->
+            controller?.let { c ->
+                RadioStore.played(r)
+                c.shuffleModeEnabled = false
+                c.setMediaItem(androidx.media3.common.MediaItem.Builder().setMediaId(r.url).setUri(r.url)
+                    .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(r.name)
+                        .setArtist(listOf("Radio en vivo", r.place).filter { it.isNotBlank() }.joinToString(" · "))
+                        .apply { if (r.logo.startsWith("http")) setArtworkUri(android.net.Uri.parse(r.logo)) }.build()).build())
+                c.prepare(); c.play()
+                Thread { RadioApi.click(r.uuid) }.start()
+            }
+        }
+    }
     // Nebula Música arranca ya con la biblioteca puesta (sin que se asome el explorador mientras se anima)
     val overlays = remember { androidx.compose.runtime.mutableStateListOf<Overlay>().apply { if (IS_MUSIC_APP) add(Overlay.Library) } }
     val overlayStates = remember { androidx.compose.runtime.mutableStateMapOf<Overlay, androidx.compose.animation.core.MutableTransitionState<Boolean>>() }

@@ -79,6 +79,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 
+/** Colores de la radio: el control remoto usa los suyos y Nebula Música los de su tema. */
+internal object RadioColors {
+    var text by mutableStateOf(RC.text)
+    var sub by mutableStateOf(RC.sub)
+    var accent by mutableStateOf(RC.accent)
+    var accent2 by mutableStateOf(RC.accent2)
+    var bg1 by mutableStateOf(RC.bg1)
+    var bg2 by mutableStateOf(RC.bg2)
+    fun remote() { text = RC.text; sub = RC.sub; accent = RC.accent; accent2 = RC.accent2; bg1 = RC.bg1; bg2 = RC.bg2 }
+}
+
 /** Una estación de radio por internet (datos de radio-browser.info). */
 data class RadioStation(
     val uuid: String, val name: String, val url: String, val logo: String = "",
@@ -240,9 +251,9 @@ fun LiveBadge(modifier: Modifier = Modifier) {
 
 @Composable
 private fun Chip(text: String, on: Boolean = false, onClick: (() -> Unit)? = null) {
-    Text(text, color = if (on) Color.White else RC.text, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
+    Text(text, color = if (on) Color.White else RadioColors.text, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
         modifier = Modifier.clip(RoundedCornerShape(16.dp))
-            .then(if (on) Modifier.background(Brush.linearGradient(listOf(RC.accent, RC.accent2))) else Modifier.glass(RoundedCornerShape(16.dp)))
+            .then(if (on) Modifier.background(Brush.linearGradient(listOf(RadioColors.accent, RadioColors.accent2))) else Modifier.glass(RoundedCornerShape(16.dp)))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 7.dp))
 }
@@ -250,7 +261,7 @@ private fun Chip(text: String, on: Boolean = false, onClick: (() -> Unit)? = nul
 /** Pestaña «Radio» del control remoto: buscar, géneros, favoritas y estaciones populares. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun RadioTab(nowUrl: String?, playing: Boolean, onPlay: (RadioStation) -> Unit) {
+internal fun RadioTab(nowUrl: String?, playing: Boolean, subtitle: String = "En vivo, en tus bocinas", onPlay: (RadioStation) -> Unit) {
     val ctx = LocalContext.current
     LaunchedEffect(Unit) { RadioStore.init(ctx) }
     var mexico by remember { mutableStateOf(true) }
@@ -282,13 +293,13 @@ internal fun RadioTab(nowUrl: String?, playing: Boolean, onPlay: (RadioStation) 
             // encabezado
             Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Radio", color = RC.text, fontSize = 30.sp, fontWeight = FontWeight.Black)
-                    Text("En vivo, en tus bocinas", color = RC.sub, fontSize = 13.sp, maxLines = 1)
+                    Text("Radio", color = RadioColors.text, fontSize = 30.sp, fontWeight = FontWeight.Black)
+                    Text(subtitle, color = RadioColors.sub, fontSize = 13.sp, maxLines = 1)
                 }
                 Row(Modifier.glass(RoundedCornerShape(18.dp)).padding(3.dp)) {
                     listOf(true to "🇲🇽 México", false to "🌎 Mundo").forEach { (mx, l) ->
-                        Text(l, color = if (mexico == mx) Color.White else RC.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clip(RoundedCornerShape(15.dp)).background(if (mexico == mx) RC.accent.copy(alpha = 0.45f) else Color.Transparent)
+                        Text(l, color = if (mexico == mx) Color.White else RadioColors.sub, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clip(RoundedCornerShape(15.dp)).background(if (mexico == mx) RadioColors.accent.copy(alpha = 0.45f) else Color.Transparent)
                                 .clickable { mexico = mx }.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
                 }
@@ -296,14 +307,14 @@ internal fun RadioTab(nowUrl: String?, playing: Boolean, onPlay: (RadioStation) 
             // buscador
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp).glass(RoundedCornerShape(22.dp)).padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Search, null, tint = RC.sub, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Search, null, tint = RadioColors.sub, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text("Busca una estación (ej. «La Mejor», «Los 40»)", color = RC.sub.copy(alpha = 0.7f), fontSize = 14.sp, maxLines = 1)
-                    BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(color = RC.text, fontSize = 14.sp),
-                        cursorBrush = SolidColor(RC.accent), modifier = Modifier.fillMaxWidth())
+                    if (query.isEmpty()) Text("Busca una estación (ej. «La Mejor», «Los 40»)", color = RadioColors.sub.copy(alpha = 0.7f), fontSize = 14.sp, maxLines = 1)
+                    BasicTextField(query, { query = it }, singleLine = true, textStyle = TextStyle(color = RadioColors.text, fontSize = 14.sp),
+                        cursorBrush = SolidColor(RadioColors.accent), modifier = Modifier.fillMaxWidth())
                 }
-                if (query.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RC.sub, modifier = Modifier.size(22.dp).clip(CircleShape).clickable { query = "" })
+                if (query.isNotEmpty()) Icon(Icons.Filled.Close, "Borrar", tint = RadioColors.sub, modifier = Modifier.size(22.dp).clip(CircleShape).clickable { query = "" })
             }
             // géneros
             if (query.isBlank()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -334,24 +345,24 @@ internal fun RadioTab(nowUrl: String?, playing: Boolean, onPlay: (RadioStation) 
                 else -> if (mexico) "Las más escuchadas en México" else "Las más escuchadas del mundo"
             })
             if (loading && list.isEmpty()) Box(Modifier.fillMaxWidth().padding(30.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = RC.accent, strokeWidth = 2.dp)
+                CircularProgressIndicator(color = RadioColors.accent, strokeWidth = 2.dp)
             }
             error?.let { Text(it, color = Color(0xFFFFB4C8), fontSize = 13.sp, modifier = Modifier.padding(18.dp)) }
-            if (!loading && error == null && list.isEmpty()) Text("No encontré estaciones.", color = RC.sub, fontSize = 13.sp, modifier = Modifier.padding(18.dp))
+            if (!loading && error == null && list.isEmpty()) Text("No encontré estaciones.", color = RadioColors.sub, fontSize = 13.sp, modifier = Modifier.padding(18.dp))
         }
         items(list, key = { "l" + it.url }) { s ->
             StationRow(s, s.url == nowUrl, playing, onClick = { onPlay(s) }, onInfo = { detail = s })
         }
         item {
             Text("Estaciones de radio-browser.info · mantén presionada una tarjeta para ver su información",
-                color = RC.sub.copy(alpha = 0.6f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(16.dp))
+                color = RadioColors.sub.copy(alpha = 0.6f), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(16.dp))
         }
     }
     detail?.let { s -> StationSheet(s, s.url == nowUrl, onPlay = { onPlay(s); detail = null }, onDismiss = { detail = null }) }
 }
 
 @Composable
-private fun RadioSection(t: String) = Text(t, color = RC.text, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+private fun RadioSection(t: String) = Text(t, color = RadioColors.text, fontWeight = FontWeight.Bold, fontSize = 18.sp,
     modifier = Modifier.padding(start = 18.dp, top = 18.dp, bottom = 10.dp))
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -361,14 +372,14 @@ private fun StationCard(s: RadioStation, now: Boolean, playing: Boolean, small: 
     Column(Modifier.width(w).clip(RoundedCornerShape(18.dp)).combinedClickable(onClick = onClick, onLongClick = onLong)) {
         Box {
             StationLogo(s, Modifier.width(w).aspectRatio(1f)
-                .then(if (now) Modifier.border(2.5.dp, Brush.linearGradient(listOf(RC.accent, RC.accent2)), RoundedCornerShape(18.dp)) else Modifier), corner = 18)
+                .then(if (now) Modifier.border(2.5.dp, Brush.linearGradient(listOf(RadioColors.accent, RadioColors.accent2)), RoundedCornerShape(18.dp)) else Modifier), corner = 18)
             if (now) Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(CircleShape).background(Color(0xCC140F2B)).padding(7.dp)) {
-                if (playing) LiveBars(RC.accent) else Icon(Icons.Filled.Pause, null, tint = RC.accent, modifier = Modifier.size(16.dp))
+                if (playing) LiveBars(RadioColors.accent) else Icon(Icons.Filled.Pause, null, tint = RadioColors.accent, modifier = Modifier.size(16.dp))
             }
         }
-        Text(s.name, color = RC.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text(s.name, color = RadioColors.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp))
-        Text((s.genres.firstOrNull() ?: s.place).ifBlank { " " }, color = RC.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Text((s.genres.firstOrNull() ?: s.place).ifBlank { " " }, color = RadioColors.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 2.dp, end = 2.dp))
     }
 }
@@ -382,17 +393,17 @@ private fun StationRow(s: RadioStation, now: Boolean, playing: Boolean, onClick:
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (now && playing) { LiveBars(RC.accent); Spacer(Modifier.width(6.dp)) }
-                Text(s.name, color = if (now) RC.accent else RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (now && playing) { LiveBars(RadioColors.accent); Spacer(Modifier.width(6.dp)) }
+                Text(s.name, color = if (now) RadioColors.accent else RadioColors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Text(listOf(s.flag + " " + s.place, s.genres.joinToString(" · ")).map { it.trim() }.filter { it.isNotBlank() }.joinToString("  ·  "),
-                color = RC.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (s.quality.isNotBlank()) Text(s.quality, color = RC.sub.copy(alpha = 0.7f), fontSize = 11.sp)
+                color = RadioColors.sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (s.quality.isNotBlank()) Text(s.quality, color = RadioColors.sub.copy(alpha = 0.7f), fontSize = 11.sp)
         }
         val fav = RadioStore.isFav(s)
-        Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RC.sub,
+        Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RadioColors.sub,
             modifier = Modifier.size(40.dp).clip(CircleShape).clickable { RadioStore.toggleFav(s) }.padding(9.dp))
-        Icon(Icons.Filled.Info, "Información", tint = RC.sub, modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onInfo).padding(9.dp))
+        Icon(Icons.Filled.Info, "Información", tint = RadioColors.sub, modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onInfo).padding(9.dp))
     }
 }
 
@@ -401,15 +412,15 @@ private fun StationRow(s: RadioStation, now: Boolean, playing: Boolean, onClick:
 private fun StationSheet(s: RadioStation, now: Boolean, onPlay: () -> Unit, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxWidth().padding(18.dp).clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(listOf(RC.bg2, RC.bg1)))) {
+        Box(Modifier.fillMaxWidth().padding(18.dp).clip(RoundedCornerShape(28.dp)).background(Brush.verticalGradient(listOf(RadioColors.bg2, RadioColors.bg1)))) {
             // el logo borroso de fondo
             StationLogo(s, Modifier.matchParentSize().blur(60.dp), corner = 0)
             Box(Modifier.matchParentSize().background(Color(0xCC140F2B)))
             Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 StationLogo(s, Modifier.size(170.dp), corner = 30, big = true)
                 Spacer(Modifier.height(14.dp))
-                Text(s.name, color = RC.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (s.place.isNotBlank()) Text("${s.flag} ${s.place}".trim(), color = RC.sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
+                Text(s.name, color = RadioColors.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (s.place.isNotBlank()) Text("${s.flag} ${s.place}".trim(), color = RadioColors.sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
                 if (s.genres.isNotEmpty()) Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { s.genres.forEach { Chip(it) } }
                 Column(Modifier.fillMaxWidth().padding(top = 16.dp).glass(RoundedCornerShape(18.dp)).padding(14.dp)) {
                     InfoLine("Calidad", s.quality.ifBlank { "—" })
@@ -420,16 +431,16 @@ private fun StationSheet(s: RadioStation, now: Boolean, onPlay: () -> Unit, onDi
                     InfoLine("Sitio", s.homepage.removePrefix("https://").removePrefix("http://").removeSuffix("/").ifBlank { "—" })
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(RC.accent, RC.accent2)))
+                    Row(Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(RadioColors.accent, RadioColors.accent2)))
                         .clickable(onClick = onPlay), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.PlayArrow, null, tint = Color.White)
                         Spacer(Modifier.width(6.dp))
                         Text(if (now) "Sonando" else "Escuchar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                     val fav = RadioStore.isFav(s)
-                    Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RC.text,
+                    Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RadioColors.text,
                         modifier = Modifier.size(52.dp).glass(CircleShape).clickable { RadioStore.toggleFav(s) }.padding(13.dp))
-                    if (s.homepage.startsWith("http")) Icon(Icons.Filled.Language, "Página de la estación", tint = RC.text,
+                    if (s.homepage.startsWith("http")) Icon(Icons.Filled.Language, "Página de la estación", tint = RadioColors.text,
                         modifier = Modifier.size(52.dp).glass(CircleShape).clickable {
                             runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(s.homepage))) }
                         }.padding(13.dp))
@@ -443,8 +454,8 @@ private fun StationSheet(s: RadioStation, now: Boolean, onPlay: () -> Unit, onDi
 @Composable
 private fun InfoLine(k: String, v: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(k, color = RC.sub, fontSize = 13.sp, modifier = Modifier.width(72.dp))
-        Text(v, color = RC.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(k, color = RadioColors.sub, fontSize = 13.sp, modifier = Modifier.width(72.dp))
+        Text(v, color = RadioColors.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
     }
 }
 
@@ -467,36 +478,36 @@ internal fun RadioNowPlaying(
             LiveBadge(Modifier.align(Alignment.TopStart).padding(12.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xAA140F2B)))
         }
         Spacer(Modifier.height(18.dp))
-        Text(station.name, color = RC.text, fontWeight = FontWeight.Bold, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        Text(station.name, color = RadioColors.text, fontWeight = FontWeight.Bold, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         Text(listOf("${station.flag} ${station.place}".trim(), station.genres.take(2).joinToString(" · ")).filter { it.isNotBlank() }.joinToString("  ·  ").ifBlank { "Radio en vivo" },
-            color = RC.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            color = RadioColors.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         // lo que está sonando en la estación
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).glass(RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            if (playing) LiveBars(RC.accent) else Icon(Icons.Filled.Pause, null, tint = RC.sub, modifier = Modifier.size(18.dp))
+            if (playing) LiveBars(RadioColors.accent) else Icon(Icons.Filled.Pause, null, tint = RadioColors.sub, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (songName.isNotBlank()) "AHORA SUENA" else "TRANSMITIENDO", color = RC.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text(songName.ifBlank { if (playing) "Señal en vivo" else "En pausa" }, color = RC.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (songArtist.isNotBlank()) Text(songArtist, color = RC.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (songName.isNotBlank()) "AHORA SUENA" else "TRANSMITIENDO", color = RadioColors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                Text(songName.ifBlank { if (playing) "Señal en vivo" else "En pausa" }, color = RadioColors.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (songArtist.isNotBlank()) Text(songArtist, color = RadioColors.sub, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (station.quality.isNotBlank()) Text(station.quality, color = RC.sub, fontSize = 11.sp)
+            if (station.quality.isNotBlank()) Text(station.quality, color = RadioColors.sub, fontSize = 11.sp)
         }
-        if (speakers.isNotBlank()) Text("🔊 $speakers", color = RC.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        if (speakers.isNotBlank()) Text("🔊 $speakers", color = RadioColors.accent, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         host?.let { SleepTimerChip(it, Modifier.padding(top = 6.dp)) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 12.dp)) {
             val fav = RadioStore.isFav(station)
-            Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RC.sub,
+            Icon(if (fav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, "Favorita", tint = if (fav) Color(0xFFFF5A8A) else RadioColors.sub,
                 modifier = Modifier.size(46.dp).clip(CircleShape).clickable { RadioStore.toggleFav(station) }.padding(10.dp))
-            Icon(Icons.Filled.SkipPrevious, "Estación anterior", tint = if (ring.size > 1) RC.text else RC.sub.copy(alpha = 0.4f),
+            Icon(Icons.Filled.SkipPrevious, "Estación anterior", tint = if (ring.size > 1) RadioColors.text else RadioColors.sub.copy(alpha = 0.4f),
                 modifier = Modifier.size(52.dp).clip(CircleShape).clickable(enabled = ring.size > 1) { onSwitch(ring[(i - 1 + ring.size) % ring.size]) }.padding(8.dp))
-            Box(Modifier.size(78.dp).glass(CircleShape, strong = true).background(Brush.linearGradient(listOf(RC.accent.copy(alpha = 0.75f), RC.accent2.copy(alpha = 0.75f))))
+            Box(Modifier.size(78.dp).glass(CircleShape, strong = true).background(Brush.linearGradient(listOf(RadioColors.accent.copy(alpha = 0.75f), RadioColors.accent2.copy(alpha = 0.75f))))
                 .clickable(onClick = onToggle), contentAlignment = Alignment.Center) {
                 Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(40.dp))
             }
-            Icon(Icons.Filled.SkipNext, "Estación siguiente", tint = if (ring.size > 1) RC.text else RC.sub.copy(alpha = 0.4f),
+            Icon(Icons.Filled.SkipNext, "Estación siguiente", tint = if (ring.size > 1) RadioColors.text else RadioColors.sub.copy(alpha = 0.4f),
                 modifier = Modifier.size(52.dp).clip(CircleShape).clickable(enabled = ring.size > 1) { onSwitch(ring[(i + 1) % ring.size]) }.padding(8.dp))
-            Icon(Icons.Filled.Info, "Información", tint = RC.sub, modifier = Modifier.size(46.dp).clip(CircleShape).clickable { info = true }.padding(10.dp))
+            Icon(Icons.Filled.Info, "Información", tint = RadioColors.sub, modifier = Modifier.size(46.dp).clip(CircleShape).clickable { info = true }.padding(10.dp))
         }
         VolumeControl(volume, Modifier.fillMaxWidth().glass(RoundedCornerShape(26.dp)).padding(horizontal = 8.dp, vertical = 4.dp), onSet = onVolume)
     }

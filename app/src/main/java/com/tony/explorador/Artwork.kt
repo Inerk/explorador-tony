@@ -64,7 +64,36 @@ fun rememberTrackInfo(path: String?): State<TrackInfo?> =
         value = info
     }
 
+/** Logo de una estación (se baja una vez y se recuerda). */
+private val radioLogos = LruCache<String, Bitmap>(20)
+private fun radioLogo(url: String?, size: Int): Bitmap? {
+    if (url.isNullOrBlank() || !url.startsWith("http")) return null
+    radioLogos.get(url)?.let { return it }
+    return runCatching {
+        val c = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply { connectTimeout = 6000; readTimeout = 8000 }
+        val bytes = c.inputStream.use { it.readBytes() }
+        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        // logo sobre fondo blanco, cuadrado y con margen (casi todos están hechos para fondo claro)
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val cv = android.graphics.Canvas(out); cv.drawColor(android.graphics.Color.WHITE)
+        val pad = size * 0.12f; val box = size - pad * 2
+        val sc = minOf(box / src.width, box / src.height)
+        val w = src.width * sc; val h = src.height * sc
+        cv.drawBitmap(src, null, android.graphics.RectF((size - w) / 2, (size - h) / 2, (size + w) / 2, (size + h) / 2),
+            android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        out
+    }.getOrNull()?.also { radioLogos.put(url, it) }
+}
+
 suspend fun loadTrackInfo(path: String): TrackInfo = withContext(Dispatchers.IO) {
+    // radio por internet: datos de la estación
+    if (path.startsWith("http")) {
+        val st = RadioStore.byUrl(path)
+        val cover = radioLogo(st?.logo, 900)
+        return@withContext TrackInfo(path, st?.name ?: "Radio en vivo",
+            listOf("Radio en vivo", st?.place ?: "").filter { it.isNotBlank() }.joinToString(" · "),
+            st?.genres?.joinToString(" · "), cover, cover?.let { colorsFrom(it) } ?: DefaultCoverColors, emptyList())
+    }
     val file = File(path)
     var title: String? = null
     var artist: String? = null
@@ -176,6 +205,7 @@ private val noThumb = java.util.Collections.synchronizedSet(HashSet<String>())
 
 /** Miniatura de la portada para las listas (pequeña y en caché). */
 suspend fun loadThumb(path: String): Bitmap? = withContext(Dispatchers.IO) {
+    if (path.startsWith("http")) return@withContext radioLogo(RadioStore.byUrl(path)?.logo, 128)
     thumbCache.get(path)?.let { return@withContext it }
     if (path in noThumb) return@withContext null
     TagOverrides.cover(path, 128)?.let { thumbCache.put(path, it); return@withContext it }
@@ -197,6 +227,7 @@ private val noBigCover = java.util.Collections.synchronizedSet(HashSet<String>()
 
 /** Portada mediana para la vista de álbumes (Cover Flow). */
 suspend fun loadCover(path: String): Bitmap? = withContext(Dispatchers.IO) {
+    if (path.startsWith("http")) return@withContext radioLogo(RadioStore.byUrl(path)?.logo, 420)
     bigCoverCache.get(path)?.let { return@withContext it }
     if (path in noBigCover) return@withContext null
     TagOverrides.cover(path, 420)?.let { bigCoverCache.put(path, it); return@withContext it }

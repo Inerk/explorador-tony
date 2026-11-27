@@ -524,7 +524,7 @@ fun NasRemoteScreen(onClose: () -> Unit) {
                 val h = st.host
                 if (h != null) when (tab) {
                     0 -> NowPlayingTab(st, ::call, ::playRadio)
-                    4 -> RadioTab(st.radio?.url, st.state == "play") { r -> playRadio(r); tab = 0 }
+                    4 -> { LaunchedEffect(Unit) { RadioColors.remote() }; RadioTab(st.radio?.url, st.state == "play") { r -> playRadio(r); tab = 0 } }
                     1 -> LibraryTab(h, nav, ::playUris, ::playExpr, ::enqueue, st.state == "play" || st.state == "pause")
                     2 -> SpeakersTab(st, ::call)
                     3 -> AlarmsTab(h)
