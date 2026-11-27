@@ -288,6 +288,7 @@ fun MusicPlayerScreen(
     LaunchedEffect(Unit) { MusicUi.flyClose = false }
     val asideScope = rememberCoroutineScope()
     var lyricsMode by remember { mutableStateOf(false) }
+    var lyricsSearch by remember { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     // 0 = portada grande, 1 = lista (la portada se hace chiquita en la esquina)
@@ -462,7 +463,8 @@ fun MusicPlayerScreen(
                         }
                     }
                     // mismo ancho que los botones de la izquierda para que el título quede centrado
-                    Spacer(Modifier.width(96.dp))
+                    Spacer(Modifier.width(48.dp))
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, "Más", modifier = Modifier.size(24.dp)) }
                 }
 
                 // Centro: portada que se encoge hacia la lista, o la letra
@@ -528,6 +530,10 @@ fun MusicPlayerScreen(
                                 if (nebula && decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverBack(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha)
                                 }
+                                // mientras la portada «vuela» al mini reproductor, la de aquí no se queda pintada atrás
+                                Box(Modifier.fillMaxSize().graphicsLayer {
+                                    alpha = if (info?.cover != null && (closeFly.value > 0.001f || (screenW > 0f && aside.value > 1f))) 0f else 1f
+                                }) {
                                 CoverArt(
                                     circle = bocina || xmas,
                                     cover = info?.cover,
@@ -559,7 +565,8 @@ fun MusicPlayerScreen(
                                     canPrev = player.hasPreviousMediaItem(),
                                     onNext = { player.seekToNextMediaItem() },
                                     onPrev = { player.seekToPreviousMediaItem() },
-                                    onLongPress = onOpenCoverFlow,
+                                    // dejar presionada la portada: la letra (o buscarla si la canción no tiene)
+                                    onLongPress = { if (lyrics.isNotEmpty()) lyricsMode = true else lyricsSearch = true },
                                     // jalar la portada hacia abajo: te lleva a la lista donde suena (sin lista aparte)
                                     onPull = { dy ->
                                         asideScope.launch {
@@ -573,6 +580,7 @@ fun MusicPlayerScreen(
                                     },
                                     onMenu = { menuOpen = true },
                                 )
+                                }
                                 if (xmas && beat != null && decoAlpha > 0f) XmasRingFront(beat, decoAlpha, cx = maxWidth / 2, cy = topGap + side / 2, ringR = ringR)
                                 if (nebula && decoAlpha > 0f) Canvas(Modifier.fillMaxSize()) {
                                     nebulaCoverFront(((maxWidth - side) / 2).toPx(), topGap.toPx(), side.toPx(), decoAlpha, twinkle)
@@ -907,6 +915,11 @@ fun MusicPlayerScreen(
                     if (i >= 0 && i < player.mediaItemCount) player.removeMediaItem(i)
                 },
             )
+        }
+    }
+    if (lyricsSearch) {
+        player.currentMediaItem?.mediaId?.let { path ->
+            LyricsSearchDialog(path, accent, onDismiss = { lyricsSearch = false })
         }
     }
     if (infoOpen) {
