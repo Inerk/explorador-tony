@@ -24,6 +24,7 @@
 
     <!-- Tienda Nebula: para saber si ya están instaladas las apps de la tienda -->
     <queries>
+        <package android:name="com.tony.explorador" />
         <package android:name="com.tony.explorador.musica" />
         <package android:name="com.tony.explorador.control" />
     </queries>

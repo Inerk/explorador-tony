@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.Schedule
@@ -762,12 +764,12 @@ fun VideoTile(f: File, iconSize: Dp, modifier: Modifier = Modifier) {
 }
 
 
-/** Barra chiquita de abajo del explorador: Inicio · Archivos · Recientes. */
+/** Barra chiquita de abajo del explorador: Archivos · Favoritos · Recientes. */
 @Composable
 fun ExplorerBottomNav(selected: Int, onSelect: (Int) -> Unit) {
     val items = listOf(
-        Triple("Inicio", Icons.Outlined.Home, Icons.Filled.Home),
         Triple("Archivos", Icons.Outlined.Folder, Icons.Filled.Folder),
+        Triple("Favoritos", Icons.Outlined.StarBorder, Icons.Filled.Star),
         Triple("Recientes", Icons.Outlined.Schedule, Icons.Filled.Schedule),
     )
     Column(Modifier.fillMaxWidth().background(ExpTheme.bar)) {

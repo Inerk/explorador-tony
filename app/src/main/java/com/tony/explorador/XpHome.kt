@@ -240,9 +240,12 @@ fun XpDesktop(
                     indication = null
                 ) { clockOpen = false }
             )
-            XpClockWindow(
+            if (nebula) NebulaClockWindow(
                 onClose = { clockOpen = false },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = if (nebula) 100.dp else 48.dp)
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 100.dp)
+            ) else XpClockWindow(
+                onClose = { clockOpen = false },
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 6.dp, bottom = 48.dp)
             )
         }
 

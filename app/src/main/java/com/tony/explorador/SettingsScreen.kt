@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PictureInPicture
@@ -87,6 +88,7 @@ fun SettingsScreen(
     var historyOpen by remember { mutableStateOf(false) }
     var windowSkinOpen by remember { mutableStateOf(false) }
     var aboutOpen by remember { mutableStateOf(false) }
+    var shareOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
 
     // cada fila: sección, ícono, título, detalle, acción
@@ -110,6 +112,7 @@ fun SettingsScreen(
         Item("Explorador", "Papelera", "Lo que borras se guarda aquí un tiempo", null, R.drawable.ic_cat_trash, Color(0xFFFF8A1F)) { onClose(); AppNav.openTrash() },
         Item("Sistema", "Buscar actualizaciones", "Versión instalada: $versionName (beta)", null, R.drawable.ic_cat_update, Color(0xFF8E5BE8)) { onUpdates() },
         Item("Sistema", "Historial de versiones", "Qué cambió en cada versión", Icons.Outlined.History, null, Color(0xFF5C6BC0)) { historyOpen = true },
+        Item("Sistema", "Compartir apps Nebula", "Manda DriveNebula, Nebula Música o Control Nebula a alguien", Icons.Outlined.Share, null, Color(0xFF19B37A)) { shareOpen = true },
         Item("Sistema", "Acerca de", "DriveNebula", Icons.Outlined.Info, null, Color(0xFF8C93A8)) { aboutOpen = true },
     )
     val shown = if (query.isBlank()) items else items.filter {
@@ -218,6 +221,7 @@ fun SettingsScreen(
         },
         confirmButton = { TextButton(onClick = { windowSkinOpen = false }) { Text("Cerrar") } }
     )
+    if (shareOpen) ShareNebulaDialog(onDismiss = { shareOpen = false })
     if (aboutOpen) AlertDialog(
         onDismissRequest = { aboutOpen = false },
         icon = { Image(painterResource(R.drawable.app_logo), null, Modifier.size(72.dp)) },

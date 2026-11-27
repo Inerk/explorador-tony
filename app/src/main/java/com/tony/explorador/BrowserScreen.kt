@@ -248,6 +248,10 @@ fun BrowserScreen(
     }
 
     LaunchedEffect(homeSignal) { if (homeSignal > 0) goTo(null) }
+    // sin portada de inicio: si no hay carpeta abierta, se abre el almacenamiento interno
+    LaunchedEffect(currentDir, searchActive, recentMode, category) {
+        if (!skin.isRetro && currentDir == null && !searchActive && !recentMode && category == null) goTo(roots.firstOrNull()?.file)
+    }
     LaunchedEffect(folderRequest) { folderRequest?.let { goTo(it); onFolderHandled() } }
 
     fun openFile(file: File, siblings: List<File>) {
@@ -304,11 +308,13 @@ fun BrowserScreen(
 
     // Botón atrás: selección → búsqueda → carpeta anterior → salir
     val isRoot = currentDir != null && roots.any { it.file.absolutePath == currentDir?.absolutePath }
-    BackHandler(enabled = selection.isNotEmpty() || searchActive || currentDir != null || recentMode || category != null) {
+    // sin portada: en la raíz del almacenamiento, atrás ya sale del explorador
+    val atTop = !skin.isRetro && isRoot
+    BackHandler(enabled = selection.isNotEmpty() || searchActive || (currentDir != null && !atTop) || recentMode || category != null) {
         when {
             selection.isNotEmpty() -> selection = emptySet()
-            category != null -> { category = null; searchResults = null; ExplorerHome.show = true }
-            recentMode -> { recentMode = false; ExplorerHome.show = true }
+            category != null -> { category = null; searchResults = null }
+            recentMode -> { recentMode = false }
             searchActive -> { searchActive = false; query = "" }
             isRoot -> goTo(null)
             else -> goTo(currentDir?.parentFile)
@@ -348,8 +354,8 @@ fun BrowserScreen(
     }
 
     // inicio estilo DriveNebula (antes de entrar a las carpetas)
-    val homeShowing = (ExplorerHome.show && !searchActive && !recentMode && category == null) ||
-        (!skin.isRetro && currentDir == null && searchResults == null && !searchActive)
+    // Tony quitó esa portada: el explorador abre directo en las carpetas
+    val homeShowing = false
     if (homeShowing) {
         NebulaHome(
             roots = roots,
@@ -558,12 +564,12 @@ fun BrowserScreen(
                 }
                 // barra de abajo: Inicio · Archivos · Recientes
                 if (selection.isEmpty()) ExplorerBottomNav(
-                    selected = when { recentMode -> 2; currentDir == null -> 0; else -> 1 },
+                    selected = when { recentMode && favMode -> 1; recentMode -> 2; else -> 0 },
                     onSelect = { i ->
                         when (i) {
-                            0 -> { recentMode = false; searchActive = false; category = null; ExplorerHome.show = true }
-                            1 -> { recentMode = false; searchActive = false; if (currentDir == null) goTo(lastDir ?: roots.first().file) }
-                            2 -> { searchActive = false; recentMode = true }
+                            0 -> { recentMode = false; searchActive = false; category = null; if (currentDir == null) goTo(lastDir ?: roots.first().file) }
+                            1 -> { searchActive = false; category = null; favMode = true; recentMode = true }
+                            2 -> { searchActive = false; category = null; favMode = false; recentMode = true }
                         }
                     })
             }
